@@ -34,6 +34,12 @@
     "onCommand:oijudger.selectProblemCompiler",
     "onCommand:oijudger.openProblemResultPanel",
     "onCommand:oijudger.openProblemSampleDetail",
+    "onCommand:oijudger.openSampleInput",
+    "onCommand:oijudger.openSampleAnswer",
+    "onCommand:oijudger.openSampleOutput",
+    "onCommand:oijudger.openSampleUserOutput",
+    "onCommand:oijudger.openSampleDiff",
+    "onCommand:oijudger.deleteSample",
     "onView:oijudger.samplesView"
   ],
   "main": "./out/extension.js",
@@ -153,6 +159,36 @@
         "command": "oijudger.openProblemSampleDetail",
         "title": "OIjudger: Open Problem Sample Detail",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.openSampleInput",
+        "title": "OIjudger: Open Sample Input",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.openSampleAnswer",
+        "title": "OIjudger: Open Expected Output",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.openSampleOutput",
+        "title": "OIjudger: Open User Output",
+        "icon": "$(output)"
+      },
+      {
+        "command": "oijudger.openSampleUserOutput",
+        "title": "OIjudger: Open User Output",
+        "icon": "$(output)"
+      },
+      {
+        "command": "oijudger.openSampleDiff",
+        "title": "OIjudger: Open Diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "oijudger.deleteSample",
+        "title": "OIjudger: 删除样例/Delete Sample",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -217,9 +253,34 @@
       ],
       "view/item/context": [
         {
-          "command": "oijudger.openProblemSampleDetail",
-          "when": "view == oijudger.samplesView && viewItem == sample",
+          "command": "oijudger.openSampleInput",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",
           "group": "inline@1"
+        },
+        {
+          "command": "oijudger.openSampleAnswer",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",
+          "group": "inline@2"
+        },
+        {
+          "command": "oijudger.openSampleUserOutput",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa)",
+          "group": "inline@3"
+        },
+        {
+          "command": "oijudger.openSampleDiff",
+          "when": "view == oijudger.samplesView && viewItem == sampleWa",
+          "group": "inline@4"
+        },
+        {
+          "command": "oijudger.deleteSample",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",
+          "group": "inline@9"
+        },
+        {
+          "command": "oijudger.deleteSample",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",
+          "group": "9_delete"
         }
       ],
       "commandPalette": [
@@ -261,6 +322,26 @@
         },
         {
           "command": "oijudger.openProblemSampleDetail",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSampleInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSampleOutput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSampleUserOutput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSampleDiff",
           "when": "false"
         }
       ]

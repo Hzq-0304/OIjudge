@@ -1,3 +1,5 @@
+export type SampleSourceType = 'managed' | 'external';
+
 export type SampleConfig = {
   id: number;
   name: string;
@@ -5,6 +7,7 @@ export type SampleConfig = {
   answer: string;
   actualOutput?: string;
   expectedOutput?: string;
+  sourceType?: SampleSourceType;
 };
 
 export type OITestConfig = {
@@ -55,7 +58,7 @@ export type CompileResult = CompileReport & {
   executablePath: string;
 };
 
-export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'RE' | 'ERR';
+export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Skipped' | 'Missing';
 
 export type SampleReport = {
   id: number;
@@ -67,6 +70,10 @@ export type SampleReport = {
   input: string;
   answer: string;
   actualOutput: string;
+  output?: string;
+  stderr?: string;
+  diff?: string;
+  sampleSourceType?: SampleSourceType;
   message?: string;
 };
 

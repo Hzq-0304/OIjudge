@@ -4,10 +4,11 @@ import { promises as fs } from 'fs';
 import { exists } from './config';
 import { t } from './i18n';
 import { ensureProblemsConfig, getProblemReportPath } from './problems';
+import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
 import { JudgeReport, ProblemConfig, SampleReport, SampleStatus } from './types';
 
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'action';
-type NodeGroup = 'problems' | 'workspaceActions' | 'limits' | 'samples' | 'actions';
+type NodeGroup = 'problems' | 'workspaceActions' | 'limits' | 'samples' | 'actions' | 'sampleActions';
 
 type TreeNode = {
   kind: NodeKind;
@@ -20,6 +21,7 @@ type TreeNode = {
   group?: NodeGroup;
   problemId?: string;
   sampleId?: number;
+  sampleStatus?: SampleStatus | 'Not Run';
 };
 
 export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -40,7 +42,14 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     item.tooltip = element.tooltip;
     item.iconPath = element.icon;
     item.command = element.command;
-    item.contextValue = element.kind === 'sample' ? 'sample' : `oijudger${capitalize(element.kind)}`;
+    item.contextValue =
+      element.kind === 'sample'
+        ? element.sampleStatus === 'Missing'
+          ? 'sampleMissing'
+          : element.sampleStatus === 'WA'
+            ? 'sampleWa'
+            : 'sample'
+        : `oijudger${capitalize(element.kind)}`;
     return item;
   }
 
@@ -81,6 +90,8 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
         return createSampleNodes(workspaceFolder, problem);
       case 'actions':
         return createProblemActionNodes(problem);
+      case 'sampleActions':
+        return createSampleActionNodes(element.problemId, element.sampleId, element.sampleStatus);
       default:
         return [];
     }
@@ -191,25 +202,60 @@ async function createSampleNodes(
   }
 
   const report = await readReport(workspaceFolder, problem.id);
-  return problem.samples.map((sample) => {
+  return Promise.all(problem.samples.map(async (sample) => {
     const sampleReport = report?.samples.find((entry) => entry.id === sample.id);
-    const status = sampleReport?.status ?? 'Not Run';
-    const elapsed = sampleReport ? formatElapsed(sampleReport) : '';
+    const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
+    const missing = fileStatus.inputMissing || fileStatus.answerMissing;
+    const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
+    const elapsed = sampleReport && !missing ? formatElapsed(sampleReport) : '';
+    const sourceType = inferSampleSourceType(workspaceFolder, sample);
+    const missingDetail = fileStatus.missingPaths.length > 0
+      ? `\n${t(sourceType === 'external' ? 'externalSampleMissing' : 'sampleMissing')}:\n${fileStatus.missingPaths.join('\n')}`
+      : '';
     return {
       kind: 'sample',
       label: sample.name,
       description: elapsed ? `${statusLabel(status)}  ${elapsed}` : statusLabel(status),
-      tooltip: `${sample.input} -> ${sample.answer}`,
-      icon: new vscode.ThemeIcon(statusIcon(status)),
-      command: {
-        command: 'oijudger.openProblemSampleDetail',
-        title: t('sampleDetail', { sample: sample.name }),
-        arguments: [problem.id, sample.id]
-      },
+      tooltip: [
+        `${t('sampleInput')}: ${fileStatus.inputPath}`,
+        `${t('expectedOutput')}: ${fileStatus.answerPath}`,
+        `${t('source')}: ${t(sourceType === 'external' ? 'externalSample' : 'managedSample')}${missingDetail}`
+      ].join('\n'),
+      icon: status === 'Missing'
+        ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
+        : new vscode.ThemeIcon(statusIcon(status)),
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+      group: 'sampleActions',
       problemId: problem.id,
-      sampleId: sample.id
+      sampleId: sample.id,
+      sampleStatus: status
     };
-  });
+  }));
+}
+
+function createSampleActionNodes(
+  problemId: string,
+  sampleId: number | undefined,
+  status: SampleStatus | 'Not Run' | undefined
+): TreeNode[] {
+  if (sampleId === undefined) {
+    return [];
+  }
+
+  const nodes = [
+    sampleActionNode(t('openSampleInput'), 'oijudger.openSampleInput', 'go-to-file', problemId, sampleId),
+    sampleActionNode(t('openExpectedOutput'), 'oijudger.openSampleAnswer', 'go-to-file', problemId, sampleId)
+  ];
+
+  if (status !== 'Missing') {
+    nodes.push(sampleActionNode(t('openUserOutput'), 'oijudger.openSampleUserOutput', 'output', problemId, sampleId));
+  }
+
+  if (status === 'WA') {
+    nodes.push(sampleActionNode(t('openDiff'), 'oijudger.openSampleDiff', 'diff', problemId, sampleId));
+  }
+
+  return nodes;
 }
 
 function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
@@ -256,6 +302,27 @@ function actionNode(label: string, command: string, icon: string, problemId?: st
   };
 }
 
+function sampleActionNode(
+  label: string,
+  command: string,
+  icon: string,
+  problemId: string,
+  sampleId: number
+): TreeNode {
+  return {
+    kind: 'action',
+    label,
+    icon: new vscode.ThemeIcon(icon),
+    problemId,
+    sampleId,
+    command: {
+      command,
+      title: label,
+      arguments: [problemId, sampleId]
+    }
+  };
+}
+
 async function readReport(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string
@@ -289,10 +356,14 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
     case 'AC':
       return 'pass-filled';
     case 'WA':
+    case 'Missing':
       return 'error';
     case 'TLE':
+    case 'MLE':
       return 'watch';
     case 'RE':
+    case 'CE':
+    case 'Skipped':
     case 'ERR':
       return 'warning';
     case 'Not Run':
@@ -310,6 +381,14 @@ function statusLabel(status: SampleStatus | 'Not Run'): string {
       return t('statusTLE');
     case 'RE':
       return t('statusRE');
+    case 'CE':
+      return t('statusCE');
+    case 'MLE':
+      return t('statusMLE');
+    case 'Skipped':
+      return t('statusSkipped');
+    case 'Missing':
+      return t('statusMissing');
     case 'ERR':
       return t('statusERR');
     case 'Not Run':

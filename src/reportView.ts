@@ -9,7 +9,13 @@ import {
 } from './config';
 import { t } from './i18n';
 import { getProblem, getProblemReportPath } from './problems';
+import { inferSampleSourceType } from './sampleFiles';
 import { JudgeReport, SampleConfig, SampleReport } from './types';
+
+const openProblemReportPanels = new Map<string, {
+  panel: vscode.WebviewPanel;
+  workspaceFolder: vscode.WorkspaceFolder;
+}>();
 
 export async function openLastReport(context: vscode.ExtensionContext): Promise<void> {
   const workspaceFolder = getWorkspaceFolder();
@@ -55,7 +61,22 @@ export async function openProblemReport(context: vscode.ExtensionContext, proble
     return;
   }
 
-  await showReportPanel(context, workspaceFolder, report);
+  await showReportPanel(context, workspaceFolder, report, problemId);
+}
+
+export async function refreshProblemReportPanel(problemId: string): Promise<void> {
+  const entry = openProblemReportPanels.get(problemId);
+  if (!entry) {
+    return;
+  }
+
+  const report = await readReportFile(getProblemReportPath(entry.workspaceFolder, problemId));
+  entry.panel.webview.html = renderPage(
+    t('reportTitle'),
+    report
+      ? renderReportBody(entry.workspaceFolder, report, problemId)
+      : `<section><p>${escapeHtml(t('noReport'))}</p></section>`
+  );
 }
 
 export async function openProblemSampleDetail(
@@ -81,7 +102,7 @@ export async function openProblemSampleDetail(
     return;
   }
 
-  await showSamplePanel(context, workspaceFolder, sample, report?.samples.find((entry) => entry.id === sample.id));
+  await showSamplePanel(context, workspaceFolder, sample, report?.samples.find((entry) => entry.id === sample.id), problemId);
 }
 
 async function readReport(workspaceFolder: vscode.WorkspaceFolder): Promise<JudgeReport | undefined> {
@@ -112,13 +133,24 @@ async function readReportFile(reportPath: string): Promise<JudgeReport | undefin
 async function showReportPanel(
   context: vscode.ExtensionContext,
   workspaceFolder: vscode.WorkspaceFolder,
-  report: JudgeReport
+  report: JudgeReport,
+  problemId?: string
 ): Promise<void> {
   const title = t('reportTitle');
-  const panel = createPanel(context, title);
-  panel.webview.html = renderPage(
-    title,
-    `<section class="summary">
+  const panel = createPanel(context, title, problemId);
+  if (problemId) {
+    openProblemReportPanels.set(problemId, { panel, workspaceFolder });
+    panel.onDidDispose(() => openProblemReportPanels.delete(problemId));
+  }
+  panel.webview.html = renderPage(title, renderReportBody(workspaceFolder, report, problemId));
+}
+
+function renderReportBody(
+  workspaceFolder: vscode.WorkspaceFolder,
+  report: JudgeReport,
+  problemId?: string
+): string {
+  return `<section class="summary">
       <div><span>${escapeHtml(t('accepted'))}</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
       <div><span>${escapeHtml(t('compile'))}</span><strong>${formatDuration(report.compile?.timeMs)}</strong></div>
       <div><span>${escapeHtml(t('total'))}</span><strong>${formatDuration(report.totalTimeMs)}</strong></div>
@@ -133,61 +165,79 @@ async function showReportPanel(
     <section>
       <h2>${escapeHtml(t('samples'))}</h2>
       <div class="samples">
-        ${report.samples.map((sample) => renderSampleCard(workspaceFolder, sample)).join('')}
+        ${report.samples.map((sample) => renderSampleCard(workspaceFolder, sample, problemId)).join('')}
       </div>
-    </section>`
-  );
+    </section>`;
 }
 
 async function showSamplePanel(
   context: vscode.ExtensionContext,
   workspaceFolder: vscode.WorkspaceFolder,
   sample: SampleConfig,
-  report: SampleReport | undefined
+  report: SampleReport | undefined,
+  problemId?: string
 ): Promise<void> {
-  const input = await readText(resolveWorkspacePath(workspaceFolder, sample.input));
-  const answer = await readText(resolveWorkspacePath(workspaceFolder, sample.answer));
-  const actualOutput = report?.actualOutput
-    ? await readText(resolveWorkspacePath(workspaceFolder, report.actualOutput))
-    : t('notRunYet');
-
   const status = report?.status ?? 'Not Run';
   const elapsed = report ? `${formatMs(report.timeMs ?? report.elapsedMs)} ms` : '-';
   const compareElapsed = report?.compareTimeMs !== undefined ? `${formatMs(report.compareTimeMs)} ms` : '-';
+  const sourceType = inferSampleSourceType(workspaceFolder, sample);
   const title = t('sampleDetail', { sample: sample.name });
-  const panel = createPanel(context, title);
+  const panel = createPanel(context, title, problemId);
   panel.webview.html = renderPage(
     title,
     `<section class="summary">
       <div><span>${escapeHtml(t('status'))}</span><strong class="status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</strong></div>
       <div><span>${escapeHtml(t('elapsed'))}</span><strong>${escapeHtml(elapsed)}</strong></div>
       <div><span>${escapeHtml(t('compareTime'))}</span><strong>${escapeHtml(compareElapsed)}</strong></div>
+      <div><span>${escapeHtml(t('source'))}</span><strong>${escapeHtml(t(sourceType === 'external' ? 'externalSample' : 'managedSample'))}</strong></div>
       <div><span>${escapeHtml(t('input'))}</span><strong>${escapeHtml(sample.input)}</strong></div>
       <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
     </section>
     ${report?.message ? `<section><h2>${escapeHtml(t('message'))}</h2><p>${escapeHtml(report.message)}</p></section>` : ''}
-    <section class="columns">
-      ${renderBlock(t('input'), input)}
-      ${renderBlock(t('expectedOutput'), answer)}
-      ${renderBlock(t('userOutput'), actualOutput)}
+    <section>
+      <h2>${escapeHtml(t('actions'))}</h2>
+      ${renderActionButtons(sample.id, problemId, status)}
     </section>`
   );
 }
 
-function createPanel(context: vscode.ExtensionContext, title: string): vscode.WebviewPanel {
-  return vscode.window.createWebviewPanel(
+function createPanel(context: vscode.ExtensionContext, title: string, problemId?: string): vscode.WebviewPanel {
+  const panel = vscode.window.createWebviewPanel(
     'oijudgerReport',
     title,
     vscode.ViewColumn.Beside,
     {
-      enableScripts: false,
+      enableScripts: true,
       localResourceRoots: [context.extensionUri]
     }
   );
+  panel.webview.onDidReceiveMessage(async (message: unknown) => {
+    if (!problemId || typeof message !== 'object' || message === null) {
+      return;
+    }
+    const typed = message as { command?: unknown; sampleId?: unknown };
+    if (typeof typed.command !== 'string' || typeof typed.sampleId !== 'number') {
+      return;
+    }
+
+    const commandMap: Record<string, string> = {
+      input: 'oijudger.openSampleInput',
+      expected: 'oijudger.openSampleAnswer',
+      output: 'oijudger.openSampleUserOutput',
+      diff: 'oijudger.openSampleDiff',
+      delete: 'oijudger.deleteSample'
+    };
+    const command = commandMap[typed.command];
+    if (command) {
+      await vscode.commands.executeCommand(command, problemId, typed.sampleId);
+    }
+  });
+  return panel;
 }
 
-function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: SampleReport): string {
-  const actualPath = resolveWorkspacePath(workspaceFolder, sample.actualOutput);
+function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: SampleReport, problemId?: string): string {
+  const outputPath = resolveWorkspacePath(workspaceFolder, sample.output ?? sample.actualOutput);
+  const sourceType = sample.sampleSourceType ?? 'managed';
   return `<article class="sample">
     <div class="sampleHead">
       <strong>${escapeHtml(sample.name)}</strong>
@@ -196,28 +246,27 @@ function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: Sampl
     <dl>
       <dt>${escapeHtml(t('elapsed'))}</dt><dd>${formatDuration(sample.timeMs ?? sample.elapsedMs)}</dd>
       <dt>${escapeHtml(t('compareTime'))}</dt><dd>${formatDuration(sample.compareTimeMs)}</dd>
+      <dt>${escapeHtml(t('source'))}</dt><dd>${escapeHtml(t(sourceType === 'external' ? 'externalSample' : 'managedSample'))}</dd>
       <dt>${escapeHtml(t('input'))}</dt><dd>${escapeHtml(sample.input)}</dd>
       <dt>${escapeHtml(t('answer'))}</dt><dd>${escapeHtml(sample.answer)}</dd>
-      <dt>${escapeHtml(t('userOutput'))}</dt><dd>${escapeHtml(sample.actualOutput)}</dd>
+      <dt>${escapeHtml(t('userOutput'))}</dt><dd>${escapeHtml(sample.output ?? sample.actualOutput)}</dd>
     </dl>
     ${sample.message ? `<p>${escapeHtml(sample.message)}</p>` : ''}
-    <p class="path">${escapeHtml(actualPath)}</p>
+    <p class="path">${escapeHtml(outputPath)}</p>
+    ${renderActionButtons(sample.id, problemId, sample.status)}
   </article>`;
 }
 
-function renderBlock(title: string, value: string): string {
-  return `<article class="block">
-    <h2>${escapeHtml(title)}</h2>
-    <pre>${escapeHtml(value)}</pre>
-  </article>`;
-}
-
-async function readText(filePath: string): Promise<string> {
-  try {
-    return await fs.readFile(filePath, 'utf8');
-  } catch {
-    return t('fileNotFound');
-  }
+function renderActionButtons(sampleId: number, problemId: string | undefined, status: string): string {
+  const disabled = problemId ? '' : ' disabled';
+  const diffDisabled = status === 'WA' ? disabled : ' disabled';
+  return `<div class="buttons">
+    <button data-command="input" data-sample="${sampleId}"${disabled}>${escapeHtml(t('input'))}</button>
+    <button data-command="expected" data-sample="${sampleId}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
+    <button data-command="output" data-sample="${sampleId}"${disabled}>${escapeHtml(t('userOutput'))}</button>
+    <button data-command="diff" data-sample="${sampleId}"${diffDisabled}>${escapeHtml(t('openDiff'))}</button>
+    <button data-command="delete" data-sample="${sampleId}"${disabled}>${escapeHtml(t('delete'))}</button>
+  </div>`;
 }
 
 function renderPage(title: string, body: string): string {
@@ -245,8 +294,7 @@ function renderPage(title: string, body: string): string {
       gap: 8px;
     }
     .summary div,
-    .sample,
-    .block {
+    .sample {
       border: 1px solid var(--vscode-panel-border);
       border-radius: 6px;
       padding: 12px;
@@ -282,26 +330,27 @@ function renderPage(title: string, body: string): string {
       margin: 0;
       overflow-wrap: anywhere;
     }
-    .columns {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
+    .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    button {
+      background: var(--vscode-button-background);
+      border: 0;
+      border-radius: 3px;
+      color: var(--vscode-button-foreground);
+      cursor: pointer;
+      padding: 4px 10px;
     }
-    pre {
-      background: var(--vscode-editor-inactiveSelectionBackground);
-      border-radius: 4px;
-      margin: 0;
-      min-height: 90px;
-      overflow: auto;
-      padding: 10px;
-      white-space: pre-wrap;
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    button:disabled {
+      cursor: default;
+      opacity: 0.55;
     }
     .status { font-weight: 700; }
     .status-ac { color: var(--vscode-testing-iconPassed); }
     .status-wa,
     .status-tle,
     .status-re,
-    .status-err { color: var(--vscode-testing-iconFailed); }
+    .status-err,
+    .status-missing { color: var(--vscode-testing-iconFailed); }
     .status-not-run { color: var(--vscode-descriptionForeground); }
     .path {
       color: var(--vscode-descriptionForeground);
@@ -312,6 +361,19 @@ function renderPage(title: string, body: string): string {
 <body>
   <h1>${escapeHtml(title)}</h1>
   ${body}
+  <script>
+    const vscode = acquireVsCodeApi();
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-command][data-sample]');
+      if (!button || button.disabled) {
+        return;
+      }
+      vscode.postMessage({
+        command: button.dataset.command,
+        sampleId: Number(button.dataset.sample)
+      });
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -338,8 +400,16 @@ function statusLabel(status: string): string {
       return t('statusTLE');
     case 'RE':
       return t('statusRE');
+    case 'CE':
+      return t('statusCE');
+    case 'MLE':
+      return t('statusMLE');
     case 'ERR':
       return t('statusERR');
+    case 'Skipped':
+      return t('statusSkipped');
+    case 'Missing':
+      return t('statusMissing');
     case 'Not Run':
       return t('notRun');
     default:

@@ -88,7 +88,8 @@ export async function addSample(
     name: `Sample ${id}`,
     input: toPosixPath(path.join('.oitest', 'samples', `${id}.in`)),
     answer: toPosixPath(path.join('.oitest', 'samples', `${id}.ans`)),
-    actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${id}.out`))
+    actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${id}.out`)),
+    sourceType: 'managed'
   };
 
   await fs.mkdir(path.join(getOITestDir(workspaceFolder), 'samples'), { recursive: true });
@@ -109,6 +110,27 @@ export async function setTimeLimit(workspaceFolder: vscode.WorkspaceFolder, time
   const config = await ensureConfig(workspaceFolder);
   config.limits.timeMs = timeMs;
   await writeConfig(workspaceFolder, config);
+}
+
+export async function addExternalSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  config: OITestConfig,
+  inputPath: string,
+  answerPath: string
+): Promise<SampleConfig> {
+  const id = nextSampleId(config);
+  const sample: SampleConfig = {
+    id,
+    name: `Sample ${id}`,
+    input: path.resolve(inputPath),
+    answer: path.resolve(answerPath),
+    actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${id}.out`)),
+    sourceType: 'external'
+  };
+
+  config.samples.push(sample);
+  await writeConfig(workspaceFolder, config);
+  return sample;
 }
 
 export async function setMemoryLimit(workspaceFolder: vscode.WorkspaceFolder, memoryMb: number): Promise<void> {
@@ -183,7 +205,8 @@ function normalizeSample(sample: SampleConfig, fallbackId: number): SampleConfig
     id,
     name: sample.name ?? `Sample ${id}`,
     answer,
-    actualOutput: sample.actualOutput ?? toPosixPath(path.join('.oitest', 'outputs', `${id}.out`))
+    actualOutput: sample.actualOutput ?? toPosixPath(path.join('.oitest', 'outputs', `${id}.out`)),
+    sourceType: sample.sourceType ?? 'managed'
   };
 }
 
@@ -211,7 +234,29 @@ function normalizeConfig(config: OITestConfig): OITestConfig {
 }
 
 function nextSampleId(config: OITestConfig): number {
-  return config.samples.reduce((maxId, sample) => Math.max(maxId, sample.id ?? 0), 0) + 1;
+  return config.samples.reduce((maxId, sample) => Math.max(maxId, ...sampleNumberCandidates(sample)), 0) + 1;
+}
+
+function sampleNumberCandidates(sample: SampleConfig): number[] {
+  const values = [
+    sample.id,
+    parseSampleNumber(sample.name),
+    parseSampleNumber(sample.input),
+    parseSampleNumber(sample.answer),
+    parseSampleNumber(sample.actualOutput ?? '')
+  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
+  return values.length > 0 ? values : [0];
+}
+
+function parseSampleNumber(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const match =
+    /\bSample\s+(\d+)\b/iu.exec(value) ??
+    /(?:^|[\\/])sample-(\d+)(?:[\\/]|$)/iu.exec(value) ??
+    /(?:^|[\\/])(\d+)\.(?:in|ans|out|err|diff)$/iu.exec(value);
+  return match ? Number(match[1]) : undefined;
 }
 
 function decodeEscapes(value: string): string {

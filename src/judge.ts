@@ -3,7 +3,15 @@ import { promises as fs } from 'fs';
 import { compileSource } from './compiler';
 import { isOutputAccepted } from './comparator';
 import { getReportPath, resolveWorkspacePath } from './config';
+import { t } from './i18n';
 import { runProcess } from './runner';
+import {
+  getLegacyOutputRel,
+  getProblemSampleOutputPaths,
+  getSampleFileStatus,
+  inferSampleSourceType,
+  resolveSamplePath
+} from './sampleFiles';
 import { JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 
 export async function runAllSamples(
@@ -27,8 +35,9 @@ export async function runAllSamples(
   }
 
   const samples: SampleReport[] = [];
+  const problemId = (config as { id?: string }).id;
   for (const sample of config.samples) {
-    samples.push(await judgeSample(workspaceFolder, compile.executablePath, sample, config.limits.timeMs, output));
+    samples.push(await judgeSample(workspaceFolder, compile.executablePath, sample, config.limits.timeMs, output, problemId));
   }
 
   const accepted = samples.filter((sample) => sample.status === 'AC').length;
@@ -59,6 +68,9 @@ export async function runAllSamples(
   output.appendLine(`Summary: ${accepted}/${samples.length} accepted`);
   output.appendLine(`Total judge time: ${formatMs(totalTimeMs)} ms`);
   output.appendLine('Report: .oitest/outputs/report.json');
+  if (samples.some((sample) => sample.status === 'Missing')) {
+    vscode.window.showWarningMessage(t('someSamplesMissing'));
+  }
   if (process.platform === 'win32') {
     output.appendLine(
       'Note: On Windows, sample time includes process startup and pipe I/O overhead, so very small programs may still show tens of milliseconds.'
@@ -76,43 +88,90 @@ async function judgeSample(
   executablePath: string,
   sample: SampleConfig,
   timeLimitMs: number,
-  output: vscode.OutputChannel
+  output: vscode.OutputChannel,
+  problemId?: string
 ): Promise<SampleReport> {
-  const inputPath = resolveWorkspacePath(workspaceFolder, sample.input);
-  const answerPath = resolveWorkspacePath(workspaceFolder, sample.answer);
-  const actualOutputRel = sample.actualOutput ?? `.oitest/outputs/${sample.id}.out`;
-  const actualOutputPath = resolveWorkspacePath(workspaceFolder, actualOutputRel);
+  const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
+  const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
+
+  if (fileStatus.inputMissing || fileStatus.answerMissing) {
+    output.appendLine(`[Missing] ${sample.name}`);
+    output.appendLine(`  missing sample file: ${fileStatus.missingPaths.join(', ')}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'Missing',
+      0,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      'Sample input or expected output file is missing.'
+    );
+  }
 
   let input: string;
   let answer: string;
   try {
-    input = await fs.readFile(inputPath, 'utf8');
-    answer = await fs.readFile(answerPath, 'utf8');
+    input = await fs.readFile(fileStatus.inputPath, 'utf8');
+    answer = await fs.readFile(fileStatus.answerPath, 'utf8');
   } catch (error) {
     output.appendLine(`[ERR] ${sample.name}`);
     output.appendLine(`  failed to read sample files: ${String(error)}`);
-    return createSampleReport(sample, 'ERR', 0, 0, actualOutputRel, `Failed to read sample files: ${String(error)}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'ERR',
+      0,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      `Failed to read sample files: ${String(error)}`
+    );
   }
 
   let result: ProcessResult;
   try {
     result = await runProcess(executablePath, [], input, workspaceFolder.uri.fsPath, timeLimitMs);
   } catch (error) {
-    await saveActualOutput(actualOutputPath, '');
+    await saveTextOutput(outputPaths.outputPath, '');
+    await saveTextOutput(outputPaths.stderrPath, String(error));
     output.appendLine(`[ERR] ${sample.name}`);
     output.appendLine(`  failed to start executable: ${String(error)}`);
-    output.appendLine(`  actual output: ${actualOutputRel}`);
-    return createSampleReport(sample, 'ERR', 0, 0, actualOutputRel, `Failed to start executable: ${String(error)}`);
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'ERR',
+      0,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      `Failed to start executable: ${String(error)}`
+    );
   }
 
-  await saveActualOutput(actualOutputPath, result.stdout);
+  await saveTextOutput(outputPaths.outputPath, result.stdout);
+  await saveTextOutput(outputPaths.stderrPath, result.stderr);
 
   if (result.timedOut) {
     output.appendLine(`[TLE] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: 0 ms`);
-    output.appendLine(`  actual output: ${actualOutputRel}`);
-    return createSampleReport(sample, 'TLE', result.timeMs, 0, actualOutputRel, 'Time limit exceeded.');
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'TLE',
+      result.timeMs,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      'Time limit exceeded.'
+    );
   }
 
   if (result.code !== 0) {
@@ -123,8 +182,18 @@ async function judgeSample(
     if (result.stderr.trim()) {
       output.appendLine(indent(result.stderr.trimEnd()));
     }
-    output.appendLine(`  actual output: ${actualOutputRel}`);
-    return createSampleReport(sample, 'RE', result.timeMs, 0, actualOutputRel, message);
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'RE',
+      result.timeMs,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      message
+    );
   }
 
   const compareStartedAt = process.hrtime.bigint();
@@ -132,33 +201,58 @@ async function judgeSample(
   const compareTimeMs = elapsedMs(compareStartedAt);
 
   if (!accepted) {
+    await saveTextOutput(outputPaths.diffPath, createDiffSummary(answer, result.stdout));
     output.appendLine(`[WA] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
     output.appendLine(`  answer: ${sample.answer}`);
-    output.appendLine(`  actual output: ${actualOutputRel}`);
-    return createSampleReport(sample, 'WA', result.timeMs, compareTimeMs, actualOutputRel, 'Output differs from answer.');
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'WA',
+      result.timeMs,
+      compareTimeMs,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      'Output differs from answer.'
+    );
   }
 
+  await saveTextOutput(outputPaths.diffPath, '');
   output.appendLine(`[AC] ${sample.name} (${formatMs(result.timeMs)} ms)`);
   output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
   output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
-  return createSampleReport(sample, 'AC', result.timeMs, compareTimeMs, actualOutputRel);
+  return createSampleReport(
+    workspaceFolder,
+    sample,
+    'AC',
+    result.timeMs,
+    compareTimeMs,
+    outputPaths.outputRel,
+    outputPaths.stderrRel,
+    outputPaths.diffRel
+  );
 }
 
-async function saveActualOutput(actualOutputPath: string, stdout: string): Promise<void> {
-  await fs.mkdir(resolveDirname(actualOutputPath), { recursive: true });
-  await fs.writeFile(actualOutputPath, stdout, 'utf8');
+async function saveTextOutput(filePath: string, text: string): Promise<void> {
+  await fs.mkdir(resolveDirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, text, 'utf8');
 }
 
 function createSampleReport(
+  workspaceFolder: vscode.WorkspaceFolder,
   sample: SampleConfig,
   status: SampleReport['status'],
   timeMs: number,
   compareTimeMs: number,
-  actualOutput: string,
+  outputRel: string,
+  stderrRel: string,
+  diffRel: string,
   message?: string
 ): SampleReport {
+  const sampleSourceType = inferSampleSourceType(workspaceFolder, sample);
   return {
     id: sample.id,
     name: sample.name,
@@ -166,11 +260,61 @@ function createSampleReport(
     timeMs,
     compareTimeMs,
     elapsedMs: Math.round(timeMs),
-    input: sample.input,
-    answer: sample.answer,
-    actualOutput,
+    input: resolveSamplePath(workspaceFolder, sample.input),
+    answer: resolveSamplePath(workspaceFolder, sample.answer),
+    actualOutput: outputRel,
+    output: outputRel,
+    stderr: stderrRel,
+    diff: diffRel,
+    sampleSourceType,
     message
   };
+}
+
+function getSampleOutputPaths(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  problemId: string | undefined
+): {
+  outputRel: string;
+  outputPath: string;
+  stderrRel: string;
+  stderrPath: string;
+  diffRel: string;
+  diffPath: string;
+} {
+  if (problemId) {
+    const paths = getProblemSampleOutputPaths(workspaceFolder, problemId, sample.id);
+    return {
+      outputRel: paths.outputRel,
+      outputPath: paths.outputPath,
+      stderrRel: paths.stderrRel,
+      stderrPath: paths.stderrPath,
+      diffRel: paths.diffRel,
+      diffPath: paths.diffPath
+    };
+  }
+
+  const outputRel = getLegacyOutputRel(sample);
+  const outputPath = resolveWorkspacePath(workspaceFolder, outputRel);
+  return {
+    outputRel,
+    outputPath,
+    stderrRel: outputRel.replace(/\.out$/u, '.err'),
+    stderrPath: outputPath.replace(/\.out$/u, '.err'),
+    diffRel: outputRel.replace(/\.out$/u, '.diff'),
+    diffPath: outputPath.replace(/\.out$/u, '.diff')
+  };
+}
+
+function createDiffSummary(answer: string, actual: string): string {
+  return [
+    'Expected output:',
+    answer,
+    '',
+    'User output:',
+    actual
+  ].join('\n');
 }
 
 function elapsedMs(startedAt: bigint): number {

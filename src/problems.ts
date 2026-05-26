@@ -11,7 +11,13 @@ import {
   setCompilerCommand,
   toPosixPath
 } from './config';
-import { OITestConfig, ProblemConfig, ProblemsConfig, SampleConfig } from './types';
+import {
+  getProblemSampleOutputPaths,
+  inferSampleSourceType,
+  isUnderPath,
+  resolveSamplePath
+} from './sampleFiles';
+import { JudgeReport, OITestConfig, ProblemConfig, ProblemsConfig, SampleConfig } from './types';
 
 export function getProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(getOITestDir(workspaceFolder), 'problems.json');
@@ -39,7 +45,7 @@ export async function readProblemsConfig(workspaceFolder: vscode.WorkspaceFolder
   const parsed = JSON.parse(raw) as ProblemsConfig;
   return {
     version: 1,
-    problems: (parsed.problems ?? []).map(normalizeProblem)
+    problems: (parsed.problems ?? []).map((problem) => normalizeProblem(workspaceFolder, problem))
   };
 }
 
@@ -125,6 +131,35 @@ export async function addProblemSample(
   return sample;
 }
 
+export async function addExternalProblemSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  inputPath: string,
+  answerPath: string
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return undefined;
+  }
+
+  await ensureProblemFolders(workspaceFolder, problem.id);
+  const id = nextSampleId(problem);
+  const outputRel = getProblemSampleOutputPaths(workspaceFolder, problem.id, id).outputRel;
+  const sample: SampleConfig = {
+    id,
+    name: `Sample ${id}`,
+    input: path.resolve(inputPath),
+    answer: path.resolve(answerPath),
+    actualOutput: outputRel,
+    sourceType: 'external'
+  };
+
+  problem.samples.push(sample);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
 export async function updateProblemLimits(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -167,6 +202,31 @@ export async function getProblem(
   return findProblem(problems, problemId);
 }
 
+export async function deleteProblemSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: number
+): Promise<{ sample?: SampleConfig; cleanupErrors: string[]; reportCleared: boolean }> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sampleIndex = problem?.samples.findIndex((entry) => entry.id === sampleId) ?? -1;
+  if (!problem || sampleIndex < 0) {
+    return { cleanupErrors: [], reportCleared: false };
+  }
+
+  const [sample] = problem.samples.splice(sampleIndex, 1);
+  await writeProblemsConfig(workspaceFolder, problems);
+
+  const cleanupErrors: string[] = [];
+  if (inferSampleSourceType(workspaceFolder, sample) === 'managed') {
+    await removeManagedSampleFiles(workspaceFolder, sample, cleanupErrors);
+  }
+  await removeSampleOutputs(workspaceFolder, problemId, sample, cleanupErrors);
+  const reportCleared = await updateReportAfterSampleDeleted(workspaceFolder, problemId, sample);
+
+  return { sample, cleanupErrors, reportCleared };
+}
+
 export function getProblemSourcePath(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): string {
   return resolveWorkspacePath(workspaceFolder, problem.source);
 }
@@ -207,7 +267,7 @@ async function addProblemSampleFiles(
   const id = nextSampleId(problem);
   const inputRel = toPosixPath(path.join('.oitest', 'problems', problem.id, 'samples', `${id}.in`));
   const answerRel = toPosixPath(path.join('.oitest', 'problems', problem.id, 'samples', `${id}.ans`));
-  const outputRel = toPosixPath(path.join('.oitest', 'problems', problem.id, 'outputs', `${id}.out`));
+  const outputRel = getProblemSampleOutputPaths(workspaceFolder, problem.id, id).outputRel;
 
   await fs.writeFile(resolveWorkspacePath(workspaceFolder, inputRel), input, 'utf8');
   await fs.writeFile(resolveWorkspacePath(workspaceFolder, answerRel), answer, 'utf8');
@@ -217,7 +277,8 @@ async function addProblemSampleFiles(
     name: `Sample ${id}`,
     input: inputRel,
     answer: answerRel,
-    actualOutput: outputRel
+    actualOutput: outputRel,
+    sourceType: 'managed'
   };
 }
 
@@ -226,20 +287,40 @@ async function ensureProblemFolders(workspaceFolder: vscode.WorkspaceFolder, pro
   await fs.mkdir(path.join(getProblemRoot(workspaceFolder, problemId), 'outputs'), { recursive: true });
 }
 
-function normalizeProblem(problem: ProblemConfig): ProblemConfig {
+function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): ProblemConfig {
   const defaults = createDefaultConfig();
+  const id = problem.id ?? 'problem';
   return {
     ...defaults,
     ...problem,
+    id,
     compiler: problem.compiler ?? problem.compile ?? defaults.compiler,
     compile: problem.compile ?? problem.compiler ?? defaults.compile,
     limits: {
       ...defaults.limits,
       ...problem.limits
     },
-    samples: problem.samples ?? [],
+    samples: (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1)),
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),
     source: problem.source ?? ''
+  };
+}
+
+function normalizeProblemSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  problemId: string,
+  fallbackId: number
+): SampleConfig {
+  const id = sample.id ?? fallbackId;
+  const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${id}`, 'useroutput.txt'));
+  return {
+    ...sample,
+    id,
+    name: sample.name ?? `Sample ${id}`,
+    answer: sample.answer ?? sample.expectedOutput ?? toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `${id}.ans`)),
+    actualOutput: sample.actualOutput?.endsWith(`${id}.out`) ? outputRel : (sample.actualOutput ?? outputRel),
+    sourceType: sample.sourceType ?? inferSampleSourceType(workspaceFolder, sample)
   };
 }
 
@@ -269,7 +350,102 @@ function createProblemName(baseName: string, config: ProblemsConfig): string {
 }
 
 function nextSampleId(problem: OITestConfig): number {
-  return problem.samples.reduce((maxId, sample) => Math.max(maxId, sample.id ?? 0), 0) + 1;
+  return problem.samples.reduce((maxId, sample) => Math.max(maxId, ...sampleNumberCandidates(sample)), 0) + 1;
+}
+
+function sampleNumberCandidates(sample: SampleConfig): number[] {
+  const values = [
+    sample.id,
+    parseSampleNumber(sample.name),
+    parseSampleNumber(sample.input),
+    parseSampleNumber(sample.answer),
+    parseSampleNumber(sample.actualOutput ?? '')
+  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
+  return values.length > 0 ? values : [0];
+}
+
+function parseSampleNumber(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const match =
+    /\bSample\s+(\d+)\b/iu.exec(value) ??
+    /(?:^|[\\/])sample-(\d+)(?:[\\/]|$)/iu.exec(value) ??
+    /(?:^|[\\/])(\d+)\.(?:in|ans|out|err|diff)$/iu.exec(value);
+  return match ? Number(match[1]) : undefined;
+}
+
+async function removeManagedSampleFiles(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  cleanupErrors: string[]
+): Promise<void> {
+  const oitestRoot = getOITestDir(workspaceFolder);
+  for (const samplePath of [sample.input, sample.answer]) {
+    const resolved = resolveSamplePath(workspaceFolder, samplePath);
+    if (!isUnderPath(resolved, oitestRoot)) {
+      continue;
+    }
+    await removePath(resolved, cleanupErrors);
+  }
+}
+
+async function removeSampleOutputs(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sample: SampleConfig,
+  cleanupErrors: string[]
+): Promise<void> {
+  const paths = getProblemSampleOutputPaths(workspaceFolder, problemId, sample.id);
+  await removePath(path.dirname(paths.outputPath), cleanupErrors);
+  await removePath(paths.legacyOutputPath, cleanupErrors);
+  await removePath(paths.legacyStderrPath, cleanupErrors);
+  await removePath(paths.legacyDiffPath, cleanupErrors);
+
+  if (sample.actualOutput) {
+    const resolved = resolveSamplePath(workspaceFolder, sample.actualOutput);
+    if (isUnderPath(resolved, path.join(getProblemRoot(workspaceFolder, problemId), 'outputs'))) {
+      await removePath(resolved, cleanupErrors);
+    }
+  }
+}
+
+async function updateReportAfterSampleDeleted(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sample: SampleConfig
+): Promise<boolean> {
+  const reportPath = getProblemReportPath(workspaceFolder, problemId);
+  if (!(await exists(reportPath))) {
+    return false;
+  }
+
+  try {
+    const report = JSON.parse(await fs.readFile(reportPath, 'utf8')) as JudgeReport;
+    const filter = (entry: { id?: number; name?: string; input?: string; answer?: string }) =>
+      entry.id !== sample.id &&
+      entry.name !== sample.name &&
+      (entry.input !== sample.input || entry.answer !== sample.answer);
+    report.samples = (report.samples ?? []).filter(filter);
+    report.results = (report.results ?? report.samples).filter(filter);
+    report.summary = {
+      accepted: report.samples.filter((entry) => entry.status === 'AC').length,
+      total: report.samples.length
+    };
+    await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    return false;
+  } catch {
+    await fs.rm(reportPath, { force: true });
+    return true;
+  }
+}
+
+async function removePath(targetPath: string, cleanupErrors: string[]): Promise<void> {
+  try {
+    await fs.rm(targetPath, { recursive: true, force: true });
+  } catch (error) {
+    cleanupErrors.push(`${targetPath}: ${String(error)}`);
+  }
 }
 
 function formatSampleText(value: string, shouldDecodeEscapes: boolean): string {
