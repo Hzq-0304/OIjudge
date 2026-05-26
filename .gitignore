@@ -1,0 +1,9 @@
+out/
+node_modules/
+dist/
+.vscode-test/
+.oitest/build/
+.oitest/outputs/
+*.vsix
+*.log
+.codegraph/

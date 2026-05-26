@@ -1,0 +1,74 @@
+{
+  "name": "oijudger",
+  "displayName": "OIjudger",
+  "description": "A local multi-sample judge for OIers.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:oijudger.initProblem",
+    "onCommand:oijudger.addSample",
+    "onCommand:oijudger.runAllSamples",
+    "onCommand:oijudger.setTimeLimit",
+    "onCommand:oijudger.setMemoryLimit",
+    "onCommand:oijudger.openLastReport",
+    "onCommand:oijudger.clearOutputs",
+    "onView:oijudgerSamples"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oijudger.initProblem",
+        "title": "OIjudger: Init Problem"
+      },
+      {
+        "command": "oijudger.addSample",
+        "title": "OIjudger: Add Sample"
+      },
+      {
+        "command": "oijudger.runAllSamples",
+        "title": "OIjudger: Run All Samples"
+      },
+      {
+        "command": "oijudger.setTimeLimit",
+        "title": "OIjudger: Set Time Limit"
+      },
+      {
+        "command": "oijudger.setMemoryLimit",
+        "title": "OIjudger: Set Memory Limit"
+      },
+      {
+        "command": "oijudger.openLastReport",
+        "title": "OIjudger: Open Last Report"
+      },
+      {
+        "command": "oijudger.clearOutputs",
+        "title": "OIjudger: Clear Outputs"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "oijudgerSamples",
+          "name": "OIjudger Samples"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.87.0",
+    "typescript": "^5.4.5"
+  }
+}

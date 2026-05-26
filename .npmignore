@@ -1,0 +1,10 @@
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+tsconfig.json
+*.vsix
+.codegraph/**
+.oitest/**
+dist/**
+*.log
