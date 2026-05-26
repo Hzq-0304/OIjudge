@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import { t } from './i18n';
 import { OITestConfig, SampleConfig } from './types';
 
 export function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
@@ -14,7 +15,7 @@ export function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
 
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
-    vscode.window.showErrorMessage('Open a workspace folder before using OIjudger.');
+    vscode.window.showErrorMessage(t('openWorkspaceFolder'));
   }
   return folder;
 }
@@ -63,7 +64,7 @@ export async function ensureConfig(workspaceFolder: vscode.WorkspaceFolder): Pro
 
 export async function readConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<OITestConfig> {
   const raw = await fs.readFile(getConfigPath(workspaceFolder), 'utf8');
-  const config = JSON.parse(raw) as OITestConfig;
+  const config = normalizeConfig(JSON.parse(raw) as OITestConfig);
 
   config.samples = config.samples.map((sample, index) => normalizeSample(sample, index + 1));
   return config;
@@ -78,7 +79,8 @@ export async function addSample(
   workspaceFolder: vscode.WorkspaceFolder,
   config: OITestConfig,
   input: string,
-  answer: string
+  answer: string,
+  options: { decodeEscapes?: boolean } = {}
 ): Promise<SampleConfig> {
   const id = nextSampleId(config);
   const sample: SampleConfig = {
@@ -90,8 +92,13 @@ export async function addSample(
   };
 
   await fs.mkdir(path.join(getOITestDir(workspaceFolder), 'samples'), { recursive: true });
-  await fs.writeFile(resolveWorkspacePath(workspaceFolder, sample.input), decodeEscapes(input), 'utf8');
-  await fs.writeFile(resolveWorkspacePath(workspaceFolder, sample.answer), decodeEscapes(answer), 'utf8');
+  const shouldDecodeEscapes = options.decodeEscapes ?? true;
+  await fs.writeFile(resolveWorkspacePath(workspaceFolder, sample.input), formatSampleText(input, shouldDecodeEscapes), 'utf8');
+  await fs.writeFile(
+    resolveWorkspacePath(workspaceFolder, sample.answer),
+    formatSampleText(answer, shouldDecodeEscapes),
+    'utf8'
+  );
 
   config.samples.push(sample);
   await writeConfig(workspaceFolder, config);
@@ -119,6 +126,10 @@ export async function clearOutputs(workspaceFolder: vscode.WorkspaceFolder): Pro
 export function createDefaultConfig(): OITestConfig {
   return {
     version: 1,
+    compile: {
+      command: 'g++',
+      args: ['-std=c++17', '-O2', '-pipe', '${file}', '-o', '${output}']
+    },
     compiler: {
       command: 'g++',
       args: ['-std=c++17', '-O2', '-pipe', '${file}', '-o', '${output}']
@@ -129,6 +140,15 @@ export function createDefaultConfig(): OITestConfig {
     },
     samples: []
   };
+}
+
+export function setCompilerCommand(config: OITestConfig, command: string): OITestConfig {
+  config.compiler.command = command;
+  config.compile = {
+    command,
+    args: config.compile?.args ?? config.compiler.args
+  };
+  return config;
 }
 
 export async function exists(filePath: string): Promise<boolean> {
@@ -146,7 +166,7 @@ export function isCppFile(filePath: string): boolean {
 
 export function validatePositiveInteger(value: string): string | undefined {
   if (!/^[1-9]\d*$/.test(value)) {
-    return 'Enter a positive integer.';
+    return t('positiveInteger');
   }
   return undefined;
 }
@@ -167,10 +187,37 @@ function normalizeSample(sample: SampleConfig, fallbackId: number): SampleConfig
   };
 }
 
+function normalizeConfig(config: OITestConfig): OITestConfig {
+  const defaultConfig = createDefaultConfig();
+  const compiler = config.compiler ?? config.compile ?? defaultConfig.compiler;
+  const compile = config.compile ?? compiler;
+  return {
+    ...defaultConfig,
+    ...config,
+    compiler: {
+      command: compiler.command || compile.command || defaultConfig.compiler.command,
+      args: compiler.args ?? compile.args ?? defaultConfig.compiler.args
+    },
+    compile: {
+      command: compile.command || compiler.command || defaultConfig.compile?.command || 'g++',
+      args: compile.args ?? compiler.args ?? defaultConfig.compile?.args ?? defaultConfig.compiler.args
+    },
+    limits: {
+      ...defaultConfig.limits,
+      ...config.limits
+    },
+    samples: config.samples ?? []
+  };
+}
+
 function nextSampleId(config: OITestConfig): number {
   return config.samples.reduce((maxId, sample) => Math.max(maxId, sample.id ?? 0), 0) + 1;
 }
 
 function decodeEscapes(value: string): string {
   return value.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+}
+
+function formatSampleText(value: string, shouldDecodeEscapes: boolean): string {
+  return shouldDecodeEscapes ? decodeEscapes(value) : value;
 }

@@ -7,6 +7,8 @@ import {
   getWorkspaceFolder,
   resolveWorkspacePath
 } from './config';
+import { t } from './i18n';
+import { getProblem, getProblemReportPath } from './problems';
 import { JudgeReport, SampleConfig, SampleReport } from './types';
 
 export async function openLastReport(context: vscode.ExtensionContext): Promise<void> {
@@ -17,7 +19,7 @@ export async function openLastReport(context: vscode.ExtensionContext): Promise<
 
   const report = await readReport(workspaceFolder);
   if (!report) {
-    vscode.window.showWarningMessage('No OIjudger report found. Run all samples first.');
+    vscode.window.showWarningMessage(t('noReport'));
     return;
   }
 
@@ -34,7 +36,48 @@ export async function openSampleDetail(context: vscode.ExtensionContext, sampleI
   const report = await readReport(workspaceFolder);
   const sample = config.samples.find((entry) => entry.id === sampleId);
   if (!sample) {
-    vscode.window.showWarningMessage('Sample not found.');
+    vscode.window.showWarningMessage(t('sampleNotFound'));
+    return;
+  }
+
+  await showSamplePanel(context, workspaceFolder, sample, report?.samples.find((entry) => entry.id === sample.id));
+}
+
+export async function openProblemReport(context: vscode.ExtensionContext, problemId: string): Promise<void> {
+  const workspaceFolder = getWorkspaceFolder();
+  if (!workspaceFolder) {
+    return;
+  }
+
+  const report = await readReportFile(getProblemReportPath(workspaceFolder, problemId));
+  if (!report) {
+    vscode.window.showWarningMessage(t('noReport'));
+    return;
+  }
+
+  await showReportPanel(context, workspaceFolder, report);
+}
+
+export async function openProblemSampleDetail(
+  context: vscode.ExtensionContext,
+  problemId: string,
+  sampleId: number
+): Promise<void> {
+  const workspaceFolder = getWorkspaceFolder();
+  if (!workspaceFolder) {
+    return;
+  }
+
+  const problem = await getProblem(workspaceFolder, problemId);
+  if (!problem) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return;
+  }
+
+  const report = await readReportFile(getProblemReportPath(workspaceFolder, problemId));
+  const sample = problem.samples.find((entry) => entry.id === sampleId);
+  if (!sample) {
+    vscode.window.showWarningMessage(t('sampleNotFound'));
     return;
   }
 
@@ -43,6 +86,18 @@ export async function openSampleDetail(context: vscode.ExtensionContext, sampleI
 
 async function readReport(workspaceFolder: vscode.WorkspaceFolder): Promise<JudgeReport | undefined> {
   const reportPath = getReportPath(workspaceFolder);
+  if (!(await exists(reportPath))) {
+    return undefined;
+  }
+
+  try {
+    return readReportFile(reportPath);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readReportFile(reportPath: string): Promise<JudgeReport | undefined> {
   if (!(await exists(reportPath))) {
     return undefined;
   }
@@ -59,21 +114,24 @@ async function showReportPanel(
   workspaceFolder: vscode.WorkspaceFolder,
   report: JudgeReport
 ): Promise<void> {
-  const panel = createPanel(context, 'OIjudger Report');
+  const title = t('reportTitle');
+  const panel = createPanel(context, title);
   panel.webview.html = renderPage(
-    'OIjudger Report',
+    title,
     `<section class="summary">
-      <div><span>Accepted</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
-      <div><span>Time Limit</span><strong>${report.timeLimitMs} ms</strong></div>
-      <div><span>Memory Limit</span><strong>${report.memoryLimitMb} MB</strong></div>
-      <div><span>Generated</span><strong>${escapeHtml(new Date(report.generatedAt).toLocaleString())}</strong></div>
+      <div><span>${escapeHtml(t('accepted'))}</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
+      <div><span>${escapeHtml(t('compile'))}</span><strong>${formatDuration(report.compile?.timeMs)}</strong></div>
+      <div><span>${escapeHtml(t('total'))}</span><strong>${formatDuration(report.totalTimeMs)}</strong></div>
+      <div><span>${escapeHtml(t('timeLimit'))}</span><strong>${report.timeLimitMs} ms</strong></div>
+      <div><span>${escapeHtml(t('memoryLimit'))}</span><strong>${report.memoryLimitMb} MB</strong></div>
+      <div><span>${escapeHtml(t('generated'))}</span><strong>${escapeHtml(new Date(report.generatedAt).toLocaleString())}</strong></div>
     </section>
     <section>
-      <h2>Source</h2>
+      <h2>${escapeHtml(t('source'))}</h2>
       <p class="path">${escapeHtml(report.source)}</p>
     </section>
     <section>
-      <h2>Samples</h2>
+      <h2>${escapeHtml(t('samples'))}</h2>
       <div class="samples">
         ${report.samples.map((sample) => renderSampleCard(workspaceFolder, sample)).join('')}
       </div>
@@ -91,24 +149,27 @@ async function showSamplePanel(
   const answer = await readText(resolveWorkspacePath(workspaceFolder, sample.answer));
   const actualOutput = report?.actualOutput
     ? await readText(resolveWorkspacePath(workspaceFolder, report.actualOutput))
-    : 'Not run yet.';
+    : t('notRunYet');
 
   const status = report?.status ?? 'Not Run';
-  const elapsed = report ? `${report.elapsedMs} ms` : '-';
-  const panel = createPanel(context, `${sample.name} Detail`);
+  const elapsed = report ? `${formatMs(report.timeMs ?? report.elapsedMs)} ms` : '-';
+  const compareElapsed = report?.compareTimeMs !== undefined ? `${formatMs(report.compareTimeMs)} ms` : '-';
+  const title = t('sampleDetail', { sample: sample.name });
+  const panel = createPanel(context, title);
   panel.webview.html = renderPage(
-    `${sample.name} Detail`,
+    title,
     `<section class="summary">
-      <div><span>Status</span><strong class="status ${statusClass(status)}">${escapeHtml(status)}</strong></div>
-      <div><span>Elapsed</span><strong>${escapeHtml(elapsed)}</strong></div>
-      <div><span>Input</span><strong>${escapeHtml(sample.input)}</strong></div>
-      <div><span>Answer</span><strong>${escapeHtml(sample.answer)}</strong></div>
+      <div><span>${escapeHtml(t('status'))}</span><strong class="status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</strong></div>
+      <div><span>${escapeHtml(t('elapsed'))}</span><strong>${escapeHtml(elapsed)}</strong></div>
+      <div><span>${escapeHtml(t('compareTime'))}</span><strong>${escapeHtml(compareElapsed)}</strong></div>
+      <div><span>${escapeHtml(t('input'))}</span><strong>${escapeHtml(sample.input)}</strong></div>
+      <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
     </section>
-    ${report?.message ? `<section><h2>Message</h2><p>${escapeHtml(report.message)}</p></section>` : ''}
+    ${report?.message ? `<section><h2>${escapeHtml(t('message'))}</h2><p>${escapeHtml(report.message)}</p></section>` : ''}
     <section class="columns">
-      ${renderBlock('Input', input)}
-      ${renderBlock('Expected Output', answer)}
-      ${renderBlock('User Output', actualOutput)}
+      ${renderBlock(t('input'), input)}
+      ${renderBlock(t('expectedOutput'), answer)}
+      ${renderBlock(t('userOutput'), actualOutput)}
     </section>`
   );
 }
@@ -130,13 +191,14 @@ function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: Sampl
   return `<article class="sample">
     <div class="sampleHead">
       <strong>${escapeHtml(sample.name)}</strong>
-      <span class="status ${statusClass(sample.status)}">${escapeHtml(sample.status)}</span>
+      <span class="status ${statusClass(sample.status)}">${escapeHtml(statusLabel(sample.status))}</span>
     </div>
     <dl>
-      <dt>Elapsed</dt><dd>${sample.elapsedMs} ms</dd>
-      <dt>Input</dt><dd>${escapeHtml(sample.input)}</dd>
-      <dt>Answer</dt><dd>${escapeHtml(sample.answer)}</dd>
-      <dt>User Output</dt><dd>${escapeHtml(sample.actualOutput)}</dd>
+      <dt>${escapeHtml(t('elapsed'))}</dt><dd>${formatDuration(sample.timeMs ?? sample.elapsedMs)}</dd>
+      <dt>${escapeHtml(t('compareTime'))}</dt><dd>${formatDuration(sample.compareTimeMs)}</dd>
+      <dt>${escapeHtml(t('input'))}</dt><dd>${escapeHtml(sample.input)}</dd>
+      <dt>${escapeHtml(t('answer'))}</dt><dd>${escapeHtml(sample.answer)}</dd>
+      <dt>${escapeHtml(t('userOutput'))}</dt><dd>${escapeHtml(sample.actualOutput)}</dd>
     </dl>
     ${sample.message ? `<p>${escapeHtml(sample.message)}</p>` : ''}
     <p class="path">${escapeHtml(actualPath)}</p>
@@ -154,7 +216,7 @@ async function readText(filePath: string): Promise<string> {
   try {
     return await fs.readFile(filePath, 'utf8');
   } catch {
-    return 'File not found.';
+    return t('fileNotFound');
   }
 }
 
@@ -256,6 +318,33 @@ function renderPage(title: string, body: string): string {
 
 function statusClass(status: string): string {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function formatMs(value: number | undefined): number | string {
+  return value === undefined ? '-' : Math.round(value);
+}
+
+function formatDuration(value: number | undefined): string {
+  return value === undefined ? '-' : `${Math.round(value)} ms`;
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'AC':
+      return t('statusAC');
+    case 'WA':
+      return t('statusWA');
+    case 'TLE':
+      return t('statusTLE');
+    case 'RE':
+      return t('statusRE');
+    case 'ERR':
+      return t('statusERR');
+    case 'Not Run':
+      return t('notRun');
+    default:
+      return status;
+  }
 }
 
 function escapeHtml(value: string): string {

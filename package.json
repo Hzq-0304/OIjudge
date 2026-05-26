@@ -16,10 +16,25 @@
     "onCommand:oijudger.runAllSamples",
     "onCommand:oijudger.setTimeLimit",
     "onCommand:oijudger.setMemoryLimit",
+    "onCommand:oijudger.selectCompiler",
     "onCommand:oijudger.openLastReport",
+    "onCommand:oijudger.openResultPanel",
     "onCommand:oijudger.openSampleDetail",
     "onCommand:oijudger.clearOutputs",
-    "onView:oijudgerSamples"
+    "onCommand:oijudger.refreshView",
+    "onCommand:oijudger.addProblemFromCurrentFile",
+    "onCommand:oijudger.addProblemFromFile",
+    "onCommand:oijudger.importLegacyProblem",
+    "onCommand:oijudger.addProblemSample",
+    "onCommand:oijudger.addProblemSampleFromFiles",
+    "onCommand:oijudger.runProblemSamples",
+    "onCommand:oijudger.setProblemTimeLimit",
+    "onCommand:oijudger.setProblemMemoryLimit",
+    "onCommand:oijudger.setProblemStandard",
+    "onCommand:oijudger.selectProblemCompiler",
+    "onCommand:oijudger.openProblemResultPanel",
+    "onCommand:oijudger.openProblemSampleDetail",
+    "onView:oijudger.samplesView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -50,9 +65,19 @@
         "icon": "$(server)"
       },
       {
+        "command": "oijudger.selectCompiler",
+        "title": "OIjudger: Select C++ Compiler",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "oijudger.openLastReport",
         "title": "OIjudger: Open Last Report",
         "icon": "$(preview)"
+      },
+      {
+        "command": "oijudger.openResultPanel",
+        "title": "OIjudger: Open Result Panel",
+        "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openSampleDetail",
@@ -63,44 +88,179 @@
         "command": "oijudger.clearOutputs",
         "title": "OIjudger: Clear Outputs",
         "icon": "$(trash)"
+      },
+      {
+        "command": "oijudger.refreshView",
+        "title": "OIjudger: Refresh View",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "oijudger.addProblemFromCurrentFile",
+        "title": "OIjudger: Add Problem From Current File",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "oijudger.addProblemFromFile",
+        "title": "OIjudger: Add Problem From File",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "oijudger.importLegacyProblem",
+        "title": "OIjudger: Import Legacy Single Problem",
+        "icon": "$(repo-pull)"
+      },
+      {
+        "command": "oijudger.addProblemSample",
+        "title": "OIjudger: Add Problem Sample",
+        "icon": "$(add)"
+      },
+      {
+        "command": "oijudger.addProblemSampleFromFiles",
+        "title": "OIjudger: Add Problem Sample From Files",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "oijudger.runProblemSamples",
+        "title": "OIjudger: Run Problem Samples",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "oijudger.setProblemTimeLimit",
+        "title": "OIjudger: Set Problem Time Limit",
+        "icon": "$(watch)"
+      },
+      {
+        "command": "oijudger.setProblemMemoryLimit",
+        "title": "OIjudger: Set Problem Memory Limit",
+        "icon": "$(server)"
+      },
+      {
+        "command": "oijudger.setProblemStandard",
+        "title": "OIjudger: Set Problem C++ Standard",
+        "icon": "$(settings)"
+      },
+      {
+        "command": "oijudger.selectProblemCompiler",
+        "title": "OIjudger: Select Problem Compiler",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "oijudger.openProblemResultPanel",
+        "title": "OIjudger: Open Problem Result Panel",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "oijudger.openProblemSampleDetail",
+        "title": "OIjudger: Open Problem Sample Detail",
+        "icon": "$(go-to-file)"
       }
     ],
-    "views": {
-      "explorer": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "oijudgerSamples",
+          "id": "oijudger",
+          "title": "OIjudger",
+          "icon": "resources/oijudger.svg"
+        }
+      ]
+    },
+    "views": {
+      "oijudger": [
+        {
+          "id": "oijudger.samplesView",
           "name": "OIjudger"
         }
       ]
     },
+    "configuration": {
+      "title": "OIjudger",
+      "properties": {
+        "oijudger.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "zh"
+          ],
+          "enumDescriptions": [
+            "Follow VSCode display language.",
+            "Use English UI text.",
+            "Use Chinese UI text."
+          ],
+          "description": "Controls OIjudger UI language."
+        }
+      }
+    },
     "menus": {
       "view/title": [
         {
-          "command": "oijudger.runAllSamples",
-          "when": "view == oijudgerSamples",
+          "command": "oijudger.addProblemFromCurrentFile",
+          "when": "view == oijudger.samplesView",
           "group": "navigation@1"
         },
         {
-          "command": "oijudger.addSample",
-          "when": "view == oijudgerSamples",
+          "command": "oijudger.addProblemFromFile",
+          "when": "view == oijudger.samplesView",
           "group": "navigation@2"
         },
         {
-          "command": "oijudger.openLastReport",
-          "when": "view == oijudgerSamples",
+          "command": "oijudger.importLegacyProblem",
+          "when": "view == oijudger.samplesView",
           "group": "navigation@3"
+        },
+        {
+          "command": "oijudger.refreshView",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "oijudger.openSampleDetail",
-          "when": "view == oijudgerSamples && viewItem == oijudgerSample",
+          "command": "oijudger.openProblemSampleDetail",
+          "when": "view == oijudger.samplesView && viewItem == sample",
           "group": "inline@1"
         }
       ],
       "commandPalette": [
         {
           "command": "oijudger.openSampleDetail",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addProblemSample",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addProblemSampleFromFiles",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.runProblemSamples",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setProblemTimeLimit",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setProblemMemoryLimit",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setProblemStandard",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.selectProblemCompiler",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openProblemResultPanel",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openProblemSampleDetail",
           "when": "false"
         }
       ]

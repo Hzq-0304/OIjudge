@@ -2,15 +2,16 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { getOITestDir } from './config';
+import { t } from './i18n';
 import { runProcess } from './runner';
-import { OITestConfig, ProcessResult } from './types';
+import { CompileResult, OITestConfig, ProcessResult } from './types';
 
 export async function compileSource(
   workspaceFolder: vscode.WorkspaceFolder,
   sourcePath: string,
   config: OITestConfig,
   output: vscode.OutputChannel
-): Promise<string | undefined> {
+): Promise<CompileResult | undefined> {
   const buildDir = path.join(getOITestDir(workspaceFolder), 'build');
   await fs.mkdir(buildDir, { recursive: true });
 
@@ -21,6 +22,8 @@ export async function compileSource(
       .replace(/\$\{file\}/g, sourcePath)
       .replace(/\$\{output\}/g, executablePath)
       .replace(/\$\{workspaceFolder\}/g, workspaceFolder.uri.fsPath)
+      .replace(/\{source\}/g, sourcePath)
+      .replace(/\{exe\}/g, executablePath)
   );
 
   output.appendLine(`Compile: ${config.compiler.command} ${args.map(quoteArg).join(' ')}`);
@@ -30,7 +33,7 @@ export async function compileSource(
     result = await runProcess(config.compiler.command, args, '', workspaceFolder.uri.fsPath, 60_000);
   } catch (error) {
     output.appendLine(`Compile failed to start: ${String(error)}`);
-    vscode.window.showErrorMessage('OIjudger compile command failed to start. Check compiler settings.');
+    vscode.window.showErrorMessage(t('compileStartFailed'));
     return undefined;
   }
 
@@ -42,13 +45,18 @@ export async function compileSource(
     if (result.stdout.trim()) {
       output.appendLine(result.stdout.trimEnd());
     }
-    vscode.window.showErrorMessage('OIjudger compile failed. See output for details.');
+    vscode.window.showErrorMessage(t('compileFailed'));
     return undefined;
   }
 
   output.appendLine('Compile succeeded.');
+  output.appendLine(`Compile time: ${formatMs(result.timeMs)} ms`);
   output.appendLine('');
-  return executablePath;
+  return {
+    status: 'OK',
+    timeMs: result.timeMs,
+    executablePath
+  };
 }
 
 function quoteArg(value: string): string {
@@ -56,4 +64,8 @@ function quoteArg(value: string): string {
     return `"${value.replace(/"/g, '\\"')}"`;
   }
   return value;
+}
+
+function formatMs(value: number): number {
+  return Math.round(value);
 }

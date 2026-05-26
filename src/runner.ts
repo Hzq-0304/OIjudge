@@ -9,7 +9,7 @@ export function runProcess(
   timeoutMs: number
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const startedAt = Date.now();
+    const startedAt = process.hrtime.bigint();
     const child = spawn(command, args, {
       cwd,
       shell: false,
@@ -18,9 +18,11 @@ export function runProcess(
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let timedOut = false;
+    let timeoutTimeMs: number | undefined;
 
     const timer = setTimeout(() => {
       timedOut = true;
+      timeoutTimeMs = elapsedMs(startedAt);
       child.kill();
     }, timeoutMs);
 
@@ -32,16 +34,22 @@ export function runProcess(
     });
     child.on('close', (code, signal) => {
       clearTimeout(timer);
+      const timeMs = timedOut && timeoutTimeMs !== undefined ? timeoutTimeMs : elapsedMs(startedAt);
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
         stderr: Buffer.concat(stderrChunks).toString('utf8'),
         code,
         signal,
         timedOut,
-        elapsedMs: Date.now() - startedAt
+        timeMs,
+        elapsedMs: Math.round(timeMs)
       });
     });
 
     child.stdin.end(input);
   });
+}
+
+function elapsedMs(startedAt: bigint): number {
+  return Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 }
