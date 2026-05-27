@@ -125,12 +125,16 @@ export type CheckerSampleReport = {
   exe?: string;
   testlibPath?: string;
   exitCode?: number | null;
+  exitCodeHex?: string;
   signal?: NodeJS.Signals | null;
   timeMs?: number;
+  output?: string;
   stdout?: string;
   stderr?: string;
   finalLine?: string;
-  verdict?: 'AC' | 'WA' | 'Score' | 'Invalid';
+  verdict?: 'AC' | 'WA' | 'Score' | 'Invalid' | 'CheckerError';
+  errorKind?: RuntimeErrorSummary['kind'] | 'CheckerError';
+  errorName?: string;
   score?: number;
   scoreText?: string;
   message?: string;

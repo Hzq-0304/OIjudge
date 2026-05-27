@@ -11,6 +11,8 @@ export type CheckerCompileResult = {
   type: 'testlib' | 'plain';
   source: string;
   exe: string;
+  compilerCommand?: string;
+  compilerBin?: string;
   testlib?: TestlibResolveResult;
   timeMs?: number;
   stderrPath: string;
@@ -54,7 +56,17 @@ export async function compileChecker(
     const message = 'testlib.h not found. Please run OIjudger: Import testlib.h.';
     await fs.writeFile(stderrPath, `${message}\n`, 'utf8');
     output.appendLine(`  ${message}`);
-    return { ok: false, type: checker.type, source: checkerSource, exe: checkerExe, testlib, stderrPath, message };
+    return {
+      ok: false,
+      type: checker.type,
+      source: checkerSource,
+      exe: checkerExe,
+      compilerCommand: config.compiler.command,
+      compilerBin: getCompilerBin(config.compiler.command),
+      testlib,
+      stderrPath,
+      message
+    };
   }
 
   const args = [
@@ -66,18 +78,45 @@ export async function compileChecker(
   if (checker.type === 'testlib' && testlib?.includeDir) {
     args.push(`-I${testlib.includeDir}`);
   }
+  const staticLinkArgs = getCheckerStaticLinkArgs(config.compiler.command);
+  args.push(...staticLinkArgs);
   args.push('-o', checkerExe);
   output.appendLine(`  compiler: ${config.compiler.command}`);
+  if (staticLinkArgs.length > 0) {
+    output.appendLine(`  static link args: ${staticLinkArgs.join(' ')}`);
+  }
   output.appendLine(`  args: ${args.map(quoteArg).join(' ')}`);
 
   let result;
+  let finalArgs = args;
   try {
     result = await runProcess(config.compiler.command, args, '', workspaceFolder.uri.fsPath, 60_000);
+    if ((result.code !== 0 || result.timedOut) && staticLinkArgs.length > 0) {
+      const fallbackArgs = args.filter((arg) => !staticLinkArgs.includes(arg));
+      output.appendLine('  Checker static linking failed; retrying without static link args.');
+      output.appendLine(`  fallback args: ${fallbackArgs.map(quoteArg).join(' ')}`);
+      const fallbackResult = await runProcess(config.compiler.command, fallbackArgs, '', workspaceFolder.uri.fsPath, 60_000);
+      if (fallbackResult.code === 0 && !fallbackResult.timedOut) {
+        result = fallbackResult;
+        finalArgs = fallbackArgs;
+        output.appendLine('  Checker fallback compile succeeded without static link args.');
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await fs.writeFile(stderrPath, message, 'utf8');
     output.appendLine(`  Checker compile failed to start: ${message}`);
-    return { ok: false, type: checker.type, source: checkerSource, exe: checkerExe, testlib, stderrPath, message };
+    return {
+      ok: false,
+      type: checker.type,
+      source: checkerSource,
+      exe: checkerExe,
+      compilerCommand: config.compiler.command,
+      compilerBin: getCompilerBin(config.compiler.command),
+      testlib,
+      stderrPath,
+      message
+    };
   }
   const compileOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
   await fs.writeFile(stderrPath, compileOutput, 'utf8');
@@ -90,11 +129,35 @@ export async function compileChecker(
     if (compileOutput.trim()) {
       output.appendLine(indent(compileOutput.trimEnd()));
     }
-    return { ok: false, type: checker.type, source: checkerSource, exe: checkerExe, testlib, timeMs: result.timeMs, stderrPath, message };
+    return {
+      ok: false,
+      type: checker.type,
+      source: checkerSource,
+      exe: checkerExe,
+      compilerCommand: config.compiler.command,
+      compilerBin: getCompilerBin(config.compiler.command),
+      testlib,
+      timeMs: result.timeMs,
+      stderrPath,
+      message
+    };
   }
 
   output.appendLine(`  Checker compile succeeded: ${Math.round(result.timeMs)} ms`);
-  return { ok: true, type: checker.type, source: checkerSource, exe: checkerExe, testlib, timeMs: result.timeMs, stderrPath };
+  if (finalArgs !== args) {
+    output.appendLine('  Note: checker was compiled without static link args after fallback.');
+  }
+  return {
+    ok: true,
+    type: checker.type,
+    source: checkerSource,
+    exe: checkerExe,
+    compilerCommand: config.compiler.command,
+    compilerBin: getCompilerBin(config.compiler.command),
+    testlib,
+    timeMs: result.timeMs,
+    stderrPath
+  };
 }
 
 export async function compileTestlibChecker(
@@ -116,4 +179,20 @@ function quoteArg(value: string): string {
 
 function indent(value: string): string {
   return value.split(/\r?\n/u).map((line) => `    ${line}`).join('\n');
+}
+
+function getCheckerStaticLinkArgs(compilerCommand: string): string[] {
+  if (process.platform !== 'win32' || !isGnuGppCompiler(compilerCommand)) {
+    return [];
+  }
+  return ['-static', '-static-libgcc', '-static-libstdc++'];
+}
+
+function isGnuGppCompiler(compilerCommand: string): boolean {
+  const base = path.basename(compilerCommand).toLowerCase();
+  return base === 'g++.exe' || base === 'g++' || base === 'c++.exe' || base === 'c++';
+}
+
+function getCompilerBin(compilerCommand: string): string | undefined {
+  return path.isAbsolute(compilerCommand) ? path.dirname(compilerCommand) : undefined;
 }

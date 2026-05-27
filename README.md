@@ -133,11 +133,19 @@ checker.exe input.txt useroutput.txt answer.txt
   - `Import testlib.h from local file`
 - Bundled source and license details are preserved in `resources/testlib/README.md` and `resources/testlib/LICENSE`.
 - Checker executables are built under `.oitest/problems/<problemId>/checker/`.
-- Checker stdout/stderr are saved beside each sample output as `checker-stdout.txt` and `checker-stderr.txt`.
+- Checker stdout and stderr are merged into one file beside each sample output as `checker-output.txt`.
+- testlib checkers often print verdict details to stderr; users can still view all checker information through the single `Checker Output` action.
+- Plain Checker verdict parsing still uses only the last non-empty line of the original stdout. Merged stderr content is saved for viewing, but it is not parsed as the verdict.
 - First-version verdict rules:
   - checker exit code `0` => `AC`
-  - checker exit code not `0` => `WA`
+  - checker exit code `1` => `WA`
+  - Windows NTSTATUS exception codes such as `0xC0000135` => `Checker Error`
   - checker compile/run/timeout failure => `Checker Error`
+- Windows DLL note:
+  - If a checker exits with code `3221225781` / `0xC0000135`, it usually means `checker.exe` failed to start because a runtime DLL is missing, not that the checker judged `WA`.
+  - Common missing DLLs include MinGW `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll`.
+  - OIjudger tries to compile checkers with static linking for MinGW/g++ and prepends the compiler `bin` directory to the checker process `PATH`.
+  - You can also add the MinGW `bin` directory to `PATH`, rebuild the checker with static linking, or put the missing DLL next to `checker.exe`.
 - Normal compare is unchanged when no checker is enabled.
 - Later versions may add `score-json`, `score-plain`, and partial score checker protocols.
 

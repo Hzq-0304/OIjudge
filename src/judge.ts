@@ -29,6 +29,7 @@ type CheckerContext = {
   type: 'testlib' | 'plain';
   source: string;
   exe: string;
+  compilerBin?: string;
   testlibPath?: string;
   timeLimitMs: number;
 };
@@ -64,6 +65,7 @@ export async function runAllSamples(
         type: checkerCompile.type,
         source: checkerCompile.source,
         exe: checkerCompile.exe,
+        compilerBin: checkerCompile.compilerBin,
         testlibPath: checkerCompile.testlib?.testlibPath,
         timeLimitMs: getCheckerTimeLimitMs(config.checker)
       }
@@ -349,20 +351,18 @@ async function judgeSample(
 
   const compareStartedAt = process.hrtime.bigint();
   if (checkerContext) {
-    const checkerStdoutRel = outputPaths.outputRel.replace(/useroutput\.txt$/u, 'checker-stdout.txt');
-    const checkerStderrRel = outputPaths.outputRel.replace(/useroutput\.txt$/u, 'checker-stderr.txt');
+    const checkerOutputRel = outputPaths.outputRel.replace(/useroutput\.txt$/u, 'checker-output.txt');
     const checkerStartedAt = process.hrtime.bigint();
     const checkerInput = {
       checkerSource: checkerContext.source,
       checkerExe: checkerContext.exe,
+      compilerBin: checkerContext.compilerBin,
       testlibPath: checkerContext.testlibPath,
       inputPath: fileStatus.inputPath,
       userOutputPath: outputPaths.outputPath,
       answerPath: fileStatus.answerPath,
-      stdoutPath: resolveWorkspacePath(workspaceFolder, checkerStdoutRel),
-      stderrPath: resolveWorkspacePath(workspaceFolder, checkerStderrRel),
-      stdoutRel: checkerStdoutRel,
-      stderrRel: checkerStderrRel,
+      outputPath: resolveWorkspacePath(workspaceFolder, checkerOutputRel),
+      outputRel: checkerOutputRel,
       timeLimitMs: checkerContext.timeLimitMs
     };
     const checkerResult = checkerContext.type === 'plain'
@@ -375,6 +375,9 @@ async function judgeSample(
     output.appendLine(`[${checkerResult.status}] ${sample.name}${scoreSuffix} (${formatMs(result.timeMs)} ms, checker ${formatMs(checkerResult.report.timeMs ?? checkerTimeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} checker time: ${formatMs(checkerResult.report.timeMs ?? checkerTimeMs)} ms`);
+    if (checkerContext.compilerBin) {
+      output.appendLine(`${sample.name} checker PATH includes compiler bin: ${checkerContext.compilerBin}`);
+    }
     if (checkerResult.report.message) {
       output.appendLine(indent(checkerResult.report.message));
     }
@@ -498,7 +501,7 @@ function createCheckerErrorSampleReport(
       source: checkerCompile.source,
       exe: checkerCompile.exe,
       testlibPath: checkerCompile.testlib?.testlibPath,
-      stderr: checkerCompile.stderrPath,
+      output: checkerCompile.stderrPath,
       message: checkerCompile.message
     }
   );

@@ -237,6 +237,7 @@ async function showSamplePanel(
       <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
     </section>
     ${report ? renderRuntimeErrorDetails(report) : ''}
+    ${report ? renderCheckerErrorDetails(report) : ''}
     ${report?.message ? `<section><h2>${escapeHtml(t('message'))}</h2><p>${escapeHtml(report.message)}</p></section>` : ''}
     <section>
       <h2>${escapeHtml(t('actions'))}</h2>
@@ -271,7 +272,6 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       stderr: 'oijudger.openSampleStderr',
       diff: 'oijudger.openSampleDiff',
       checkerOutput: 'oijudger.openCheckerOutput',
-      checkerStderr: 'oijudger.openCheckerStderr',
       delete: 'oijudger.deleteSample'
     };
     const command = commandMap[typed.command];
@@ -304,6 +304,7 @@ function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: Sampl
     </dl>
     ${sample.message ? `<p>${escapeHtml(sample.message)}</p>` : ''}
     ${renderRuntimeErrorDetails(sample)}
+    ${renderCheckerErrorDetails(sample)}
     <p class="path">${escapeHtml(outputPath)}</p>
     ${renderActionButtons(sampleIndex, problemId, sample.status)}
   </article>`;
@@ -331,6 +332,23 @@ function renderRuntimeErrorDetails(sample: SampleReport): string {
   </section>`;
 }
 
+function renderCheckerErrorDetails(sample: SampleReport): string {
+  if (sample.status !== 'Checker Error' || !sample.checker?.errorName) {
+    return '';
+  }
+
+  const checker = sample.checker;
+  const errorName = checker.errorName ?? 'Checker Error';
+  const exitCode = checker.exitCode !== undefined && checker.exitCode !== null
+    ? `<p><strong>${escapeHtml(t('exitCode'))}:</strong> ${checker.exitCode}${checker.exitCodeHex ? ` (${escapeHtml(checker.exitCodeHex)})` : ''}</p>`
+    : '';
+  return `<section class="runtimeError">
+    <h2>${escapeHtml(t('checkerError'))}: ${escapeHtml(errorName)}</h2>
+    ${exitCode}
+    ${checker.message ? `<pre>${escapeHtml(checker.message)}</pre>` : ''}
+  </section>`;
+}
+
 function renderActionButtons(sampleId: number | undefined, problemId: string | undefined, status: string): string {
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
   const diffDisabled = status === 'WA' ? disabled : ' disabled';
@@ -342,7 +360,6 @@ function renderActionButtons(sampleId: number | undefined, problemId: string | u
     <button data-command="stderr" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('openStderr'))}</button>
     <button data-command="diff" data-sample="${sampleValue}"${diffDisabled}>${escapeHtml(t('openDiff'))}</button>
     <button data-command="checkerOutput" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('checkerOutput'))}</button>
-    <button data-command="checkerStderr" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('checkerStderr'))}</button>
     <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
   </div>`;
 }

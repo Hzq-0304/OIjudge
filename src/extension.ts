@@ -398,10 +398,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await openSampleDiffCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
     }),
     vscode.commands.registerCommand('oijudger.openCheckerOutput', async (problemArg?: unknown, sampleArg?: unknown) => {
-      await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'stdout');
+      await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
     }),
     vscode.commands.registerCommand('oijudger.openCheckerStderr', async (problemArg?: unknown, sampleArg?: unknown) => {
-      await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'stderr');
+      await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
     }),
     vscode.commands.registerCommand('oijudger.deleteSample', async (problemArg?: unknown, sampleArg?: unknown) => {
       await deleteSampleCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
@@ -1533,8 +1533,7 @@ async function openSampleDiffCommand(problemId: string | undefined, sampleId: nu
 
 async function openCheckerArtifactCommand(
   problemId: string | undefined,
-  sampleId: number | undefined,
-  kind: 'stdout' | 'stderr'
+  sampleId: number | undefined
 ): Promise<void> {
   const context = await getSampleContext(problemId, sampleId);
   if (!context) {
@@ -1548,22 +1547,22 @@ async function openCheckerArtifactCommand(
   }
 
   try {
-    const report = JSON.parse(await fs.readFile(reportPath, 'utf8')) as { samples?: Array<{ index?: number; id?: string; checker?: { stdout?: string; stderr?: string } }> };
+    const report = JSON.parse(await fs.readFile(reportPath, 'utf8')) as { samples?: Array<{ index?: number; id?: string; checker?: { output?: string; stdout?: string; stderr?: string } }> };
     const sampleReport = report.samples?.find((entry) =>
       entry.index === context.sample.index || entry.id === context.sample.id
     );
-    const artifact = kind === 'stdout' ? sampleReport?.checker?.stdout : sampleReport?.checker?.stderr;
+    const artifact = sampleReport?.checker?.output ?? sampleReport?.checker?.stdout ?? sampleReport?.checker?.stderr;
     if (!artifact) {
-      vscode.window.showWarningMessage(kind === 'stdout' ? t('checkerOutputMissing') : t('checkerStderrMissing'));
+      vscode.window.showWarningMessage(t('checkerOutputMissing'));
       return;
     }
 
     const artifactPath = path.isAbsolute(artifact)
       ? artifact
       : resolveProblemReferencePath(context.workspaceFolder, artifact);
-    await openFileInEditor(artifactPath, kind === 'stdout' ? t('checkerOutputMissing') : t('checkerStderrMissing'));
+    await openFileInEditor(artifactPath, t('checkerOutputMissing'));
   } catch {
-    vscode.window.showWarningMessage(kind === 'stdout' ? t('checkerOutputMissing') : t('checkerStderrMissing'));
+    vscode.window.showWarningMessage(t('checkerOutputMissing'));
   }
 }
 

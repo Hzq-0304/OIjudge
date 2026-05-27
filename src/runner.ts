@@ -6,12 +6,14 @@ export function runProcess(
   args: string[],
   input: string,
   cwd: string,
-  timeoutMs: number
+  timeoutMs: number,
+  env?: NodeJS.ProcessEnv
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint();
     const child = spawn(command, args, {
       cwd,
+      env,
       shell: false,
       windowsHide: true
     });

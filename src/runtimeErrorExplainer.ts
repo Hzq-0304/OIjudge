@@ -1,6 +1,7 @@
 import { getLocale } from './i18n';
 
 export type RuntimeErrorKind =
+  | 'missingRuntimeDll'
   | 'stackOverflow'
   | 'accessViolation'
   | 'integerDivideByZero'
@@ -49,6 +50,16 @@ type RuntimeErrorInput = {
 type RuntimeErrorTemplate = Omit<RuntimeErrorExplanation, 'rawCode' | 'rawExitCode' | 'rawSignal'>;
 
 const windowsExitCodeMap = new Map<number, RuntimeErrorTemplate>([
+  [0xC0000135, {
+    kind: 'missingRuntimeDll',
+    englishName: 'Missing runtime DLL',
+    englishDescription: 'The program failed to start, probably because a runtime DLL is missing.',
+    chineseDescription: '程序启动失败，通常是缺少运行时 DLL，例如 MinGW 的 libstdc++-6.dll、libgcc_s_seh-1.dll 或 libwinpthread-1.dll。',
+    englishCauses: ['Missing MinGW runtime DLL', 'Compiler bin directory is not in PATH', 'The executable was built with dynamic runtime libraries'],
+    chineseCauses: ['缺少 MinGW 运行时 DLL', '编译器 bin 目录未加入 PATH', '可执行文件依赖动态运行时库'],
+    englishSuggestions: ['Add the MinGW bin directory to PATH', 'Rebuild with static linking', 'Put the missing DLL next to the executable'],
+    chineseSuggestions: ['将 MinGW bin 目录加入 PATH', '使用静态链接参数重新编译', '将缺失 DLL 放到可执行文件同目录']
+  }],
   [0xC00000FD, {
     kind: 'stackOverflow',
     englishName: 'Stack overflow',

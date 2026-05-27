@@ -326,8 +326,7 @@ async function createSampleNodes(
           t('plainCheckerProtocol')
         ] : []),
         ...(sampleReport?.checker?.message ? [`${t('checker')}: ${sampleReport.checker.message}`] : []),
-        ...(sampleReport?.checker?.stdout ? [`${t('checkerOutput')}: ${sampleReport.checker.stdout}`] : []),
-        ...(sampleReport?.checker?.stderr ? [`${t('checkerStderr')}: ${sampleReport.checker.stderr}`] : []),
+        ...(sampleReport?.checker?.output ? [`${t('checkerOutput')}: ${sampleReport.checker.output}`] : []),
         ...createRuntimeTooltipLines(sampleReport)
       ].join('\n'),
       icon: status === 'Missing'
@@ -383,6 +382,9 @@ function formatSampleDescription(
   if (status === 'Scored' && report?.checker?.scoreText !== undefined) {
     return report.checker.scoreText;
   }
+  if (status === 'Checker Error' && report?.checker?.errorName) {
+    return `${t('checkerError')}: ${report.checker.errorName}`;
+  }
   const statusText = explanation ? `RE: ${explanation.englishName}` : statusLabel(status);
   return elapsed ? `${statusText}  ${elapsed}` : statusText;
 }
@@ -421,7 +423,6 @@ function createSampleActionNodes(
   }
   if (status === 'WA' || status === 'AC' || status === 'Scored' || status === 'Checker Error') {
     nodes.push(sampleActionNode(t('checkerOutput'), 'oijudger.openCheckerOutput', 'output', problemId, sampleId));
-    nodes.push(sampleActionNode(t('checkerStderr'), 'oijudger.openCheckerStderr', 'warning', problemId, sampleId));
   }
 
   return nodes;
@@ -463,11 +464,12 @@ function createCheckerInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem:
     ? resolveProblemReferencePath(workspaceFolder, checker.source)
     : undefined;
   const missing = !checkerPath || !existsSync(checkerPath);
+  const checkerMode = checker.type === 'plain' ? t('plainCheckerMode') : t('testlibCheckerMode');
   return {
     kind: 'info',
     label: missing
       ? `${t('checker')}: ${t('statusMissing')}`
-      : `${t('checker')}: testlib ${path.basename(checkerPath)}`,
+      : `${t('checker')}: ${checkerMode} ${path.basename(checkerPath)}`,
     tooltip: checkerPath ?? t('checkerMissing'),
     icon: missing
       ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))

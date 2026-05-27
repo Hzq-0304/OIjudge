@@ -2,7 +2,7 @@
   "name": "oijudger",
   "displayName": "OIjudger",
   "description": "A local multi-sample judge for OIers with normal compare, testlib checkers, and plain checkers.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "local",
   "engines": {
     "vscode": "^1.87.0"
@@ -57,8 +57,7 @@
     "onCommand:oijudger.openChecker",
     "onCommand:oijudger.importTestlib",
     "onCommand:oijudger.openTestlib",
-    "onCommand:oijudger.openCheckerOutput",
-    "onCommand:oijudger.openCheckerStderr"
+    "onCommand:oijudger.openCheckerOutput"
   ],
   "main": "./out/extension.js",
   "repository": {
@@ -297,11 +296,6 @@
         "command": "oijudger.openCheckerOutput",
         "title": "OIjudger: Open Checker Output",
         "icon": "$(output)"
-      },
-      {
-        "command": "oijudger.openCheckerStderr",
-        "title": "OIjudger: Open Checker Stderr",
-        "icon": "$(warning)"
       }
     ],
     "viewsContainers": {
@@ -479,11 +473,6 @@
           "command": "oijudger.openCheckerOutput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa)",
           "group": "inline@6"
-        },
-        {
-          "command": "oijudger.openCheckerStderr",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa)",
-          "group": "inline@7"
         }
       ],
       "commandPalette": [
@@ -557,10 +546,6 @@
         },
         {
           "command": "oijudger.openCheckerOutput",
-          "when": "false"
-        },
-        {
-          "command": "oijudger.openCheckerStderr",
           "when": "false"
         }
       ]
