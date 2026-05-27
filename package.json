@@ -2,7 +2,7 @@
   "name": "oijudger",
   "displayName": "OIjudger",
   "description": "A local multi-sample judge for OIers with normal compare, testlib checkers, and plain checkers.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "local",
   "engines": {
     "vscode": "^1.87.0"
@@ -48,7 +48,6 @@
     "onCommand:oijudger.openSampleAnswer",
     "onCommand:oijudger.openSampleOutput",
     "onCommand:oijudger.openSampleUserOutput",
-    "onCommand:oijudger.openSampleStderr",
     "onCommand:oijudger.openSampleDiff",
     "onCommand:oijudger.deleteSample",
     "onView:oijudger.samplesView",
@@ -244,18 +243,13 @@
       },
       {
         "command": "oijudger.openSampleOutput",
-        "title": "OIjudger: Open User Output",
+        "title": "OIjudger: Open Run Result",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleUserOutput",
-        "title": "OIjudger: Open User Output",
+        "title": "OIjudger: Open Run Result",
         "icon": "$(output)"
-      },
-      {
-        "command": "oijudger.openSampleStderr",
-        "title": "OIjudger: Open Stderr",
-        "icon": "$(warning)"
       },
       {
         "command": "oijudger.openSampleDiff",
@@ -405,11 +399,6 @@
           "group": "3_run"
         },
         {
-          "command": "oijudger.setStackSize",
-          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
-          "group": "4_limits"
-        },
-        {
           "command": "oijudger.openSampleInput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",
           "group": "inline@1"
@@ -423,11 +412,6 @@
           "command": "oijudger.openSampleUserOutput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa)",
           "group": "inline@3"
-        },
-        {
-          "command": "oijudger.openSampleStderr",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa)",
-          "group": "inline@4"
         },
         {
           "command": "oijudger.openSampleDiff",
@@ -534,10 +518,6 @@
         },
         {
           "command": "oijudger.openSampleUserOutput",
-          "when": "false"
-        },
-        {
-          "command": "oijudger.openSampleStderr",
           "when": "false"
         },
         {

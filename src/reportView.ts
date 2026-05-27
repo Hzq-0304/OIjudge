@@ -269,7 +269,6 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       input: 'oijudger.openSampleInput',
       expected: 'oijudger.openSampleAnswer',
       output: 'oijudger.openSampleUserOutput',
-      stderr: 'oijudger.openSampleStderr',
       diff: 'oijudger.openSampleDiff',
       checkerOutput: 'oijudger.openCheckerOutput',
       delete: 'oijudger.deleteSample'
@@ -356,8 +355,7 @@ function renderActionButtons(sampleId: number | undefined, problemId: string | u
   return `<div class="buttons">
     <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('userOutput'))}</button>
-    <button data-command="stderr" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('openStderr'))}</button>
+    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
     <button data-command="diff" data-sample="${sampleValue}"${diffDisabled}>${escapeHtml(t('openDiff'))}</button>
     <button data-command="checkerOutput" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('checkerOutput'))}</button>
     <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>

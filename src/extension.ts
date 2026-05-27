@@ -18,6 +18,7 @@ import {
 import { ensureCompilerConfigured, findCompiler, pickCompilerPath, selectCompiler } from './compilerDetection';
 import { t } from './i18n';
 import { runAllSamples } from './judge';
+import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import {
   openLastReport,
   openProblemReport,
@@ -50,7 +51,14 @@ import {
   updateProblemStack,
   updateProblemStandard
 } from './problems';
-import { findExistingStderrOutput, findExistingUserOutput, getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
+import {
+  findExistingRunResult,
+  findExistingStderrOutput,
+  findExistingUserOutput,
+  getProblemSampleOutputPaths,
+  getSampleFileStatus,
+  inferSampleSourceType
+} from './sampleFiles';
 import { SampleTreeProvider } from './sampleTreeProvider';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
 import { ProblemConfig } from './types';
@@ -1481,10 +1489,12 @@ async function openSampleFileCommand(
         ? fileStatus.answerPath
         : kind === 'stderr'
           ? await findExistingStderrOutput(context.workspaceFolder, context.sample, context.problem.id)
-          : await findExistingUserOutput(context.workspaceFolder, context.sample, context.problem.id);
+          : await findExistingRunResult(context.workspaceFolder, context.sample, context.problem.id)
+            ?? await createRunResultFallback(context)
+            ?? await findExistingUserOutput(context.workspaceFolder, context.sample, context.problem.id);
 
   if (!filePath) {
-    vscode.window.showWarningMessage(kind === 'stderr' ? t('stderrMissing') : t('userOutputMissing'));
+    vscode.window.showWarningMessage(kind === 'stderr' ? t('stderrMissing') : t('runResultMissing'));
     return;
   }
 
@@ -1529,6 +1539,106 @@ async function openSampleDiffCommand(problemId: string | undefined, sampleId: nu
     vscode.Uri.file(outputPath),
     t('diffTitle', { sample: context.sample.name })
   );
+}
+
+async function createRunResultFallback(context: {
+  workspaceFolder: vscode.WorkspaceFolder;
+  problem: ProblemConfig;
+  sample: ProblemConfig['samples'][number];
+}): Promise<string | undefined> {
+  const paths = getProblemSampleOutputPaths(context.workspaceFolder, context.problem.id, context.sample.index);
+  const stdoutPath = await findExistingUserOutput(context.workspaceFolder, context.sample, context.problem.id);
+  const stderrPath = await findExistingStderrOutput(context.workspaceFolder, context.sample, context.problem.id);
+  if (!stdoutPath && !stderrPath) {
+    return undefined;
+  }
+
+  let sampleReport: {
+    status?: string;
+    message?: string;
+    exitCode?: number | null;
+    signal?: string | null;
+    killedByTimeout?: boolean;
+    stdinError?: string;
+    stdoutError?: string;
+    stderrError?: string;
+    timeMs?: number;
+    runtimeError?: {
+      rawExitCode?: number;
+      rawSignal?: string | null;
+    };
+  } | undefined;
+  try {
+    const report = JSON.parse(await fs.readFile(getProblemReportPath(context.workspaceFolder, context.problem.id), 'utf8')) as {
+      samples?: Array<{
+        id?: string;
+        index?: number;
+        status?: string;
+        message?: string;
+        exitCode?: number | null;
+        signal?: string | null;
+        killedByTimeout?: boolean;
+        stdinError?: string;
+        stdoutError?: string;
+        stderrError?: string;
+        timeMs?: number;
+        runtimeError?: {
+          rawExitCode?: number;
+          rawSignal?: string | null;
+        };
+      }>;
+    };
+    sampleReport = report.samples?.find((entry) =>
+      entry.index === context.sample.index || entry.id === context.sample.id
+    );
+  } catch {
+    // A missing or older report should not block opening the best available run result.
+  }
+
+  const stdout = stdoutPath && await exists(stdoutPath) ? await fs.readFile(stdoutPath, 'utf8') : '';
+  const stderr = stderrPath && await exists(stderrPath) ? await fs.readFile(stderrPath, 'utf8') : '';
+  const lines = [
+    '[stdout]',
+    stdout.trimEnd() || '<empty>',
+    '',
+    '[stderr]',
+    stderr.trimEnd() || '<empty>',
+    '',
+    '[runtime]',
+    `Status: ${sampleReport?.status ?? 'Unknown'}`,
+    `Exit code: ${sampleReport?.exitCode ?? 'unknown'}`,
+    `Signal: ${sampleReport?.signal ?? 'null'}`,
+    `Killed by timeout: ${sampleReport?.killedByTimeout ?? false}`
+  ];
+  if (sampleReport?.timeMs !== undefined) {
+    lines.push(`Time: ${Math.round(sampleReport.timeMs)} ms`);
+  }
+  if (sampleReport?.stdinError) {
+    lines.push(`stdinError: ${sampleReport.stdinError}`);
+  }
+  if (sampleReport?.stdoutError) {
+    lines.push(`stdoutError: ${sampleReport.stdoutError}`);
+  }
+  if (sampleReport?.stderrError) {
+    lines.push(`stderrError: ${sampleReport.stderrError}`);
+  }
+  if (sampleReport?.message) {
+    lines.push(`Message: ${sampleReport.message}`);
+  }
+  if (sampleReport?.status === 'RE') {
+    const explanation = explainRuntimeError({
+      exitCode: sampleReport.runtimeError?.rawExitCode ?? sampleReport.exitCode,
+      signal: sampleReport.runtimeError?.rawSignal ?? sampleReport.signal,
+      platform: process.platform
+    });
+    if (explanation) {
+      lines.push('', renderRuntimeErrorExplanation(explanation, { stderrEmpty: !stderr.trim() }));
+    }
+  }
+
+  await fs.mkdir(path.dirname(paths.runResultPath), { recursive: true });
+  await fs.writeFile(paths.runResultPath, `${lines.join('\n')}\n`, 'utf8');
+  return paths.runResultPath;
 }
 
 async function openCheckerArtifactCommand(

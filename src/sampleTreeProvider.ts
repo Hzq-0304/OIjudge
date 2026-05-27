@@ -37,6 +37,7 @@ type TreeNode = {
   problemId?: string;
   sampleId?: number;
   sampleStatus?: SampleStatus | 'Not Run';
+  hasCheckerOutput?: boolean;
 };
 
 export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -110,7 +111,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       case 'actions':
         return createProblemActionNodes(problem);
       case 'sampleActions':
-        return createSampleActionNodes(element.problemId, element.sampleId, element.sampleStatus);
+        return createSampleActionNodes(element.problemId, element.sampleId, element.sampleStatus, element.hasCheckerOutput);
       default:
         return [];
     }
@@ -336,7 +337,8 @@ async function createSampleNodes(
       group: 'sampleActions',
       problemId: problem.id,
       sampleId: sample.index,
-      sampleStatus: status
+      sampleStatus: status,
+      hasCheckerOutput: Boolean(sampleReport?.checker?.output || sampleReport?.checker?.stdout || sampleReport?.checker?.stderr)
     };
   }));
 }
@@ -402,7 +404,8 @@ function getRuntimeExplanation(report: SampleReport) {
 function createSampleActionNodes(
   problemId: string,
   sampleId: number | undefined,
-  status: SampleStatus | 'Not Run' | undefined
+  status: SampleStatus | 'Not Run' | undefined,
+  hasCheckerOutput = false
 ): TreeNode[] {
   if (sampleId === undefined) {
     return [];
@@ -415,13 +418,12 @@ function createSampleActionNodes(
 
   if (status !== 'Missing') {
     nodes.push(sampleActionNode(t('openUserOutput'), 'oijudger.openSampleUserOutput', 'output', problemId, sampleId));
-    nodes.push(sampleActionNode(t('openStderr'), 'oijudger.openSampleStderr', 'warning', problemId, sampleId));
   }
 
   if (status === 'WA') {
     nodes.push(sampleActionNode(t('openDiff'), 'oijudger.openSampleDiff', 'diff', problemId, sampleId));
   }
-  if (status === 'WA' || status === 'AC' || status === 'Scored' || status === 'Checker Error') {
+  if (hasCheckerOutput) {
     nodes.push(sampleActionNode(t('checkerOutput'), 'oijudger.openCheckerOutput', 'output', problemId, sampleId));
   }
 
@@ -445,9 +447,6 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(t('addSample'), 'oijudger.addProblemSample', 'add', problem.id),
     actionNode(t('addSampleFromFiles'), 'oijudger.addProblemSampleFromFiles', 'file-add', problem.id),
     actionNode(t('batchAddSamples'), 'oijudger.batchAddSamples', 'folder-opened', problem.id),
-    actionNode(t('setTimeLimit'), 'oijudger.setProblemTimeLimit', 'watch', problem.id),
-    actionNode(t('setMemoryLimit'), 'oijudger.setProblemMemoryLimit', 'server', problem.id),
-    actionNode(t('setStackSize'), 'oijudger.setStackSize', 'layers', problem.id),
     actionNode(t('setCppStandard'), 'oijudger.setProblemStandard', 'settings', problem.id),
     actionNode(t('selectCompiler'), 'oijudger.selectProblemCompiler', 'settings-gear', problem.id),
     actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)

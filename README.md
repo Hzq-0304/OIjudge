@@ -39,6 +39,7 @@ Tree view:
 - Problem nodes are collapsed by default to keep the OIjudger sidebar compact after VSCode restarts.
 - Expand a problem manually to view Statement, Programs, Limits, Samples, and Actions.
 - Samples and Actions are also collapsed by default, which keeps large multi-sample problems easier to scan.
+- Click the Time, Memory, or Stack node under a problem's Limits section to edit the corresponding limit. These limit editors are not duplicated in the Actions section.
 
 Sample storage:
 
@@ -70,9 +71,14 @@ Sample names:
 
 Sample viewing:
 
-- Sample input, expected output, and user output open in the native VSCode text editor.
+- Sample input, expected output, and run results open in the native VSCode text editor.
 - Output differences open with the native VSCode Diff Editor.
-- New per-problem runs save user output as `.oitest/problems/<problemId>/outputs/sample-x/useroutput.txt`, with `stderr.txt` and `diff.txt` next to it.
+- New per-problem runs keep pure stdout in `.oitest/problems/<problemId>/outputs/sample-x/useroutput.txt` for judging and diff.
+- `Run Result` opens `.oitest/problems/<problemId>/outputs/sample-x/run-result.txt`, which contains program stdout, program stderr, and runtime diagnostics such as status, exit code, signal, and Runtime Error details.
+- The standalone `Open Stderr` sample action has been removed; stderr is shown through `Run Result`.
+- Checker output is separate: checker stdout and stderr are merged into `checker-output.txt` and opened with `Checker Output`.
+- `Diff` and judging still use pure `useroutput.txt`; stderr is never appended to it.
+- New per-problem runs also keep `stderr.txt` and `diff.txt` next to the output for diagnostics and compatibility.
 - Older `1.out`, `1.err`, and `1.diff` outputs remain readable for compatibility.
 
 Timing note: sample time only measures the user executable process. On Windows, sample time includes process startup and pipe I/O overhead, so very small programs may still show tens of milliseconds.
@@ -84,7 +90,7 @@ Windows stack size:
 - Deep recursive programs on Windows may exit with `0xC00000FD`, which is a stack overflow exception.
 - By default, OIjudger follows the problem memory limit and adds a MinGW/g++ linker flag when compiling on Windows.
 - For `memoryMb = 256`, the generated flag is `-Wl,--stack,268435456`.
-- Use `OIjudger: Set Stack Size` to choose `Follow Memory Limit`, `Custom Stack Size`, or `Disable Auto Stack Size`.
+- Click the Stack node under a problem's Limits section, or run `OIjudger: Set Stack Size`, to choose `Follow Memory Limit`, `Custom Stack Size`, or `Disable Auto Stack Size`.
 - The stack flag is generated at compile time and is not repeatedly inserted into `compile.args`.
 - If auto stack size is enabled, an existing `-Wl,--stack,...` argument is replaced by the current setting. If auto stack size is disabled, OIjudger does not add a stack flag.
 - This mainly targets Windows + MinGW/g++. Linux/macOS judging environments usually control stack through the runner or system limits, and avoiding very deep recursion is still the safest algorithmic choice.

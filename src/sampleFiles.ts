@@ -16,6 +16,8 @@ export type SampleOutputPaths = {
   outputPath: string;
   stderrRel: string;
   stderrPath: string;
+  runResultRel: string;
+  runResultPath: string;
   diffRel: string;
   diffPath: string;
   legacyOutputRel: string;
@@ -73,6 +75,7 @@ export function getProblemSampleOutputPaths(
 ): SampleOutputPaths {
   const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'useroutput.txt'));
   const stderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'stderr.txt'));
+  const runResultRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'run-result.txt'));
   const diffRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'diff.txt'));
   const legacyOutputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.out`));
   const legacyStderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.err`));
@@ -83,6 +86,8 @@ export function getProblemSampleOutputPaths(
     outputPath: resolveSamplePath(workspaceFolder, outputRel),
     stderrRel,
     stderrPath: resolveSamplePath(workspaceFolder, stderrRel),
+    runResultRel,
+    runResultPath: resolveSamplePath(workspaceFolder, runResultRel),
     diffRel,
     diffPath: resolveSamplePath(workspaceFolder, diffRel),
     legacyOutputRel,
@@ -126,6 +131,20 @@ export async function findExistingStderrOutput(
   return undefined;
 }
 
+export async function findExistingRunResult(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  problemId?: string
+): Promise<string | undefined> {
+  const candidates = getRunResultCandidates(workspaceFolder, sample, problemId);
+  for (const candidate of candidates) {
+    if (await exists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 export function getUserOutputCandidates(
   workspaceFolder: vscode.WorkspaceFolder,
   sample: SampleConfig,
@@ -156,6 +175,19 @@ export function getStderrOutputCandidates(
   }
   if (sample.actualOutput) {
     candidates.add(resolveSamplePath(workspaceFolder, sample.actualOutput).replace(/\.out$/u, '.err'));
+  }
+  return [...candidates];
+}
+
+export function getRunResultCandidates(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  problemId?: string
+): string[] {
+  const candidates = new Set<string>();
+  if (problemId) {
+    const paths = getProblemSampleOutputPaths(workspaceFolder, problemId, sample.index);
+    candidates.add(paths.runResultPath);
   }
   return [...candidates];
 }

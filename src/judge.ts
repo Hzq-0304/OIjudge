@@ -222,6 +222,16 @@ async function judgeSample(
     const runnerError = formatUnknownError(error);
     await saveTextOutput(outputPaths.outputPath, '');
     await saveTextOutput(outputPaths.stderrPath, runnerError);
+    await saveRunResultOutput(outputPaths.runResultPath, 'ERR', {
+      stdout: '',
+      stderr: runnerError,
+      code: null,
+      signal: null,
+      timedOut: false,
+      killedByTimeout: false,
+      timeMs: 0,
+      elapsedMs: 0
+    }, `Failed to start executable: ${runnerError}`);
     output.appendLine(`[ERR] ${sample.name}`);
     output.appendLine(`  failed to start executable: ${runnerError}`);
     output.appendLine(`  actual output: ${outputPaths.outputRel}`);
@@ -257,6 +267,7 @@ async function judgeSample(
   const runStatus = classifyRunResult(result);
 
   if (runStatus === 'TLE') {
+    await saveRunResultOutput(outputPaths.runResultPath, 'TLE', result, 'Time limit exceeded.');
     output.appendLine(`[TLE] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: 0 ms`);
@@ -304,6 +315,7 @@ async function judgeSample(
       : result.signal
         ? `Runtime error, signal ${result.signal}.`
         : `Runtime error, exit code ${formatExitCode(result.code)}.`;
+    await saveRunResultOutput(outputPaths.runResultPath, 'RE', result, message, runtimeExplanation);
     output.appendLine(`[RE] ${sample.name}`);
     if (runtimeExplanation) {
       output.appendLine(renderRuntimeErrorExplanation(runtimeExplanation, { stderrEmpty: !result.stderr.trim() }));
@@ -368,6 +380,14 @@ async function judgeSample(
     const checkerResult = checkerContext.type === 'plain'
       ? await runPlainChecker(checkerInput)
       : await runTestlibChecker(checkerInput);
+    await saveRunResultOutput(
+      outputPaths.runResultPath,
+      checkerResult.status,
+      result,
+      checkerResult.status === 'Checker Error'
+        ? checkerResult.report.message
+        : withStdinMessage(checkerResult.report.message ?? '', result)
+    );
     const checkerTimeMs = elapsedMs(checkerStartedAt);
     const scoreSuffix = checkerResult.status === 'Scored' && checkerResult.report.scoreText
       ? ` score ${checkerResult.report.scoreText}`
@@ -405,6 +425,7 @@ async function judgeSample(
   } catch (error) {
     const compareTimeMs = elapsedMs(compareStartedAt);
     const compareError = formatUnknownError(error);
+    await saveRunResultOutput(outputPaths.runResultPath, 'ERR', result, `Failed to compare output: ${compareError}`);
     output.appendLine(`[ERR] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -429,6 +450,7 @@ async function judgeSample(
 
   if (!accepted) {
     await saveTextOutput(outputPaths.diffPath, createDiffSummary(answer, result.stdout));
+    await saveRunResultOutput(outputPaths.runResultPath, 'WA', result, withStdinMessage('Output differs from answer.', result));
     output.appendLine(`[WA] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -449,6 +471,14 @@ async function judgeSample(
   }
 
   await saveTextOutput(outputPaths.diffPath, '');
+  await saveRunResultOutput(
+    outputPaths.runResultPath,
+    'AC',
+    result,
+    result.stdinError
+      ? 'stdin write error occurred after process closed, but process exited successfully.'
+      : undefined
+  );
   output.appendLine(`[AC] ${sample.name} (${formatMs(result.timeMs)} ms)`);
   output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
   output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -512,6 +542,56 @@ async function saveTextOutput(filePath: string, text: string): Promise<void> {
   await fs.writeFile(filePath, text, 'utf8');
 }
 
+async function saveRunResultOutput(
+  filePath: string,
+  status: SampleReport['status'],
+  result: ProcessResult,
+  message?: string,
+  runtimeExplanation?: RuntimeErrorExplanation
+): Promise<void> {
+  await saveTextOutput(filePath, formatRunResultOutput(status, result, message, runtimeExplanation));
+}
+
+function formatRunResultOutput(
+  status: SampleReport['status'],
+  result: ProcessResult,
+  message?: string,
+  runtimeExplanation?: RuntimeErrorExplanation
+): string {
+  const lines = [
+    '[stdout]',
+    result.stdout.trimEnd() || '<empty>',
+    '',
+    '[stderr]',
+    result.stderr.trimEnd() || '<empty>',
+    '',
+    '[runtime]',
+    `Status: ${status}`,
+    `Exit code: ${formatExitCode(result.code)}`,
+    `Signal: ${result.signal ?? 'null'}`,
+    `Killed by timeout: ${result.killedByTimeout}`,
+    `Time: ${formatMs(result.timeMs)} ms`
+  ];
+
+  if (result.stdinError) {
+    lines.push(`stdinError: ${result.stdinError}`);
+  }
+  if (result.stdoutError) {
+    lines.push(`stdoutError: ${result.stdoutError}`);
+  }
+  if (result.stderrError) {
+    lines.push(`stderrError: ${result.stderrError}`);
+  }
+  if (message) {
+    lines.push(`Message: ${message}`);
+  }
+  if (runtimeExplanation) {
+    lines.push('', renderRuntimeErrorExplanation(runtimeExplanation, { stderrEmpty: !result.stderr.trim() }));
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 function createSampleReport(
   workspaceFolder: vscode.WorkspaceFolder,
   sample: SampleConfig,
@@ -540,6 +620,7 @@ function createSampleReport(
     actualOutput: outputRel,
     output: outputRel,
     stderr: stderrRel,
+    runResult: deriveRunResultRel(outputRel),
     diff: diffRel,
     sampleSourceType,
     ...diagnostics,
@@ -547,6 +628,16 @@ function createSampleReport(
     checker,
     message
   };
+}
+
+function deriveRunResultRel(outputRel: string): string {
+  if (/useroutput\.txt$/u.test(outputRel)) {
+    return outputRel.replace(/useroutput\.txt$/u, 'run-result.txt');
+  }
+  if (/\.out$/u.test(outputRel)) {
+    return outputRel.replace(/\.out$/u, '.run-result.txt');
+  }
+  return `${outputRel}.run-result.txt`;
 }
 
 function createRuntimeDiagnostics(
@@ -580,6 +671,8 @@ function getSampleOutputPaths(
   outputPath: string;
   stderrRel: string;
   stderrPath: string;
+  runResultRel: string;
+  runResultPath: string;
   diffRel: string;
   diffPath: string;
 } {
@@ -590,6 +683,8 @@ function getSampleOutputPaths(
       outputPath: paths.outputPath,
       stderrRel: paths.stderrRel,
       stderrPath: paths.stderrPath,
+      runResultRel: paths.runResultRel,
+      runResultPath: paths.runResultPath,
       diffRel: paths.diffRel,
       diffPath: paths.diffPath
     };
@@ -602,6 +697,8 @@ function getSampleOutputPaths(
     outputPath,
     stderrRel: outputRel.replace(/\.out$/u, '.err'),
     stderrPath: outputPath.replace(/\.out$/u, '.err'),
+    runResultRel: outputRel.replace(/\.out$/u, '.run-result.txt'),
+    runResultPath: outputPath.replace(/\.out$/u, '.run-result.txt'),
     diffRel: outputRel.replace(/\.out$/u, '.diff'),
     diffPath: outputPath.replace(/\.out$/u, '.diff')
   };

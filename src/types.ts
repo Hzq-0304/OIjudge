@@ -153,6 +153,7 @@ export type SampleReport = {
   actualOutput: string;
   output?: string;
   stderr?: string;
+  runResult?: string;
   diff?: string;
   sampleSourceType?: SampleSourceType;
   source?: string;
