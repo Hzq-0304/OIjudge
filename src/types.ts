@@ -1,3 +1,5 @@
+import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
+
 export type SampleSourceType = 'managed' | 'external';
 
 export type ProblemStatementType = 'markdown' | 'pdf' | 'text' | 'unknown';
@@ -126,6 +128,7 @@ export type SampleReport = {
   spawnError?: string;
   runnerError?: string;
   compareError?: string;
+  runtimeError?: RuntimeErrorSummary;
   message?: string;
 };
 

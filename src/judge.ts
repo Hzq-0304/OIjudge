@@ -7,6 +7,12 @@ import { getReportPath, resolveWorkspacePath } from './config';
 import { t } from './i18n';
 import { runProcess } from './runner';
 import {
+  explainRuntimeError,
+  renderRuntimeErrorExplanation,
+  RuntimeErrorExplanation,
+  toRuntimeErrorSummary
+} from './runtimeErrorExplainer';
+import {
   getLegacyOutputRel,
   getProblemSampleOutputPaths,
   getSampleFileStatus,
@@ -241,18 +247,26 @@ async function judgeSample(
   }
 
   if (runStatus === 'RE') {
-    const message = result.signal
-      ? `Runtime error, signal ${result.signal}.`
-      : `Runtime error, exit code ${formatExitCode(result.code)}.`;
-    const stackHint = getStackOverflowHint(result.code, compileStack);
-    output.appendLine(`[RE] ${sample.name} (${formatMs(result.timeMs)} ms, exit code ${formatExitCode(result.code)}, signal ${result.signal ?? 'none'})`);
+    const runtimeExplanation = explainRuntimeError({
+      exitCode: result.code,
+      signal: result.signal,
+      stderr: result.stderr,
+      platform: process.platform
+    });
+    const message = runtimeExplanation
+      ? `Runtime Error: ${runtimeExplanation.englishName}`
+      : result.signal
+        ? `Runtime error, signal ${result.signal}.`
+        : `Runtime error, exit code ${formatExitCode(result.code)}.`;
+    output.appendLine(`[RE] ${sample.name}`);
+    if (runtimeExplanation) {
+      output.appendLine(renderRuntimeErrorExplanation(runtimeExplanation, { stderrEmpty: !result.stderr.trim() }));
+      appendCompileStackLine(output, runtimeExplanation, compileStack);
+    }
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: 0 ms`);
     if (result.stderr.trim()) {
       output.appendLine(indent(result.stderr.trimEnd()));
-    }
-    if (stackHint) {
-      output.appendLine(stackHint);
     }
     output.appendLine(`  actual output: ${outputPaths.outputRel}`);
     appendRuntimeDiagnostics(output, sample.name, {
@@ -281,8 +295,11 @@ async function judgeSample(
       outputPaths.outputRel,
       outputPaths.stderrRel,
       outputPaths.diffRel,
-      createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
-      withStdinMessage(stackHint ? `${message} ${stackHint}` : message, result)
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+        runtimeError: runtimeExplanation ? toRuntimeErrorSummary(runtimeExplanation) : undefined
+      },
+      withStdinMessage(message, result)
     );
   }
 
@@ -370,7 +387,7 @@ function createSampleReport(
   outputRel: string,
   stderrRel: string,
   diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'spawnError' | 'runnerError' | 'compareError'>> = {},
+  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError'>> = {},
   message?: string
 ): SampleReport {
   const sampleSourceType = inferSampleSourceType(workspaceFolder, sample);
@@ -523,22 +540,19 @@ function withStdinMessage(message: string, result: ProcessResult): string {
   return result.stdinError ? `${message} stdin write error: ${result.stdinError}` : message;
 }
 
-function getStackOverflowHint(exitCode: number | null, stack: CompileStackReport | undefined): string | undefined {
-  if (exitCode === null) {
-    return undefined;
+function appendCompileStackLine(
+  output: vscode.OutputChannel,
+  explanation: RuntimeErrorExplanation,
+  stack: CompileStackReport | undefined
+): void {
+  if (explanation.kind !== 'stackOverflow') {
+    return;
   }
-  if ((exitCode >>> 0) !== 0xC00000FD) {
-    return undefined;
-  }
-
-  const details = stack?.enabled && stack.sizeMb
-    ? t('stackOverflowCurrentSize', { size: stack.sizeMb })
-    : t('stackOverflowEnableHint');
-  return [
-    t('stackOverflowDetected'),
-    t('stackOverflowCause'),
-    details
-  ].join(' ');
+  output.appendLine(
+    stack?.enabled && stack.sizeMb
+      ? t('stackOverflowCurrentSize', { size: stack.sizeMb })
+      : t('stackOverflowEnableHint')
+  );
 }
 
 function classifyRunResult(result: ProcessResult): RunClassification {

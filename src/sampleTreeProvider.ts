@@ -3,6 +3,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { exists } from './config';
 import { t } from './i18n';
+import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import {
   ensureProblemsConfig,
   getDefaultProblemSource,
@@ -128,7 +129,7 @@ function createRootNodes(): TreeNode[] {
       kind: 'group',
       label: t('workspaceActions'),
       icon: new vscode.ThemeIcon('tools'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'workspaceActions'
     }
   ];
@@ -142,7 +143,7 @@ function createProblemNode(problem: ProblemConfig): TreeNode {
     description: defaultSource ? path.basename(defaultSource) : t('noProgramSet'),
     tooltip: defaultSource ?? t('noProgramSet'),
     icon: new vscode.ThemeIcon('symbol-file'),
-    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
     problemId: problem.id
   };
 }
@@ -166,7 +167,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       kind: 'group',
       label: t('statement'),
       icon: new vscode.ThemeIcon('book'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'statement',
       problemId: problem.id
     },
@@ -174,7 +175,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       kind: 'group',
       label: t('programs'),
       icon: new vscode.ThemeIcon('file-code'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'programs',
       problemId: problem.id
     },
@@ -185,7 +186,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       kind: 'group',
       label: t('limits'),
       icon: new vscode.ThemeIcon('dashboard'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'limits',
       problemId: problem.id
     },
@@ -193,7 +194,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       kind: 'group',
       label: t('samples'),
       icon: new vscode.ThemeIcon('list-tree'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'samples',
       problemId: problem.id
     },
@@ -201,7 +202,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       kind: 'group',
       label: t('actions'),
       icon: new vscode.ThemeIcon('tools'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'actions',
       problemId: problem.id
     }
@@ -299,6 +300,7 @@ async function createSampleNodes(
     const missing = fileStatus.inputMissing || fileStatus.answerMissing;
     const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
     const elapsed = sampleReport && !missing ? formatElapsed(sampleReport) : '';
+    const description = formatSampleDescription(status, sampleReport, elapsed);
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
       ? `\n${t(sourceType === 'external' ? 'externalSampleMissing' : 'sampleMissing')}:\n${fileStatus.missingPaths.join('\n')}`
@@ -306,7 +308,7 @@ async function createSampleNodes(
     return {
       kind: 'sample',
       label: sample.name,
-      description: elapsed ? `${statusLabel(status)}  ${elapsed}` : statusLabel(status),
+      description,
       tooltip: [
         `${t('sampleInput')}: ${fileStatus.inputPath}`,
         `${t('expectedOutput')}: ${fileStatus.answerPath}`,
@@ -330,16 +332,10 @@ function createRuntimeTooltipLines(report: SampleReport | undefined): string[] {
     return [];
   }
 
-  const lines = ['', `${statusLabel('RE')}:`];
-  if (report.message) {
-    lines.push(report.message);
-  }
-  if (report.exitCode !== undefined) {
-    lines.push(`Exit code: ${formatExitCode(report.exitCode)}`);
-  }
-  if (report.signal !== undefined && report.signal !== null) {
-    lines.push(`Signal: ${report.signal}`);
-  }
+  const explanation = getRuntimeExplanation(report);
+  const lines = explanation
+    ? ['', renderRuntimeErrorExplanation(explanation, { stderrEmpty: report.stderrPreview === '' })]
+    : ['', `Runtime Error: ${t('unknownRuntimeError')}`];
   if (report.stdinError) {
     lines.push(`stdinError: ${report.stdinError}`);
   }
@@ -361,6 +357,26 @@ function createRuntimeTooltipLines(report: SampleReport | undefined): string[] {
     lines.push('Runtime Error: missing diagnostic information. This is an OIjudger internal issue. See Output Channel.');
   }
   return lines;
+}
+
+function formatSampleDescription(
+  status: SampleStatus | 'Not Run',
+  report: SampleReport | undefined,
+  elapsed: string
+): string {
+  const explanation = report?.status === 'RE' ? getRuntimeExplanation(report) : undefined;
+  const statusText = explanation ? `RE: ${explanation.englishName}` : statusLabel(status);
+  return elapsed ? `${statusText}  ${elapsed}` : statusText;
+}
+
+function getRuntimeExplanation(report: SampleReport) {
+  return explainRuntimeError({
+    exitCode: report.runtimeError?.rawExitCode ?? report.exitCode,
+    signal: report.runtimeError?.rawSignal ?? report.signal,
+    spawnError: report.spawnError,
+    runnerError: report.runnerError,
+    platform: process.platform
+  });
 }
 
 function createSampleActionNodes(
@@ -500,14 +516,6 @@ function formatStackLabel(problem: ProblemConfig): string {
 
 function formatMs(value: number): number {
   return Math.round(value);
-}
-
-function formatExitCode(code: number | null): string {
-  if (code === null) {
-    return 'unknown';
-  }
-  const unsigned = code >>> 0;
-  return `${code} (0x${unsigned.toString(16).toUpperCase().padStart(8, '0')})`;
 }
 
 function statusIcon(status: SampleStatus | 'Not Run'): string {

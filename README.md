@@ -34,6 +34,12 @@ Problem workflow:
 - `OIjudger: Run Samples With Program` lets you temporarily choose any linked or newly selected `.cpp` file for one run.
 - `OIjudger: Add Problem From Current File` and `OIjudger: Add Problem From File` still work as shortcuts: they create a problem and set the selected file as the default program.
 
+Tree view:
+
+- Problem nodes are collapsed by default to keep the OIjudger sidebar compact after VSCode restarts.
+- Expand a problem manually to view Statement, Programs, Limits, Samples, and Actions.
+- Samples and Actions are also collapsed by default, which keeps large multi-sample problems easier to scan.
+
 Sample storage:
 
 - Paste manually: OIjudger stores the input and expected output inside `.oitest`. This is best for small samples.
@@ -73,6 +79,26 @@ Windows stack size:
 - The stack flag is generated at compile time and is not repeatedly inserted into `compile.args`.
 - If auto stack size is enabled, an existing `-Wl,--stack,...` argument is replaced by the current setting. If auto stack size is disabled, OIjudger does not add a stack flag.
 - This mainly targets Windows + MinGW/g++. Linux/macOS judging environments usually control stack through the runner or system limits, and avoiding very deep recursion is still the safest algorithmic choice.
+
+Runtime Error Explanation:
+
+- OIjudger explains common Runtime Error results from the process exit code or POSIX signal.
+- Runtime Error names use common OI/OJ-style English descriptions, such as:
+  - Stack overflow
+  - Access violation
+  - Integer divide by zero
+  - Floating point exception
+  - Segmentation fault
+- Chinese UI keeps the English Runtime Error title and adds Chinese descriptions, possible causes, and suggestions below it.
+- Common Windows examples:
+  - `0xC00000FD`: Stack overflow
+  - `0xC0000005`: Access violation
+  - `0xC0000094`: Integer divide by zero
+- Common Linux/macOS signals:
+  - `SIGSEGV`: Segmentation fault
+  - `SIGFPE`: Floating point exception
+  - `SIGABRT`: Aborted
+- The explanation is a diagnostic hint, not a final proof. Always combine it with the input file, stderr, the reproduction command, and a debugger when needed.
 
 Commands:
 

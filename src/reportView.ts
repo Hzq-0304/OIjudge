@@ -9,6 +9,7 @@ import {
 } from './config';
 import { t } from './i18n';
 import { getDefaultProblemSource, getProblem, getProblemReportPath } from './problems';
+import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import { inferSampleSourceType } from './sampleFiles';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
 
@@ -212,6 +213,7 @@ async function showSamplePanel(
       <div><span>${escapeHtml(t('input'))}</span><strong>${escapeHtml(sample.input)}</strong></div>
       <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
     </section>
+    ${report ? renderRuntimeErrorDetails(report) : ''}
     ${report?.message ? `<section><h2>${escapeHtml(t('message'))}</h2><p>${escapeHtml(report.message)}</p></section>` : ''}
     <section>
       <h2>${escapeHtml(t('actions'))}</h2>
@@ -272,9 +274,32 @@ function renderSampleCard(workspaceFolder: vscode.WorkspaceFolder, sample: Sampl
       <dt>${escapeHtml(t('userOutput'))}</dt><dd>${escapeHtml(sample.output ?? sample.actualOutput)}</dd>
     </dl>
     ${sample.message ? `<p>${escapeHtml(sample.message)}</p>` : ''}
+    ${renderRuntimeErrorDetails(sample)}
     <p class="path">${escapeHtml(outputPath)}</p>
     ${renderActionButtons(sample.id, problemId, sample.status)}
   </article>`;
+}
+
+function renderRuntimeErrorDetails(sample: SampleReport): string {
+  if (sample.status !== 'RE') {
+    return '';
+  }
+
+  const explanation = explainRuntimeError({
+    exitCode: sample.runtimeError?.rawExitCode ?? sample.exitCode,
+    signal: sample.runtimeError?.rawSignal ?? sample.signal,
+    spawnError: sample.spawnError,
+    runnerError: sample.runnerError,
+    platform: process.platform
+  });
+  if (!explanation) {
+    return '';
+  }
+
+  return `<section class="runtimeError">
+    <h2>${escapeHtml(t('runtimeErrorDetails'))}</h2>
+    <pre>${escapeHtml(renderRuntimeErrorExplanation(explanation, { stderrEmpty: sample.stderrPreview === '' }))}</pre>
+  </section>`;
 }
 
 function renderActionButtons(sampleId: number, problemId: string | undefined, status: string): string {
@@ -376,6 +401,13 @@ function renderPage(title: string, body: string): string {
     .path {
       color: var(--vscode-descriptionForeground);
       overflow-wrap: anywhere;
+    }
+    pre {
+      background: var(--vscode-textCodeBlock-background);
+      border-radius: 4px;
+      overflow-x: auto;
+      padding: 10px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
