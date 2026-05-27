@@ -12,7 +12,10 @@ export async function compileSource(
   config: OITestConfig,
   output: vscode.OutputChannel
 ): Promise<CompileResult | undefined> {
-  const buildDir = path.join(getOITestDir(workspaceFolder), 'build');
+  const problemId = (config as { id?: string }).id;
+  const buildDir = problemId
+    ? path.join(getOITestDir(workspaceFolder), 'problems', problemId, 'build')
+    : path.join(getOITestDir(workspaceFolder), 'build');
   await fs.mkdir(buildDir, { recursive: true });
 
   const executableName = process.platform === 'win32' ? 'main.exe' : 'main';

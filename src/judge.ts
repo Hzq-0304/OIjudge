@@ -46,6 +46,7 @@ export async function runAllSamples(
     version: 1,
     generatedAt: new Date().toISOString(),
     source: sourcePath,
+    sourceName: sourcePath.replace(/^.*[\\/]/u, ''),
     compile: {
       status: compile.status,
       timeMs: compile.timeMs

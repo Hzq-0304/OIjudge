@@ -22,16 +22,23 @@
     "onCommand:oijudger.openSampleDetail",
     "onCommand:oijudger.clearOutputs",
     "onCommand:oijudger.refreshView",
+    "onCommand:oijudger.createProblem",
     "onCommand:oijudger.addProblemFromCurrentFile",
     "onCommand:oijudger.addProblemFromFile",
     "onCommand:oijudger.importLegacyProblem",
     "onCommand:oijudger.addProblemSample",
     "onCommand:oijudger.addProblemSampleFromFiles",
     "onCommand:oijudger.runProblemSamples",
+    "onCommand:oijudger.runSamplesWithProgram",
     "onCommand:oijudger.setProblemTimeLimit",
     "onCommand:oijudger.setProblemMemoryLimit",
     "onCommand:oijudger.setProblemStandard",
     "onCommand:oijudger.selectProblemCompiler",
+    "onCommand:oijudger.bindStatement",
+    "onCommand:oijudger.openStatement",
+    "onCommand:oijudger.unbindStatement",
+    "onCommand:oijudger.addProgramToProblem",
+    "onCommand:oijudger.setDefaultProgram",
     "onCommand:oijudger.openProblemResultPanel",
     "onCommand:oijudger.openProblemSampleDetail",
     "onCommand:oijudger.openSampleInput",
@@ -101,6 +108,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "oijudger.createProblem",
+        "title": "OIjudger: 创建题目/Create Problem",
+        "icon": "$(new-folder)"
+      },
+      {
         "command": "oijudger.addProblemFromCurrentFile",
         "title": "OIjudger: Add Problem From Current File",
         "icon": "$(file-code)"
@@ -131,6 +143,11 @@
         "icon": "$(run-all)"
       },
       {
+        "command": "oijudger.runSamplesWithProgram",
+        "title": "OIjudger: 选择程序评测/Run With Program",
+        "icon": "$(run)"
+      },
+      {
         "command": "oijudger.setProblemTimeLimit",
         "title": "OIjudger: Set Problem Time Limit",
         "icon": "$(watch)"
@@ -149,6 +166,31 @@
         "command": "oijudger.selectProblemCompiler",
         "title": "OIjudger: Select Problem Compiler",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "oijudger.bindStatement",
+        "title": "OIjudger: 绑定题面/Bind Statement",
+        "icon": "$(link)"
+      },
+      {
+        "command": "oijudger.openStatement",
+        "title": "OIjudger: 打开题面/Open Statement",
+        "icon": "$(book)"
+      },
+      {
+        "command": "oijudger.unbindStatement",
+        "title": "OIjudger: 解绑题面/Unbind Statement",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "oijudger.addProgramToProblem",
+        "title": "OIjudger: 添加程序/Add Program",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "oijudger.setDefaultProgram",
+        "title": "OIjudger: 设置默认程序/Set Default Program",
+        "icon": "$(star-full)"
       },
       {
         "command": "oijudger.openProblemResultPanel",
@@ -231,6 +273,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "oijudger.createProblem",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@0"
+        },
+        {
           "command": "oijudger.addProblemFromCurrentFile",
           "when": "view == oijudger.samplesView",
           "group": "navigation@1"
@@ -252,6 +299,41 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "oijudger.bindStatement",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "1_statement"
+        },
+        {
+          "command": "oijudger.openStatement",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "1_statement"
+        },
+        {
+          "command": "oijudger.unbindStatement",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "1_statement"
+        },
+        {
+          "command": "oijudger.addProgramToProblem",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "2_program"
+        },
+        {
+          "command": "oijudger.setDefaultProgram",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "2_program"
+        },
+        {
+          "command": "oijudger.runSamplesWithProgram",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "3_run"
+        },
+        {
+          "command": "oijudger.runProblemSamples",
+          "when": "view == oijudger.samplesView && viewItem == oijudgerProblem",
+          "group": "3_run"
+        },
         {
           "command": "oijudger.openSampleInput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleWa || viewItem == sampleMissing)",

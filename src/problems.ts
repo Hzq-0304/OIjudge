@@ -17,7 +17,15 @@ import {
   isUnderPath,
   resolveSamplePath
 } from './sampleFiles';
-import { JudgeReport, OITestConfig, ProblemConfig, ProblemsConfig, SampleConfig } from './types';
+import {
+  JudgeReport,
+  OITestConfig,
+  ProblemConfig,
+  ProblemsConfig,
+  ProblemSource,
+  ProblemStatementType,
+  SampleConfig
+} from './types';
 
 export function getProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(getOITestDir(workspaceFolder), 'problems.json');
@@ -29,6 +37,10 @@ export function getProblemRoot(workspaceFolder: vscode.WorkspaceFolder, problemI
 
 export function getProblemReportPath(workspaceFolder: vscode.WorkspaceFolder, problemId: string): string {
   return path.join(getProblemRoot(workspaceFolder, problemId), 'outputs', 'report.json');
+}
+
+export function getProblemConfigPath(workspaceFolder: vscode.WorkspaceFolder, problemId: string): string {
+  return path.join(getProblemRoot(workspaceFolder, problemId), 'config.json');
 }
 
 export async function ensureProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig> {
@@ -55,6 +67,26 @@ export async function writeProblemsConfig(
 ): Promise<void> {
   await fs.mkdir(path.dirname(getProblemsPath(workspaceFolder)), { recursive: true });
   await fs.writeFile(getProblemsPath(workspaceFolder), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  await Promise.all(config.problems.map((problem) => writeProblemConfig(workspaceFolder, problem)));
+}
+
+export async function createProblem(
+  workspaceFolder: vscode.WorkspaceFolder,
+  name: string
+): Promise<ProblemConfig> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem: ProblemConfig = {
+    ...createDefaultConfig(),
+    id: createProblemId(name, problems),
+    name: createProblemName(name, problems),
+    standard: 'c++17',
+    sources: []
+  };
+
+  await ensureProblemFolders(workspaceFolder, problem.id);
+  problems.problems.push(problem);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return problem;
 }
 
 export async function addProblemFromSource(
@@ -69,6 +101,8 @@ export async function addProblemFromSource(
     id: createProblemId(baseName, problems),
     name: createProblemName(baseName, problems),
     source: relativeSource,
+    defaultSource: relativeSource,
+    sources: [createProblemSource(workspaceFolder, sourcePath)],
     standard: 'c++17'
   };
 
@@ -91,6 +125,8 @@ export async function importLegacyProblem(workspaceFolder: vscode.WorkspaceFolde
     id: createProblemId(baseName, problems),
     name: createProblemName(baseName, problems),
     source: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : '',
+    defaultSource: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : undefined,
+    sources: source ? [createProblemSource(workspaceFolder, source)] : [],
     standard: getStandardFromArgs(legacy.compiler.args)
   };
 
@@ -202,6 +238,58 @@ export async function getProblem(
   return findProblem(problems, problemId);
 }
 
+export async function bindProblemStatement(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  statementPath: string
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    problem.statement = {
+      path: path.resolve(statementPath),
+      type: getStatementType(statementPath),
+      sourceType: 'external'
+    };
+  });
+}
+
+export async function unbindProblemStatement(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    delete problem.statement;
+  });
+}
+
+export async function addProgramToProblem(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sourcePath: string,
+  options: { setDefault?: boolean } = {}
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    const source = createProblemSource(workspaceFolder, sourcePath);
+    problem.sources = upsertProblemSource(problem.sources ?? [], source);
+    if (options.setDefault || !getDefaultProblemSource(problem)) {
+      problem.defaultSource = source.path;
+      problem.source = source.path;
+    }
+  });
+}
+
+export async function setProblemDefaultSource(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sourcePath: string
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    const source = createProblemSource(workspaceFolder, sourcePath);
+    problem.sources = upsertProblemSource(problem.sources ?? [], source);
+    problem.defaultSource = source.path;
+    problem.source = source.path;
+  });
+}
+
 export async function deleteProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -227,8 +315,17 @@ export async function deleteProblemSample(
   return { sample, cleanupErrors, reportCleared };
 }
 
-export function getProblemSourcePath(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): string {
-  return resolveWorkspacePath(workspaceFolder, problem.source);
+export function getDefaultProblemSource(problem: ProblemConfig): string | undefined {
+  return problem.defaultSource || problem.source || problem.sources?.[0]?.path;
+}
+
+export function getProblemSourcePath(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): string | undefined {
+  const source = getDefaultProblemSource(problem);
+  return source ? resolveProblemReferencePath(workspaceFolder, source) : undefined;
+}
+
+export function resolveProblemReferencePath(workspaceFolder: vscode.WorkspaceFolder, filePath: string): string {
+  return path.isAbsolute(filePath) ? filePath : resolveWorkspacePath(workspaceFolder, filePath);
 }
 
 export async function saveProblemReport(
@@ -255,6 +352,11 @@ async function updateProblem(
   update(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return problem;
+}
+
+async function writeProblemConfig(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): Promise<void> {
+  await fs.mkdir(getProblemRoot(workspaceFolder, problem.id), { recursive: true });
+  await fs.writeFile(getProblemConfigPath(workspaceFolder, problem.id), `${JSON.stringify(problem, null, 2)}\n`, 'utf8');
 }
 
 async function addProblemSampleFiles(
@@ -285,11 +387,14 @@ async function addProblemSampleFiles(
 async function ensureProblemFolders(workspaceFolder: vscode.WorkspaceFolder, problemId: string): Promise<void> {
   await fs.mkdir(path.join(getProblemRoot(workspaceFolder, problemId), 'samples'), { recursive: true });
   await fs.mkdir(path.join(getProblemRoot(workspaceFolder, problemId), 'outputs'), { recursive: true });
+  await fs.mkdir(path.join(getProblemRoot(workspaceFolder, problemId), 'build'), { recursive: true });
 }
 
 function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): ProblemConfig {
   const defaults = createDefaultConfig();
   const id = problem.id ?? 'problem';
+  const defaultSource = problem.defaultSource || problem.source || problem.sources?.[0]?.path;
+  const sources = normalizeProblemSources(workspaceFolder, problem, defaultSource);
   return {
     ...defaults,
     ...problem,
@@ -302,8 +407,22 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
     },
     samples: (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1)),
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),
-    source: problem.source ?? ''
+    source: problem.source,
+    defaultSource,
+    sources
   };
+}
+
+function normalizeProblemSources(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  defaultSource: string | undefined
+): ProblemSource[] {
+  const sources = [...(problem.sources ?? [])];
+  if (defaultSource && !sources.some((source) => source.path === defaultSource)) {
+    sources.unshift(createProblemSource(workspaceFolder, defaultSource));
+  }
+  return sources;
 }
 
 function normalizeProblemSample(
@@ -347,6 +466,39 @@ function createProblemName(baseName: string, config: ProblemsConfig): string {
     suffix += 1;
   }
   return candidate;
+}
+
+function createProblemSource(workspaceFolder: vscode.WorkspaceFolder, sourcePath: string): ProblemSource {
+  const resolved = resolveProblemReferencePath(workspaceFolder, sourcePath);
+  const workspaceRelative = path.relative(workspaceFolder.uri.fsPath, resolved);
+  const storedPath =
+    workspaceRelative && !workspaceRelative.startsWith('..') && !path.isAbsolute(workspaceRelative)
+      ? toPosixPath(workspaceRelative)
+      : path.resolve(resolved);
+  return {
+    path: storedPath,
+    name: path.basename(resolved),
+    lastUsedAt: new Date().toISOString()
+  };
+}
+
+function upsertProblemSource(sources: ProblemSource[], source: ProblemSource): ProblemSource[] {
+  const filtered = sources.filter((entry) => entry.path !== source.path);
+  return [source, ...filtered];
+}
+
+function getStatementType(statementPath: string): ProblemStatementType {
+  switch (path.extname(statementPath).toLowerCase()) {
+    case '.md':
+    case '.markdown':
+      return 'markdown';
+    case '.pdf':
+      return 'pdf';
+    case '.txt':
+      return 'text';
+    default:
+      return 'unknown';
+  }
 }
 
 function nextSampleId(problem: OITestConfig): number {

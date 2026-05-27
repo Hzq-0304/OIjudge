@@ -5,6 +5,9 @@ OIjudger is a VSCode extension for local OI-style sample judging.
 First-version features:
 
 - Initialize `.oitest/config.json`
+- Create a problem without immediately binding a source file
+- Bind a local statement file (`.md`, `.pdf`, or `.txt`) to a problem
+- Add one or more C++ programs to a problem and choose a default program
 - Add multiple samples under `.oitest/samples` or `.oitest/problems/<problemId>/samples`
 - Add samples by pasting text or selecting input/output files
 - Delete samples from the OIjudger sidebar
@@ -19,6 +22,15 @@ First-version features:
 - Switch UI text with `oijudger.language` (`auto`, `en`, `zh`)
 - Manage multiple problems in one workspace with `.oitest/problems.json`
 - Keep legacy single-problem `.oitest/config.json` data intact and import it when needed
+
+Problem workflow:
+
+- `OIjudger: Create Problem` creates a problem entry and its `.oitest/problems/<problemId>/` folders without requiring a source file.
+- `OIjudger: Bind Statement` links a statement file. OIjudger stores the original file path only; it does not copy, modify, or delete the statement file.
+- `OIjudger: Add Program To Problem` links a C++ program. Programs are path references only; source files are not copied into `.oitest`.
+- `OIjudger: Set Default Program` chooses the program used by `Run All Samples`.
+- `OIjudger: Run Samples With Program` lets you temporarily choose any linked or newly selected `.cpp` file for one run.
+- `OIjudger: Add Problem From Current File` and `OIjudger: Add Problem From File` still work as shortcuts: they create a problem and set the selected file as the default program.
 
 Sample storage:
 

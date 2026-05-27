@@ -1,5 +1,19 @@
 export type SampleSourceType = 'managed' | 'external';
 
+export type ProblemStatementType = 'markdown' | 'pdf' | 'text' | 'unknown';
+
+export type ProblemStatement = {
+  path: string;
+  type: ProblemStatementType;
+  sourceType?: SampleSourceType;
+};
+
+export type ProblemSource = {
+  path: string;
+  name?: string;
+  lastUsedAt?: string;
+};
+
 export type SampleConfig = {
   id: number;
   name: string;
@@ -30,7 +44,10 @@ export type OITestConfig = {
 export type ProblemConfig = OITestConfig & {
   id: string;
   name: string;
-  source: string;
+  source?: string;
+  defaultSource?: string;
+  statement?: ProblemStatement;
+  sources?: ProblemSource[];
   standard: string;
 };
 
@@ -81,6 +98,7 @@ export type JudgeReport = {
   version: 1;
   generatedAt: string;
   source: string;
+  sourceName?: string;
   compile?: CompileReport;
   totalTimeMs?: number;
   timeLimitMs: number;

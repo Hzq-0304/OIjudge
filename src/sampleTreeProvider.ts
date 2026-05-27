@@ -3,12 +3,25 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { exists } from './config';
 import { t } from './i18n';
-import { ensureProblemsConfig, getProblemReportPath } from './problems';
+import {
+  ensureProblemsConfig,
+  getDefaultProblemSource,
+  getProblemReportPath,
+  resolveProblemReferencePath
+} from './problems';
 import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
 import { JudgeReport, ProblemConfig, SampleReport, SampleStatus } from './types';
 
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'action';
-type NodeGroup = 'problems' | 'workspaceActions' | 'limits' | 'samples' | 'actions' | 'sampleActions';
+type NodeGroup =
+  | 'problems'
+  | 'workspaceActions'
+  | 'statement'
+  | 'programs'
+  | 'limits'
+  | 'samples'
+  | 'actions'
+  | 'sampleActions';
 
 type TreeNode = {
   kind: NodeKind;
@@ -83,7 +96,11 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
     switch (element.group) {
       case undefined:
-        return createProblemChildren(problem);
+        return createProblemChildren(workspaceFolder, problem);
+      case 'statement':
+        return createStatementNodes(workspaceFolder, problem);
+      case 'programs':
+        return createProgramNodes(workspaceFolder, problem);
       case 'limits':
         return createLimitNodes(problem);
       case 'samples':
@@ -118,11 +135,12 @@ function createRootNodes(): TreeNode[] {
 }
 
 function createProblemNode(problem: ProblemConfig): TreeNode {
+  const defaultSource = getDefaultProblemSource(problem);
   return {
     kind: 'problem',
     label: problem.name,
-    description: path.basename(problem.source),
-    tooltip: problem.source,
+    description: defaultSource ? path.basename(defaultSource) : t('noProgramSet'),
+    tooltip: defaultSource ?? t('noProgramSet'),
     icon: new vscode.ThemeIcon('symbol-file'),
     collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
     problemId: problem.id
@@ -142,9 +160,25 @@ function createNoProblemsNode(): TreeNode {
   };
 }
 
-function createProblemChildren(problem: ProblemConfig): TreeNode[] {
+function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
   return [
-    infoNode(t('sourceLine', { source: problem.source || '-' }), 'file-code'),
+    {
+      kind: 'group',
+      label: t('statement'),
+      icon: new vscode.ThemeIcon('book'),
+      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      group: 'statement',
+      problemId: problem.id
+    },
+    {
+      kind: 'group',
+      label: t('programs'),
+      icon: new vscode.ThemeIcon('file-code'),
+      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      group: 'programs',
+      problemId: problem.id
+    },
+    infoNode(t('defaultProgramLine', { program: getDefaultProblemSource(problem) ? path.basename(getDefaultProblemSource(problem) ?? '') : t('noProgramSet') }), 'file-code'),
     infoNode(t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }), 'terminal'),
     infoNode(t('standardLine', { standard: problem.standard }), 'settings'),
     {
@@ -179,6 +213,62 @@ function createLimitNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(`${t('time')}: ${problem.limits.timeMs} ms`, 'oijudger.setProblemTimeLimit', 'watch', problem.id),
     actionNode(`${t('memory')}: ${problem.limits.memoryMb} MB`, 'oijudger.setProblemMemoryLimit', 'server', problem.id)
   ];
+}
+
+async function createStatementNodes(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<TreeNode[]> {
+  if (!problem.statement) {
+    return [
+      actionNode(`${t('statement')}: ${t('noStatementBound')}`, 'oijudger.bindStatement', 'link', problem.id)
+    ];
+  }
+
+  const statementPath = resolveProblemReferencePath(workspaceFolder, problem.statement.path);
+  const missing = !(await exists(statementPath));
+  return [
+    {
+      kind: 'info',
+      label: missing ? `${t('statement')}: ${t('statusMissing')}` : `${t('statement')}: ${path.basename(statementPath)}`,
+      tooltip: statementPath,
+      icon: missing
+        ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+        : new vscode.ThemeIcon(statementIcon(problem.statement.type)),
+      command: {
+        command: 'oijudger.openStatement',
+        title: t('openStatement'),
+        arguments: [problem.id]
+      }
+    }
+  ];
+}
+
+async function createProgramNodes(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<TreeNode[]> {
+  const sources = problem.sources ?? [];
+  if (sources.length === 0) {
+    return [
+      actionNode(`${t('programs')}: ${t('noPrograms')}`, 'oijudger.addProgramToProblem', 'file-add', problem.id)
+    ];
+  }
+
+  const defaultSource = getDefaultProblemSource(problem);
+  return Promise.all(sources.map(async (source) => {
+    const sourcePath = resolveProblemReferencePath(workspaceFolder, source.path);
+    const missing = !(await exists(sourcePath));
+    return {
+      kind: 'info',
+      label: source.name ?? path.basename(sourcePath),
+      description: missing ? t('statusMissing') : (source.path === defaultSource ? t('defaultProgram') : undefined),
+      tooltip: sourcePath,
+      icon: missing
+        ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+        : new vscode.ThemeIcon('file-code')
+    };
+  }));
 }
 
 async function createSampleNodes(
@@ -260,9 +350,15 @@ function createSampleActionNodes(
 
 function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
   return [
+    actionNode(t('bindStatement'), 'oijudger.bindStatement', 'link', problem.id),
+    actionNode(t('openStatement'), 'oijudger.openStatement', 'book', problem.id),
+    actionNode(t('unbindStatement'), 'oijudger.unbindStatement', 'debug-disconnect', problem.id),
+    actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id),
+    actionNode(t('setDefaultProgram'), 'oijudger.setDefaultProgram', 'star-full', problem.id),
+    actionNode(t('runDefaultProgram'), 'oijudger.runProblemSamples', 'run-all', problem.id),
+    actionNode(t('runWithProgram'), 'oijudger.runSamplesWithProgram', 'run', problem.id),
     actionNode(t('addSample'), 'oijudger.addProblemSample', 'add', problem.id),
     actionNode(t('addSampleFromFiles'), 'oijudger.addProblemSampleFromFiles', 'file-add', problem.id),
-    actionNode(t('runSamples'), 'oijudger.runProblemSamples', 'run-all', problem.id),
     actionNode(t('setTimeLimit'), 'oijudger.setProblemTimeLimit', 'watch', problem.id),
     actionNode(t('setMemoryLimit'), 'oijudger.setProblemMemoryLimit', 'server', problem.id),
     actionNode(t('setCppStandard'), 'oijudger.setProblemStandard', 'settings', problem.id),
@@ -273,6 +369,7 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
 
 function createWorkspaceActionNodes(): TreeNode[] {
   return [
+    actionNode(t('createProblem'), 'oijudger.createProblem', 'new-folder'),
     actionNode(t('addProblemFromCurrentFile'), 'oijudger.addProblemFromCurrentFile', 'file-code'),
     actionNode(t('addProblemFromFile'), 'oijudger.addProblemFromFile', 'file-add'),
     actionNode(t('refreshView'), 'oijudger.refreshView', 'refresh'),
@@ -393,6 +490,19 @@ function statusLabel(status: SampleStatus | 'Not Run'): string {
       return t('statusERR');
     case 'Not Run':
       return t('notRun');
+  }
+}
+
+function statementIcon(type: string): string {
+  switch (type) {
+    case 'markdown':
+      return 'markdown';
+    case 'pdf':
+      return 'file-pdf';
+    case 'text':
+      return 'file-text';
+    default:
+      return 'file';
   }
 }
 

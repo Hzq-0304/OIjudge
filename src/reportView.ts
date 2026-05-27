@@ -8,9 +8,9 @@ import {
   resolveWorkspacePath
 } from './config';
 import { t } from './i18n';
-import { getProblem, getProblemReportPath } from './problems';
+import { getDefaultProblemSource, getProblem, getProblemReportPath } from './problems';
 import { inferSampleSourceType } from './sampleFiles';
-import { JudgeReport, SampleConfig, SampleReport } from './types';
+import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
 
 const openProblemReportPanels = new Map<string, {
   panel: vscode.WebviewPanel;
@@ -61,7 +61,8 @@ export async function openProblemReport(context: vscode.ExtensionContext, proble
     return;
   }
 
-  await showReportPanel(context, workspaceFolder, report, problemId);
+  const problem = await getProblem(workspaceFolder, problemId);
+  await showReportPanel(context, workspaceFolder, report, problemId, problem);
 }
 
 export async function refreshProblemReportPanel(problemId: string): Promise<void> {
@@ -74,7 +75,7 @@ export async function refreshProblemReportPanel(problemId: string): Promise<void
   entry.panel.webview.html = renderPage(
     t('reportTitle'),
     report
-      ? renderReportBody(entry.workspaceFolder, report, problemId)
+      ? renderReportBody(entry.workspaceFolder, report, problemId, await getProblem(entry.workspaceFolder, problemId))
       : `<section><p>${escapeHtml(t('noReport'))}</p></section>`
   );
 }
@@ -134,7 +135,8 @@ async function showReportPanel(
   context: vscode.ExtensionContext,
   workspaceFolder: vscode.WorkspaceFolder,
   report: JudgeReport,
-  problemId?: string
+  problemId?: string,
+  problem?: ProblemConfig
 ): Promise<void> {
   const title = t('reportTitle');
   const panel = createPanel(context, title, problemId);
@@ -142,15 +144,19 @@ async function showReportPanel(
     openProblemReportPanels.set(problemId, { panel, workspaceFolder });
     panel.onDidDispose(() => openProblemReportPanels.delete(problemId));
   }
-  panel.webview.html = renderPage(title, renderReportBody(workspaceFolder, report, problemId));
+  panel.webview.html = renderPage(title, renderReportBody(workspaceFolder, report, problemId, problem));
 }
 
 function renderReportBody(
   workspaceFolder: vscode.WorkspaceFolder,
   report: JudgeReport,
-  problemId?: string
+  problemId?: string,
+  problem?: ProblemConfig
 ): string {
   return `<section class="summary">
+      <div><span>${escapeHtml(t('problem'))}</span><strong>${escapeHtml(problem?.name ?? '-')}</strong></div>
+      <div><span>${escapeHtml(t('statement'))}</span><strong>${escapeHtml(problem?.statement ? basename(problem.statement.path) : t('noStatementBound'))}</strong></div>
+      <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''))}</strong></div>
       <div><span>${escapeHtml(t('accepted'))}</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
       <div><span>${escapeHtml(t('compile'))}</span><strong>${formatDuration(report.compile?.timeMs)}</strong></div>
       <div><span>${escapeHtml(t('total'))}</span><strong>${formatDuration(report.totalTimeMs)}</strong></div>
@@ -168,6 +174,10 @@ function renderReportBody(
         ${report.samples.map((sample) => renderSampleCard(workspaceFolder, sample, problemId)).join('')}
       </div>
     </section>`;
+}
+
+function basename(filePath: string): string {
+  return filePath.replace(/^.*[\\/]/u, '');
 }
 
 async function showSamplePanel(

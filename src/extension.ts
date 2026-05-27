@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   addExternalSample,
@@ -23,15 +24,23 @@ import {
   refreshProblemReportPanel
 } from './reportView';
 import {
+  addProgramToProblem,
   addExternalProblemSample,
   addProblemFromSource,
   addProblemSample,
+  bindProblemStatement,
+  createProblem,
   deleteProblemSample,
   ensureProblemsConfig,
+  getDefaultProblemSource,
   getProblem,
+  getProblemReportPath,
   getProblemSourcePath,
   importLegacyProblem,
+  resolveProblemReferencePath,
   saveProblemReport,
+  setProblemDefaultSource,
+  unbindProblemStatement,
   updateProblemCompiler,
   updateProblemLimits,
   updateProblemStandard
@@ -41,13 +50,19 @@ import { SampleTreeProvider } from './sampleTreeProvider';
 import { ProblemConfig } from './types';
 
 const output = vscode.window.createOutputChannel('OIjudger');
+const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+let activeProblemId: string | undefined;
 
 type AddSampleMode = 'paste' | 'files';
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
+  statusBar.command = 'oijudger.refreshView';
+  statusBar.show();
+  void updateStatusBar();
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('oijudger.samplesView', sampleTreeProvider),
+    statusBar,
     vscode.commands.registerCommand('oijudger.initProblem', async () => {
       const workspaceFolder = getWorkspaceFolder();
       if (!workspaceFolder) {
@@ -87,6 +102,15 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
     vscode.commands.registerCommand('oijudger.runAllSamples', async () => {
+      const firstWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (firstWorkspaceFolder) {
+        const problems = await ensureProblemsConfig(firstWorkspaceFolder);
+        if (problems.problems.length > 0) {
+          await runProblemSamplesCommand(activeProblemId, sampleTreeProvider, false);
+          return;
+        }
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showErrorMessage(t('openCppFile'));
@@ -203,6 +227,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.refreshView', () => {
       sampleTreeProvider.refresh();
+      void updateStatusBar();
+    }),
+    vscode.commands.registerCommand('oijudger.createProblem', async () => {
+      await createProblemCommand(sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.addProblemFromCurrentFile', async () => {
       const editor = vscode.window.activeTextEditor;
@@ -222,7 +250,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (candidate) {
         await updateProblemCompiler(workspaceFolder, problem.id, candidate.command);
       }
+      activeProblemId = problem.id;
       sampleTreeProvider.refresh();
+      await updateStatusBar(problem.id);
       vscode.window.showInformationMessage(t('problemAdded', { problem: problem.name }));
     }),
     vscode.commands.registerCommand('oijudger.addProblemFromFile', async () => {
@@ -241,7 +271,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (candidate) {
         await updateProblemCompiler(workspaceFolder, problem.id, candidate.command);
       }
+      activeProblemId = problem.id;
       sampleTreeProvider.refresh();
+      await updateStatusBar(problem.id);
       vscode.window.showInformationMessage(t('problemAdded', { problem: problem.name }));
     }),
     vscode.commands.registerCommand('oijudger.importLegacyProblem', async () => {
@@ -255,7 +287,9 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage(t('noLegacyProblem'));
         return;
       }
+      activeProblemId = problem.id;
       sampleTreeProvider.refresh();
+      await updateStatusBar(problem.id);
       vscode.window.showInformationMessage(t('legacyProblemImported', { problem: problem.name }));
     }),
     vscode.commands.registerCommand('oijudger.addProblemSample', async (problemArg?: unknown) => {
@@ -265,7 +299,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await addProblemSampleCommand(readProblemId(problemArg), true, sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.runProblemSamples', async (problemArg?: unknown) => {
-      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider);
+      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, false);
+    }),
+    vscode.commands.registerCommand('oijudger.runSamplesWithProgram', async (problemArg?: unknown) => {
+      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true);
     }),
     vscode.commands.registerCommand('oijudger.setProblemTimeLimit', async (problemArg?: unknown) => {
       await setProblemLimitCommand(readProblemId(problemArg), 'timeMs', sampleTreeProvider);
@@ -278,6 +315,21 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.selectProblemCompiler', async (problemArg?: unknown) => {
       await selectProblemCompilerCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.bindStatement', async (problemArg?: unknown) => {
+      await bindStatementCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.openStatement', async (problemArg?: unknown) => {
+      await openStatementCommand(readProblemId(problemArg));
+    }),
+    vscode.commands.registerCommand('oijudger.unbindStatement', async (problemArg?: unknown) => {
+      await unbindStatementCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.addProgramToProblem', async (problemArg?: unknown) => {
+      await addProgramToProblemCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.setDefaultProgram', async (problemArg?: unknown) => {
+      await setDefaultProgramCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.openProblemResultPanel', async (problemArg?: unknown) => {
       const problemId = readProblemId(problemArg);
@@ -455,6 +507,28 @@ async function pickSourceFile(): Promise<vscode.Uri | undefined> {
   return uris?.[0];
 }
 
+async function createProblemCommand(sampleTreeProvider: SampleTreeProvider): Promise<void> {
+  const workspaceFolder = getWorkspaceFolder();
+  if (!workspaceFolder) {
+    return;
+  }
+
+  const name = await vscode.window.showInputBox({
+    title: t('createProblem'),
+    prompt: t('problemName'),
+    value: ''
+  });
+  if (!name?.trim()) {
+    return;
+  }
+
+  const problem = await createProblem(workspaceFolder, name.trim());
+  activeProblemId = problem.id;
+  sampleTreeProvider.refresh();
+  await updateStatusBar(problem.id);
+  vscode.window.showInformationMessage(t('problemCreated'));
+}
+
 async function addProblemSampleCommand(
   problemId: string | undefined,
   fromFiles: boolean,
@@ -506,9 +580,10 @@ async function addExternalProblemSampleFromPicker(
 
 async function runProblemSamplesCommand(
   problemId: string | undefined,
-  sampleTreeProvider: SampleTreeProvider
+  sampleTreeProvider: SampleTreeProvider,
+  forceProgramPicker: boolean
 ): Promise<void> {
-  const context = await getProblemContext(problemId);
+  const context = await getProblemContext(problemId, true);
   if (!context) {
     return;
   }
@@ -523,9 +598,15 @@ async function runProblemSamplesCommand(
     return;
   }
 
-  const sourcePath = getProblemSourcePath(context.workspaceFolder, problem);
+  const sourcePath = forceProgramPicker
+    ? await pickProgramForRun(context.workspaceFolder, problem, true)
+    : await resolveSourceForRun(context.workspaceFolder, problem);
+  if (!sourcePath) {
+    return;
+  }
+
   if (!(await exists(sourcePath))) {
-    vscode.window.showErrorMessage(t('sourceMissing', { source: sourcePath }));
+    vscode.window.showErrorMessage(t('programMissing'));
     return;
   }
 
@@ -536,7 +617,84 @@ async function runProblemSamplesCommand(
   if (report) {
     await saveProblemReport(context.workspaceFolder, problem.id, report);
   }
+  activeProblemId = problem.id;
   sampleTreeProvider.refresh();
+  await updateStatusBar(problem.id);
+}
+
+async function resolveSourceForRun(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<string | undefined> {
+  const defaultSource = getProblemSourcePath(workspaceFolder, problem);
+  if (defaultSource && await exists(defaultSource)) {
+    return defaultSource;
+  }
+  if (defaultSource) {
+    vscode.window.showWarningMessage(t('programMissing'));
+  }
+  return pickProgramForRun(workspaceFolder, problem, false);
+}
+
+async function pickProgramForRun(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  alwaysPick: boolean
+): Promise<string | undefined> {
+  const pickedPath = await pickProgramPath(workspaceFolder, problem, alwaysPick);
+  if (!pickedPath) {
+    return undefined;
+  }
+
+  const setDefault = await vscode.window.showQuickPick(
+    [
+      { label: t('setAsDefault'), value: true },
+      { label: t('doNotSetDefault'), value: false }
+    ],
+    {
+      title: t('setProgramAsDefault')
+    }
+  );
+  await addProgramToProblem(workspaceFolder, problem.id, pickedPath, { setDefault: setDefault?.value === true });
+  return pickedPath;
+}
+
+async function pickProgramPath(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  alwaysPick: boolean
+): Promise<string | undefined> {
+  const sources = problem.sources ?? [];
+  if (sources.length > 0 || alwaysPick) {
+    const picked = await vscode.window.showQuickPick(
+      [
+        ...sources.map((source) => ({
+          label: source.name ?? path.basename(source.path),
+          description: source.path === getDefaultProblemSource(problem) ? t('defaultProgram') : undefined,
+          detail: resolveProblemReferencePath(workspaceFolder, source.path),
+          path: resolveProblemReferencePath(workspaceFolder, source.path)
+        })),
+        {
+          label: t('selectAnotherProgram'),
+          description: t('selectSourceFile'),
+          path: undefined
+        }
+      ],
+      {
+        title: t('runWithProgram'),
+        placeHolder: t('program')
+      }
+    );
+    if (!picked) {
+      return undefined;
+    }
+    if (picked.path) {
+      return picked.path;
+    }
+  }
+
+  const uri = await pickSourceFile();
+  return uri?.fsPath;
 }
 
 async function setProblemLimitCommand(
@@ -607,6 +765,137 @@ async function selectProblemCompilerCommand(
   vscode.window.showInformationMessage(t('compilerSaved'));
 }
 
+async function bindStatementCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const uri = await pickStatementFile();
+  if (!uri) {
+    return;
+  }
+
+  await bindProblemStatement(context.workspaceFolder, context.problem.id, uri.fsPath);
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('statementBound'));
+}
+
+async function openStatementCommand(problemId: string | undefined): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const statement = context.problem.statement;
+  if (!statement) {
+    vscode.window.showWarningMessage(t('noStatementBound'));
+    return;
+  }
+
+  const statementPath = resolveProblemReferencePath(context.workspaceFolder, statement.path);
+  if (!(await exists(statementPath))) {
+    vscode.window.showWarningMessage(t('statementMissing'));
+    return;
+  }
+
+  const uri = vscode.Uri.file(statementPath);
+  if (statement.type === 'pdf') {
+    await vscode.commands.executeCommand('vscode.open', uri);
+    return;
+  }
+
+  const document = await vscode.workspace.openTextDocument(uri);
+  await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function unbindStatementCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!context.problem.statement) {
+    vscode.window.showInformationMessage(t('noStatementBound'));
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    t('unbindStatementConfirm'),
+    { modal: true },
+    t('unbindStatement'),
+    t('cancel')
+  );
+  if (confirmed !== t('unbindStatement')) {
+    return;
+  }
+
+  await unbindProblemStatement(context.workspaceFolder, context.problem.id);
+  sampleTreeProvider.refresh();
+}
+
+async function addProgramToProblemCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const uri = await pickSourceFile();
+  if (!uri) {
+    return;
+  }
+
+  const setDefault = !getDefaultProblemSource(context.problem);
+  await addProgramToProblem(context.workspaceFolder, context.problem.id, uri.fsPath, { setDefault });
+  sampleTreeProvider.refresh();
+  await updateStatusBar(context.problem.id);
+}
+
+async function setDefaultProgramCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const programPath = await pickProgramPath(context.workspaceFolder, context.problem, true);
+  if (!programPath) {
+    return;
+  }
+
+  await setProblemDefaultSource(context.workspaceFolder, context.problem.id, programPath);
+  sampleTreeProvider.refresh();
+  await updateStatusBar(context.problem.id);
+}
+
+async function pickStatementFile(): Promise<vscode.Uri | undefined> {
+  const uris = await vscode.window.showOpenDialog({
+    title: t('statementFile'),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: t('select'),
+    filters: {
+      [t('markdownStatement')]: ['md', 'markdown'],
+      [t('pdfStatement')]: ['pdf'],
+      [t('textStatement')]: ['txt'],
+      [t('statementFile')]: ['*']
+    }
+  });
+
+  return uris?.[0];
+}
+
 async function ensureProblemCompiler(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig
@@ -626,22 +915,42 @@ async function ensureProblemCompiler(
   return updateProblemCompiler(workspaceFolder, problem.id, selected);
 }
 
-async function getProblemContext(problemId: string | undefined): Promise<{
+async function getProblemContext(problemId: string | undefined, allowActive = false): Promise<{
   workspaceFolder: vscode.WorkspaceFolder;
   problem: ProblemConfig;
 } | undefined> {
   const workspaceFolder = getWorkspaceFolder();
-  if (!workspaceFolder || !problemId) {
+  if (!workspaceFolder) {
     vscode.window.showWarningMessage(t('problemNotFound'));
     return undefined;
   }
 
-  const problem = await getProblem(workspaceFolder, problemId);
+  let resolvedProblemId = problemId ?? (allowActive ? activeProblemId : undefined);
+  if (!resolvedProblemId && allowActive) {
+    const config = await ensureProblemsConfig(workspaceFolder);
+    if (config.problems.length === 1) {
+      resolvedProblemId = config.problems[0].id;
+    } else if (config.problems.length > 1) {
+      const picked = await vscode.window.showQuickPick(
+        config.problems.map((problem) => ({ label: problem.name, description: problem.id, problem })),
+        { title: t('problems') }
+      );
+      resolvedProblemId = picked?.problem.id;
+    }
+  }
+
+  if (!resolvedProblemId) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return undefined;
+  }
+
+  const problem = await getProblem(workspaceFolder, resolvedProblemId);
   if (!problem) {
     vscode.window.showWarningMessage(t('problemNotFound'));
     return undefined;
   }
 
+  activeProblemId = problem.id;
   return { workspaceFolder, problem };
 }
 
@@ -852,4 +1161,41 @@ function readSampleId(problemArg: unknown, sampleArg: unknown): number | undefin
     return typeof sampleId === 'number' ? sampleId : undefined;
   }
   return undefined;
+}
+
+async function updateStatusBar(problemId: string | undefined = activeProblemId): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    statusBar.text = 'OIjudger';
+    return;
+  }
+
+  const config = await ensureProblemsConfig(workspaceFolder);
+  const problem = problemId
+    ? config.problems.find((entry) => entry.id === problemId)
+    : config.problems[0];
+  if (!problem) {
+    statusBar.text = 'OIjudger';
+    return;
+  }
+
+  activeProblemId = problem.id;
+  if (!getDefaultProblemSource(problem)) {
+    statusBar.text = `OIjudger: ${problem.name}  ${t('noProgramSet')}`;
+    return;
+  }
+
+  try {
+    const report = JSON.parse(await vscode.workspace.fs.readFile(vscode.Uri.file(getProblemReportPath(workspaceFolder, problem.id))).then((bytes) => new TextDecoder().decode(bytes))) as {
+      summary?: { accepted: number; total: number };
+    };
+    if (report.summary) {
+      statusBar.text = `OIjudger: ${problem.name}  ${report.summary.accepted}/${report.summary.total} ${t('statusAC')}`;
+      return;
+    }
+  } catch {
+    // Ignore missing or invalid report for the compact status item.
+  }
+
+  statusBar.text = `OIjudger: ${problem.name}`;
 }
