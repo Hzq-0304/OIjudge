@@ -8,6 +8,8 @@ Repository: `https://github.com/Hzq-0304/OIjudge.git`
 
 VSIX package name format: `oijudge-<version>.vsix`
 
+The OI Judge icon represents comparing program output with the expected answer and producing a judging verdict.
+
 For compatibility with earlier versions, internal command IDs and settings may still use the `oijudger` prefix, such as `oijudger.language`.
 
 First-version features:
