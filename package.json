@@ -413,11 +413,6 @@
           "group": "2_program"
         },
         {
-          "command": "oijudger.setDefaultProgram",
-          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
-          "group": "2_program"
-        },
-        {
           "command": "oijudger.batchAddSamples",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "2_samples"

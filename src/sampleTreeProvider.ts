@@ -178,9 +178,27 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       group: 'programs',
       problemId: problem.id
     },
-    infoNode(t('defaultProgramLine', { program: getDefaultProblemSource(problem) ? path.basename(getDefaultProblemSource(problem) ?? '') : t('noProgramSet') }), 'file-code'),
-    infoNode(t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }), 'terminal'),
-    infoNode(t('standardLine', { standard: problem.standard }), 'settings'),
+    clickableInfoNode(
+      t('defaultProgramLine', { program: getDefaultProblemSource(problem) ? path.basename(getDefaultProblemSource(problem) ?? '') : t('noProgramSet') }),
+      'file-code',
+      t('clickChangeDefaultProgram'),
+      'oijudger.setDefaultProgram',
+      problem.id
+    ),
+    clickableInfoNode(
+      t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }),
+      'terminal',
+      t('clickSelectCompiler'),
+      'oijudger.selectProblemCompiler',
+      problem.id
+    ),
+    clickableInfoNode(
+      t('standardLine', { standard: problem.standard }),
+      'settings',
+      t('clickSetCppStandard'),
+      'oijudger.setProblemStandard',
+      problem.id
+    ),
     createJudgeModeNode(problem),
     createIoModeNode(problem),
     ...createFileIoNodes(problem),
@@ -482,14 +500,11 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(t('openStatement'), 'oijudger.openStatement', 'book', problem.id),
     actionNode(t('unbindStatement'), 'oijudger.unbindStatement', 'debug-disconnect', problem.id),
     actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id),
-    actionNode(t('setDefaultProgram'), 'oijudger.setDefaultProgram', 'star-full', problem.id),
     actionNode(t('runDefaultProgram'), 'oijudger.runProblemSamples', 'run-all', problem.id),
     actionNode(t('runWithProgram'), 'oijudger.runSamplesWithProgram', 'run', problem.id),
     actionNode(t('addSample'), 'oijudger.addProblemSample', 'add', problem.id),
     actionNode(t('addSampleFromFiles'), 'oijudger.addProblemSampleFromFiles', 'file-add', problem.id),
     actionNode(t('batchAddSamples'), 'oijudger.batchAddSamples', 'folder-opened', problem.id),
-    actionNode(t('setCppStandard'), 'oijudger.setProblemStandard', 'settings', problem.id),
-    actionNode(t('selectCompiler'), 'oijudger.selectProblemCompiler', 'settings-gear', problem.id),
     actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)
   ];
 }
@@ -551,6 +566,27 @@ function infoNode(label: string, icon: string): TreeNode {
     kind: 'info',
     label,
     icon: new vscode.ThemeIcon(icon)
+  };
+}
+
+function clickableInfoNode(
+  label: string,
+  icon: string,
+  tooltip: string,
+  command: string,
+  problemId: string
+): TreeNode {
+  return {
+    kind: 'info',
+    label,
+    tooltip,
+    icon: new vscode.ThemeIcon(icon),
+    problemId,
+    command: {
+      command,
+      title: label,
+      arguments: [problemId]
+    }
   };
 }
 
