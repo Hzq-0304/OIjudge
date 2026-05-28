@@ -3,6 +3,7 @@ import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
 export type SampleSourceType = 'managed' | 'external';
 export type CheckerType = 'none' | 'testlib' | 'plain';
 export type JudgeMode = 'normal' | 'checker';
+export type IoMode = 'stdio' | 'fileio';
 export type TestlibMode = 'auto' | 'managed' | 'custom';
 
 export type ProblemStatementType = 'markdown' | 'pdf' | 'text' | 'unknown';
@@ -45,6 +46,11 @@ export type CheckerConfig = {
   };
 };
 
+export type FileIoConfig = {
+  inputFileName: string;
+  outputFileName: string;
+};
+
 export type OITestConfig = {
   version: 1;
   compile?: {
@@ -61,6 +67,8 @@ export type OITestConfig = {
   };
   stack?: StackConfig;
   judgeMode?: JudgeMode;
+  ioMode?: IoMode;
+  fileIo?: FileIoConfig;
   checker?: CheckerConfig;
   samples: SampleConfig[];
 };
@@ -118,7 +126,7 @@ export type CompileStackReport = {
   unsupported?: boolean;
 };
 
-export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing';
+export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing' | 'Output Missing';
 
 export type CheckerSampleReport = {
   enabled: boolean;
@@ -158,6 +166,13 @@ export type SampleReport = {
   runResult?: string;
   diff?: string;
   sampleSourceType?: SampleSourceType;
+  ioMode?: IoMode;
+  fileIo?: FileIoConfig & {
+    runDir?: string;
+    inputPath?: string;
+    outputPath?: string;
+    outputCreated?: boolean;
+  };
   source?: string;
   exe?: string;
   sourcePath?: string;
@@ -190,6 +205,8 @@ export type JudgeReport = {
   memoryLimitMb: number;
   judgeMode?: JudgeMode | 'testlib' | 'plain';
   checkerType?: Exclude<CheckerType, 'none'>;
+  ioMode?: IoMode;
+  fileIo?: FileIoConfig;
   checker?: CheckerConfig;
   summary: {
     accepted: number;

@@ -129,6 +129,37 @@ Judge Mode:
 - If you run `OIjudger: Set Checker` while a problem is still in normal text compare mode, OIjudger asks whether to switch to custom checker first.
 - Switching back to normal text compare does not delete the saved checker configuration, so you can switch back later without reselecting the checker.
 
+I/O Mode:
+
+- Each problem can use either `Standard IO` or `File IO`.
+- `Standard IO` is the default: OIjudger feeds the sample input through stdin and captures stdout as `useroutput.txt`.
+- `File IO` is for programs that use files such as `problem.in` and `problem.out`.
+- In File IO mode, OIjudger creates an isolated temporary run directory for every sample:
+  - `.oitest/problems/<problemId>/outputs/sample-<index>/run/`
+  - writes the sample input to the configured input file name
+  - runs the executable with `cwd` set to that run directory
+  - reads the configured output file after the process exits
+  - saves that file content back to the standard `useroutput.txt`
+- Diff, normal compare, testlib Checker, Plain Checker, and Result Panel all continue to use `useroutput.txt`.
+- Program stdout in File IO mode is diagnostic only; it is not used as the judged output if the configured output file is missing.
+- File names must be simple names such as `problem.in`; absolute paths, folders, and `..` are rejected.
+- OIjudger never creates the configured input/output files in the source directory, workspace root, sample directory, or checker directory.
+
+Example File IO program:
+
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    freopen("problem.in", "r", stdin);
+    freopen("problem.out", "w", stdout);
+    int a, b;
+    cin >> a >> b;
+    cout << a + b << "\n";
+}
+```
+
 Testlib Checker:
 
 - OIjudger supports first-version testlib-style checkers for per-problem judging.

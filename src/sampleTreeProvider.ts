@@ -180,6 +180,8 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
     infoNode(t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }), 'terminal'),
     infoNode(t('standardLine', { standard: problem.standard }), 'settings'),
     createJudgeModeNode(problem),
+    createIoModeNode(problem),
+    ...createFileIoNodes(problem),
     ...(getProblemJudgeMode(problem) === 'checker' ? [createCheckerInfoNode(workspaceFolder, problem)] : []),
     {
       kind: 'group',
@@ -213,6 +215,38 @@ function createLimitNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(`${t('time')}: ${problem.limits.timeMs} ms`, 'oijudger.setProblemTimeLimit', 'watch', problem.id),
     actionNode(`${t('memory')}: ${problem.limits.memoryMb} MB`, 'oijudger.setProblemMemoryLimit', 'server', problem.id),
     actionNode(`${t('stack')}: ${formatStackLabel(problem)}`, 'oijudger.setStackSize', 'layers', problem.id)
+  ];
+}
+
+function createIoModeNode(problem: ProblemConfig): TreeNode {
+  const mode = getProblemIoMode(problem);
+  const label = mode === 'fileio' ? t('fileIo') : t('standardIo');
+  const fileIo = getProblemFileIo(problem);
+  return {
+    kind: 'info',
+    label: `${t('ioMode')}: ${label}`,
+    description: mode === 'fileio' ? `${fileIo.inputFileName} -> ${fileIo.outputFileName}` : undefined,
+    tooltip: mode === 'fileio'
+      ? `${t('inputFile')}: ${fileIo.inputFileName}\n${t('outputFile')}: ${fileIo.outputFileName}`
+      : t('standardIo'),
+    icon: new vscode.ThemeIcon(mode === 'fileio' ? 'files' : 'terminal'),
+    problemId: problem.id,
+    command: {
+      command: 'oijudger.setIoMode',
+      title: t('setIoMode'),
+      arguments: [problem.id]
+    }
+  };
+}
+
+function createFileIoNodes(problem: ProblemConfig): TreeNode[] {
+  if (getProblemIoMode(problem) !== 'fileio') {
+    return [];
+  }
+  const fileIo = getProblemFileIo(problem);
+  return [
+    actionNode(`${t('inputFile')}: ${fileIo.inputFileName}`, 'oijudger.setFileIoNames', 'file', problem.id),
+    actionNode(`${t('outputFile')}: ${fileIo.outputFileName}`, 'oijudger.setFileIoNames', 'file', problem.id)
   ];
 }
 
@@ -593,6 +627,7 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
       return 'pass-filled';
     case 'WA':
     case 'Missing':
+    case 'Output Missing':
       return 'error';
     case 'Scored':
       return 'question';
@@ -632,6 +667,8 @@ function statusLabel(status: SampleStatus | 'Not Run'): string {
       return t('statusSkipped');
     case 'Missing':
       return t('statusMissing');
+    case 'Output Missing':
+      return t('statusOutputMissing');
     case 'ERR':
       return t('statusERR');
     case 'Not Run':
@@ -658,6 +695,17 @@ function capitalize(value: string): string {
 
 function getProblemJudgeMode(problem: ProblemConfig): JudgeMode {
   return problem.judgeMode ?? (problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'normal');
+}
+
+function getProblemIoMode(problem: ProblemConfig): 'stdio' | 'fileio' {
+  return problem.ioMode === 'fileio' ? 'fileio' : 'stdio';
+}
+
+function getProblemFileIo(problem: ProblemConfig): { inputFileName: string; outputFileName: string } {
+  return {
+    inputFileName: problem.fileIo?.inputFileName || 'input.txt',
+    outputFileName: problem.fileIo?.outputFileName || 'output.txt'
+  };
 }
 
 function getContextValue(element: TreeNode): string {

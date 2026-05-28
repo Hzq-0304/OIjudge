@@ -163,6 +163,9 @@ function renderReportBody(
       <div><span>${escapeHtml(t('statement'))}</span><strong>${escapeHtml(problem?.statement ? basename(problem.statement.path) : t('noStatementBound'))}</strong></div>
       <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''))}</strong></div>
       <div><span>${escapeHtml(t('judgeMode'))}</span><strong>${escapeHtml(formatJudgeMode(report))}</strong></div>
+      <div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(formatIoMode(report))}</strong></div>
+      ${report.ioMode === 'fileio' && report.fileIo ? `<div><span>${escapeHtml(t('inputFile'))}</span><strong>${escapeHtml(report.fileIo.inputFileName)}</strong></div>
+      <div><span>${escapeHtml(t('outputFile'))}</span><strong>${escapeHtml(report.fileIo.outputFileName)}</strong></div>` : ''}
       ${isCheckerReport(report) ? `<div><span>${escapeHtml(t('checker'))}</span><strong>${escapeHtml(formatCheckerLine(report))}</strong></div>` : ''}
       <div><span>${escapeHtml(t('accepted'))}</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
       ${report.summary.wrongAnswer !== undefined ? `<div><span>${escapeHtml(t('statusWA'))}</span><strong>${report.summary.wrongAnswer}</strong></div>` : ''}
@@ -205,6 +208,14 @@ function formatJudgeMode(report: JudgeReport): string {
   return t('normalTextCompare');
 }
 
+function formatIoMode(report: JudgeReport): string {
+  return report.ioMode === 'fileio' ? t('fileIo') : t('standardIo');
+}
+
+function formatSampleIoMode(sample: SampleReport): string {
+  return sample.ioMode === 'fileio' ? t('fileIo') : t('standardIo');
+}
+
 function basename(filePath: string): string {
   return filePath.replace(/^.*[\\/]/u, '');
 }
@@ -229,6 +240,9 @@ async function showSamplePanel(
       <div><span>${escapeHtml(t('elapsed'))}</span><strong>${escapeHtml(elapsed)}</strong></div>
       <div><span>${escapeHtml(t('compareTime'))}</span><strong>${escapeHtml(compareElapsed)}</strong></div>
       <div><span>${escapeHtml(t('source'))}</span><strong>${escapeHtml(t(sourceType === 'external' ? 'externalSample' : 'managedSample'))}</strong></div>
+      ${report ? `<div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(formatSampleIoMode(report))}</strong></div>` : ''}
+      ${report?.ioMode === 'fileio' && report.fileIo ? `<div><span>${escapeHtml(t('inputFile'))}</span><strong>${escapeHtml(report.fileIo.inputFileName)}</strong></div>
+      <div><span>${escapeHtml(t('outputFile'))}</span><strong>${escapeHtml(report.fileIo.outputFileName)}</strong></div>` : ''}
       ${report?.status === 'Scored' ? `<div><span>${escapeHtml(t('checkerScore'))}</span><strong>${escapeHtml(report.checker?.scoreText ?? String(report.score ?? ''))}</strong></div>` : ''}
       <div><span>${escapeHtml(t('input'))}</span><strong>${escapeHtml(sample.input)}</strong></div>
       <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
@@ -299,6 +313,10 @@ function renderSampleCard(
       ${sample.status === 'Scored' ? `<dt>${escapeHtml(t('checkerScore'))}</dt><dd>${escapeHtml(sample.checker?.scoreText ?? String(sample.score ?? ''))}</dd>` : ''}
       ${sample.score !== undefined ? `<dt>${escapeHtml(t('score'))}</dt><dd>${sample.score}</dd>` : ''}
       ${sample.checker?.message ? `<dt>${escapeHtml(t('checker'))}</dt><dd>${escapeHtml(sample.checker.message)}</dd>` : ''}
+      <dt>${escapeHtml(t('ioMode'))}</dt><dd>${escapeHtml(formatSampleIoMode(sample))}</dd>
+      ${sample.ioMode === 'fileio' && sample.fileIo ? `<dt>${escapeHtml(t('runDirectory'))}</dt><dd>${escapeHtml(sample.fileIo.runDir ?? '-')}</dd>
+      <dt>${escapeHtml(t('inputFile'))}</dt><dd>${escapeHtml(sample.fileIo.inputFileName)}</dd>
+      <dt>${escapeHtml(t('outputFile'))}</dt><dd>${escapeHtml(sample.fileIo.outputFileName)}</dd>` : ''}
       <dt>${escapeHtml(t('input'))}</dt><dd>${escapeHtml(sample.input)}</dd>
       <dt>${escapeHtml(t('answer'))}</dt><dd>${escapeHtml(sample.answer)}</dd>
       <dt>${escapeHtml(t('userOutput'))}</dt><dd>${escapeHtml(sample.output ?? sample.actualOutput)}</dd>
@@ -490,7 +508,8 @@ function renderPage(title: string, body: string): string {
     .status-tle,
     .status-re,
     .status-err,
-    .status-missing { color: var(--vscode-testing-iconFailed); }
+    .status-missing,
+    .status-output-missing { color: var(--vscode-testing-iconFailed); }
     .status-not-run { color: var(--vscode-descriptionForeground); }
     .path {
       color: var(--vscode-descriptionForeground);
@@ -561,6 +580,8 @@ function statusLabel(status: string): string {
       return t('statusSkipped');
     case 'Missing':
       return t('statusMissing');
+    case 'Output Missing':
+      return t('statusOutputMissing');
     case 'Not Run':
       return t('notRun');
     default:

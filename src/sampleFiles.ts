@@ -18,6 +18,8 @@ export type SampleOutputPaths = {
   stderrPath: string;
   runResultRel: string;
   runResultPath: string;
+  runDirRel: string;
+  runDirPath: string;
   diffRel: string;
   diffPath: string;
   legacyOutputRel: string;
@@ -76,6 +78,7 @@ export function getProblemSampleOutputPaths(
   const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'useroutput.txt'));
   const stderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'stderr.txt'));
   const runResultRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'run-result.txt'));
+  const runDirRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'run'));
   const diffRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'diff.txt'));
   const legacyOutputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.out`));
   const legacyStderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.err`));
@@ -88,6 +91,8 @@ export function getProblemSampleOutputPaths(
     stderrPath: resolveSamplePath(workspaceFolder, stderrRel),
     runResultRel,
     runResultPath: resolveSamplePath(workspaceFolder, runResultRel),
+    runDirRel,
+    runDirPath: resolveSamplePath(workspaceFolder, runDirRel),
     diffRel,
     diffPath: resolveSamplePath(workspaceFolder, diffRel),
     legacyOutputRel,

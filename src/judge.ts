@@ -5,7 +5,7 @@ import { compileChecker, CheckerCompileResult, getCheckerTimeLimitMs } from './c
 import { runPlainChecker, runTestlibChecker } from './checkerRunner';
 import { compileSource } from './compiler';
 import { isOutputAccepted } from './comparator';
-import { getReportPath, resolveWorkspacePath } from './config';
+import { exists, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
 import { runProcess } from './runner';
 import {
@@ -21,7 +21,7 @@ import {
   inferSampleSourceType,
   resolveSamplePath
 } from './sampleFiles';
-import { CheckerSampleReport, CompileStackReport, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
+import { CheckerSampleReport, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 
 type RunClassification = 'TLE' | 'RE' | undefined;
 
@@ -32,6 +32,19 @@ type CheckerContext = {
   compilerBin?: string;
   testlibPath?: string;
   timeLimitMs: number;
+};
+
+type SampleIoContext = {
+  mode: IoMode;
+  stdin: string;
+  cwd: string;
+  diagnostics: Pick<SampleReport, 'ioMode' | 'fileIo'>;
+};
+
+type FileIoOutput = {
+  exists: boolean;
+  content: string;
+  outputPath: string;
 };
 
 export async function runAllSamples(
@@ -47,6 +60,7 @@ export async function runAllSamples(
   output.appendLine(`Source: ${sourcePath}`);
   output.appendLine(`Time limit: ${config.limits.timeMs} ms`);
   output.appendLine(`Memory limit: ${config.limits.memoryMb} MB`);
+  output.appendLine(`I/O mode: ${getIoMode(config) === 'fileio' ? 'File IO' : 'Standard IO'}`);
   output.appendLine('');
 
   const compile = await compileSource(workspaceFolder, sourcePath, config, output);
@@ -83,7 +97,17 @@ export async function runAllSamples(
 
   if (activeChecker && checkerCompile && !checkerCompile.ok) {
     for (const sample of config.samples) {
-      samples.push(createCheckerErrorSampleReport(workspaceFolder, sourcePath, compile.executablePath, runCwd, sample, problemId, checkerCompile));
+      samples.push(createCheckerErrorSampleReport(
+        workspaceFolder,
+        sourcePath,
+        compile.executablePath,
+        runCwd,
+        sample,
+        problemId,
+        checkerCompile,
+        getIoMode(config),
+        getFileIoConfig(config)
+      ));
     }
   } else {
     for (const sample of config.samples) {
@@ -94,6 +118,8 @@ export async function runAllSamples(
         runCwd,
         sample,
         config.limits.timeMs,
+        getIoMode(config),
+        getFileIoConfig(config),
         output,
         problemId,
         compile.stack,
@@ -121,6 +147,8 @@ export async function runAllSamples(
     totalTimeMs,
     judgeMode,
     checkerType: activeChecker?.type === 'testlib' || activeChecker?.type === 'plain' ? activeChecker.type : undefined,
+    ioMode: getIoMode(config),
+    fileIo: getIoMode(config) === 'fileio' ? getFileIoConfig(config) : undefined,
     checker: activeChecker,
     timeLimitMs: config.limits.timeMs,
     memoryLimitMb: config.limits.memoryMb,
@@ -168,6 +196,97 @@ function getJudgeMode(config: OITestConfig): 'normal' | 'checker' {
   return config.checker?.enabled && config.checker.type !== 'none' ? 'checker' : 'normal';
 }
 
+function getIoMode(config: OITestConfig): IoMode {
+  return config.ioMode === 'fileio' ? 'fileio' : 'stdio';
+}
+
+function getFileIoConfig(config: OITestConfig): FileIoConfig {
+  return {
+    inputFileName: config.fileIo?.inputFileName || 'input.txt',
+    outputFileName: config.fileIo?.outputFileName || 'output.txt'
+  };
+}
+
+async function prepareSampleIo(
+  workspaceFolder: vscode.WorkspaceFolder,
+  outputPaths: ReturnType<typeof getSampleOutputPaths>,
+  sampleInput: string,
+  defaultCwd: string,
+  ioMode: IoMode,
+  fileIo: FileIoConfig
+): Promise<SampleIoContext> {
+  if (ioMode !== 'fileio') {
+    return {
+      mode: 'stdio',
+      stdin: sampleInput,
+      cwd: defaultCwd,
+      diagnostics: { ioMode: 'stdio' }
+    };
+  }
+
+  await fs.rm(outputPaths.runDirPath, { recursive: true, force: true });
+  await fs.mkdir(outputPaths.runDirPath, { recursive: true });
+  const inputPath = path.join(outputPaths.runDirPath, fileIo.inputFileName);
+  await fs.writeFile(inputPath, sampleInput, 'utf8');
+
+  return {
+    mode: 'fileio',
+    stdin: '',
+    cwd: outputPaths.runDirPath,
+    diagnostics: createFileIoDiagnostics(outputPaths, fileIo, false)
+  };
+}
+
+async function readFileIoOutput(
+  outputPaths: ReturnType<typeof getSampleOutputPaths>,
+  fileIo: FileIoConfig
+): Promise<FileIoOutput> {
+  const outputPath = path.join(outputPaths.runDirPath, fileIo.outputFileName);
+  if (!(await exists(outputPath))) {
+    return { exists: false, content: '', outputPath };
+  }
+
+  return {
+    exists: true,
+    content: await fs.readFile(outputPath, 'utf8'),
+    outputPath
+  };
+}
+
+function createFileIoDiagnostics(
+  outputPaths: ReturnType<typeof getSampleOutputPaths>,
+  fileIo: FileIoConfig,
+  outputCreated: boolean
+): Pick<SampleReport, 'ioMode' | 'fileIo'> {
+  return {
+    ioMode: 'fileio',
+    fileIo: {
+      ...fileIo,
+      runDir: outputPaths.runDirRel,
+      inputPath: toPosixPath(path.join(outputPaths.runDirRel, fileIo.inputFileName)),
+      outputPath: toPosixPath(path.join(outputPaths.runDirRel, fileIo.outputFileName)),
+      outputCreated
+    }
+  };
+}
+
+function mergeFileIoOutputDiagnostics(
+  diagnostics: Pick<SampleReport, 'ioMode' | 'fileIo'>,
+  fileIoOutput: FileIoOutput | undefined
+): Pick<SampleReport, 'ioMode' | 'fileIo'> {
+  if (diagnostics.ioMode !== 'fileio' || !diagnostics.fileIo || !fileIoOutput) {
+    return diagnostics;
+  }
+
+  return {
+    ioMode: 'fileio',
+    fileIo: {
+      ...diagnostics.fileIo,
+      outputCreated: fileIoOutput.exists
+    }
+  };
+}
+
 async function judgeSample(
   workspaceFolder: vscode.WorkspaceFolder,
   sourcePath: string,
@@ -175,6 +294,8 @@ async function judgeSample(
   cwd: string,
   sample: SampleConfig,
   timeLimitMs: number,
+  ioMode: IoMode,
+  fileIo: FileIoConfig,
   output: vscode.OutputChannel,
   problemId?: string,
   compileStack?: CompileStackReport,
@@ -199,7 +320,9 @@ async function judgeSample(
         sourcePath,
         exePath: executablePath,
         cwd,
-        killedByTimeout: false
+        killedByTimeout: false,
+        ioMode,
+        fileIo: ioMode === 'fileio' ? createFileIoDiagnostics(outputPaths, fileIo, false).fileIo : undefined
       },
       'Sample input or expected output file is missing.'
     );
@@ -227,15 +350,19 @@ async function judgeSample(
         exePath: executablePath,
         cwd,
         killedByTimeout: false,
-        spawnError: String(error)
+        spawnError: String(error),
+        ioMode,
+        fileIo: ioMode === 'fileio' ? createFileIoDiagnostics(outputPaths, fileIo, false).fileIo : undefined
       },
       `Failed to read sample files: ${String(error)}`
     );
   }
 
+  const ioContext = await prepareSampleIo(workspaceFolder, outputPaths, input, cwd, ioMode, fileIo);
+
   let result: ProcessResult;
   try {
-    result = await runProcess(executablePath, [], input, cwd, timeLimitMs);
+    result = await runProcess(path.resolve(executablePath), [], ioContext.stdin, ioContext.cwd, timeLimitMs);
   } catch (error) {
     const runnerError = formatUnknownError(error);
     await saveTextOutput(outputPaths.outputPath, '');
@@ -249,7 +376,7 @@ async function judgeSample(
       killedByTimeout: false,
       timeMs: 0,
       elapsedMs: 0
-    }, `Failed to start executable: ${runnerError}`);
+    }, `Failed to start executable: ${runnerError}`, undefined, ioContext.diagnostics);
     output.appendLine(`[ERR] ${sample.name}`);
     output.appendLine(`  failed to start executable: ${runnerError}`);
     output.appendLine(`  actual output: ${outputPaths.outputRel}`);
@@ -267,17 +394,23 @@ async function judgeSample(
         source: sourcePath,
         exePath: executablePath,
         exe: executablePath,
-        cwd,
+        cwd: ioContext.cwd,
         killedByTimeout: false,
         spawnError: runnerError,
         runnerError,
-        stderrPreview: runnerError
+        stderrPreview: runnerError,
+        ...ioContext.diagnostics
       },
       `Failed to start executable: ${runnerError}`
     );
   }
 
-  await saveTextOutput(outputPaths.outputPath, result.stdout);
+  const fileIoOutput = ioMode === 'fileio'
+    ? await readFileIoOutput(outputPaths, fileIo)
+    : undefined;
+  const ioDiagnostics = mergeFileIoOutputDiagnostics(ioContext.diagnostics, fileIoOutput);
+  const judgeOutput = ioMode === 'fileio' ? (fileIoOutput?.content ?? '') : result.stdout;
+  await saveTextOutput(outputPaths.outputPath, judgeOutput);
   await saveTextOutput(outputPaths.stderrPath, result.stderr);
   if (result.stdinError) {
     appendStdinWarning(output, sample.name, result);
@@ -285,7 +418,7 @@ async function judgeSample(
   const runStatus = classifyRunResult(result);
 
   if (runStatus === 'TLE') {
-    await saveRunResultOutput(outputPaths.runResultPath, 'TLE', result, 'Time limit exceeded.');
+    await saveRunResultOutput(outputPaths.runResultPath, 'TLE', result, 'Time limit exceeded.', undefined, ioDiagnostics);
     output.appendLine(`[TLE] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: 0 ms`);
@@ -293,7 +426,7 @@ async function judgeSample(
     appendRuntimeDiagnostics(output, sample.name, {
       sourcePath,
       exePath: executablePath,
-      cwd,
+      cwd: ioContext.cwd,
       inputPath: fileStatus.inputPath,
       answerPath: fileStatus.answerPath,
       outputPath: outputPaths.outputPath,
@@ -316,7 +449,10 @@ async function judgeSample(
       outputPaths.outputRel,
       outputPaths.stderrRel,
       outputPaths.diffRel,
-      createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics
+      },
       withStdinMessage('Time limit exceeded.', result)
     );
   }
@@ -333,7 +469,7 @@ async function judgeSample(
       : result.signal
         ? `Runtime error, signal ${result.signal}.`
         : `Runtime error, exit code ${formatExitCode(result.code)}.`;
-    await saveRunResultOutput(outputPaths.runResultPath, 'RE', result, message, runtimeExplanation);
+    await saveRunResultOutput(outputPaths.runResultPath, 'RE', result, message, runtimeExplanation, ioDiagnostics);
     output.appendLine(`[RE] ${sample.name}`);
     if (runtimeExplanation) {
       output.appendLine(renderRuntimeErrorExplanation(runtimeExplanation, { stderrEmpty: !result.stderr.trim() }));
@@ -348,7 +484,7 @@ async function judgeSample(
     appendRuntimeDiagnostics(output, sample.name, {
       sourcePath,
       exePath: executablePath,
-      cwd,
+      cwd: ioContext.cwd,
       inputPath: fileStatus.inputPath,
       answerPath: fileStatus.answerPath,
       outputPath: outputPaths.outputPath,
@@ -372,8 +508,34 @@ async function judgeSample(
       outputPaths.stderrRel,
       outputPaths.diffRel,
       {
-        ...createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics,
         runtimeError: runtimeExplanation ? toRuntimeErrorSummary(runtimeExplanation) : undefined
+      },
+      withStdinMessage(message, result)
+    );
+  }
+
+  if (ioMode === 'fileio' && fileIoOutput && !fileIoOutput.exists) {
+    const message = t('outputMissingMessage', { name: fileIo.outputFileName });
+    await saveRunResultOutput(outputPaths.runResultPath, 'Output Missing', result, message, undefined, ioDiagnostics);
+    output.appendLine(`[Output Missing] ${sample.name} (${formatMs(result.timeMs)} ms)`);
+    output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
+    output.appendLine(`${sample.name} compare time: 0 ms`);
+    output.appendLine(`  ${message}`);
+    output.appendLine(`  run directory: ${outputPaths.runDirRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'Output Missing',
+      result.timeMs,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics
       },
       withStdinMessage(message, result)
     );
@@ -404,7 +566,9 @@ async function judgeSample(
       result,
       checkerResult.status === 'Checker Error'
         ? checkerResult.report.message
-        : withStdinMessage(checkerResult.report.message ?? '', result)
+        : withStdinMessage(checkerResult.report.message ?? '', result),
+      undefined,
+      ioDiagnostics
     );
     const checkerTimeMs = elapsedMs(checkerStartedAt);
     const scoreSuffix = checkerResult.status === 'Scored' && checkerResult.report.scoreText
@@ -428,7 +592,10 @@ async function judgeSample(
       outputPaths.outputRel,
       outputPaths.stderrRel,
       outputPaths.diffRel,
-      createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics
+      },
       checkerResult.status === 'Checker Error'
         ? checkerResult.report.message
         : withStdinMessage(checkerResult.report.message ?? '', result),
@@ -439,11 +606,11 @@ async function judgeSample(
 
   let accepted: boolean;
   try {
-    accepted = isOutputAccepted(result.stdout, answer);
+    accepted = isOutputAccepted(judgeOutput, answer);
   } catch (error) {
     const compareTimeMs = elapsedMs(compareStartedAt);
     const compareError = formatUnknownError(error);
-    await saveRunResultOutput(outputPaths.runResultPath, 'ERR', result, `Failed to compare output: ${compareError}`);
+    await saveRunResultOutput(outputPaths.runResultPath, 'ERR', result, `Failed to compare output: ${compareError}`, undefined, ioDiagnostics);
     output.appendLine(`[ERR] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -458,7 +625,8 @@ async function judgeSample(
       outputPaths.stderrRel,
       outputPaths.diffRel,
       {
-        ...createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics,
         compareError
       },
       `Failed to compare output: ${compareError}`
@@ -467,8 +635,8 @@ async function judgeSample(
   const compareTimeMs = elapsedMs(compareStartedAt);
 
   if (!accepted) {
-    await saveTextOutput(outputPaths.diffPath, createDiffSummary(answer, result.stdout));
-    await saveRunResultOutput(outputPaths.runResultPath, 'WA', result, withStdinMessage('Output differs from answer.', result));
+    await saveTextOutput(outputPaths.diffPath, createDiffSummary(answer, judgeOutput));
+    await saveRunResultOutput(outputPaths.runResultPath, 'WA', result, withStdinMessage('Output differs from answer.', result), undefined, ioDiagnostics);
     output.appendLine(`[WA] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -483,7 +651,10 @@ async function judgeSample(
       outputPaths.outputRel,
       outputPaths.stderrRel,
       outputPaths.diffRel,
-      createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics
+      },
       withStdinMessage('Output differs from answer.', result)
     );
   }
@@ -495,7 +666,9 @@ async function judgeSample(
     result,
     result.stdinError
       ? 'stdin write error occurred after process closed, but process exited successfully.'
-      : undefined
+      : undefined,
+    undefined,
+    ioDiagnostics
   );
   output.appendLine(`[AC] ${sample.name} (${formatMs(result.timeMs)} ms)`);
   output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
@@ -509,7 +682,10 @@ async function judgeSample(
     outputPaths.outputRel,
     outputPaths.stderrRel,
     outputPaths.diffRel,
-    createRuntimeDiagnostics(sourcePath, executablePath, cwd, result),
+    {
+      ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+      ...ioDiagnostics
+    },
     result.stdinError
       ? 'stdin write error occurred after process closed, but process exited successfully.'
       : undefined
@@ -523,7 +699,9 @@ function createCheckerErrorSampleReport(
   cwd: string,
   sample: SampleConfig,
   problemId: string | undefined,
-  checkerCompile: CheckerCompileResult
+  checkerCompile: CheckerCompileResult,
+  ioMode: IoMode,
+  fileIo: FileIoConfig
 ): SampleReport {
   const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
   return createSampleReport(
@@ -539,7 +717,9 @@ function createCheckerErrorSampleReport(
       sourcePath,
       exePath: executablePath,
       cwd,
-      killedByTimeout: false
+      killedByTimeout: false,
+      ioMode,
+      fileIo: ioMode === 'fileio' ? createFileIoDiagnostics(outputPaths, fileIo, false).fileIo : undefined
     },
     checkerCompile.message ?? 'Checker compile failed.',
     0,
@@ -565,16 +745,18 @@ async function saveRunResultOutput(
   status: SampleReport['status'],
   result: ProcessResult,
   message?: string,
-  runtimeExplanation?: RuntimeErrorExplanation
+  runtimeExplanation?: RuntimeErrorExplanation,
+  io?: SampleIoContext['diagnostics']
 ): Promise<void> {
-  await saveTextOutput(filePath, formatRunResultOutput(status, result, message, runtimeExplanation));
+  await saveTextOutput(filePath, formatRunResultOutput(status, result, message, runtimeExplanation, io));
 }
 
 function formatRunResultOutput(
   status: SampleReport['status'],
   result: ProcessResult,
   message?: string,
-  runtimeExplanation?: RuntimeErrorExplanation
+  runtimeExplanation?: RuntimeErrorExplanation,
+  io?: SampleIoContext['diagnostics']
 ): string {
   const lines = [
     '[stdout]',
@@ -584,6 +766,13 @@ function formatRunResultOutput(
     result.stderr.trimEnd() || '<empty>',
     '',
     '[runtime]',
+    `I/O Mode: ${io?.ioMode === 'fileio' ? 'File IO' : 'Standard IO'}`,
+    ...(io?.fileIo?.inputFileName ? [`Input file name: ${io.fileIo.inputFileName}`] : []),
+    ...(io?.fileIo?.outputFileName ? [`Output file name: ${io.fileIo.outputFileName}`] : []),
+    ...(io?.fileIo?.runDir ? [`Run directory: ${io.fileIo.runDir}`] : []),
+    ...(io?.fileIo ? [
+      `File output: ${io.fileIo.outputCreated ? `loaded from ${io.fileIo.outputFileName}` : `missing ${io.fileIo.outputFileName}`}`
+    ] : []),
     `Status: ${status}`,
     `Exit code: ${formatExitCode(result.code)}`,
     `Signal: ${result.signal ?? 'null'}`,
@@ -619,7 +808,7 @@ function createSampleReport(
   outputRel: string,
   stderrRel: string,
   diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError'>> = {},
+  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
   message?: string,
   score?: number,
   checker?: CheckerSampleReport
@@ -691,6 +880,8 @@ function getSampleOutputPaths(
   stderrPath: string;
   runResultRel: string;
   runResultPath: string;
+  runDirRel: string;
+  runDirPath: string;
   diffRel: string;
   diffPath: string;
 } {
@@ -703,6 +894,8 @@ function getSampleOutputPaths(
       stderrPath: paths.stderrPath,
       runResultRel: paths.runResultRel,
       runResultPath: paths.runResultPath,
+      runDirRel: paths.runDirRel,
+      runDirPath: paths.runDirPath,
       diffRel: paths.diffRel,
       diffPath: paths.diffPath
     };
@@ -717,6 +910,8 @@ function getSampleOutputPaths(
     stderrPath: outputPath.replace(/\.out$/u, '.err'),
     runResultRel: outputRel.replace(/\.out$/u, '.run-result.txt'),
     runResultPath: outputPath.replace(/\.out$/u, '.run-result.txt'),
+    runDirRel: outputRel.replace(/\.out$/u, '-run'),
+    runDirPath: outputPath.replace(/\.out$/u, '-run'),
     diffRel: outputRel.replace(/\.out$/u, '.diff'),
     diffPath: outputPath.replace(/\.out$/u, '.diff')
   };

@@ -36,6 +36,8 @@
     "onCommand:oijudger.setProblemMemoryLimit",
     "onCommand:oijudger.setProblemStackSize",
     "onCommand:oijudger.setJudgeMode",
+    "onCommand:oijudger.setIoMode",
+    "onCommand:oijudger.setFileIoNames",
     "onCommand:oijudger.setProblemStandard",
     "onCommand:oijudger.selectProblemCompiler",
     "onCommand:oijudger.bindStatement",
@@ -191,6 +193,16 @@
         "command": "oijudger.setJudgeMode",
         "title": "OIjudger: 设置评测方式/Set Judge Mode",
         "icon": "$(diff)"
+      },
+      {
+        "command": "oijudger.setIoMode",
+        "title": "OIjudger: 设置输入输出方式/Set I/O Mode",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "oijudger.setFileIoNames",
+        "title": "OIjudger: 设置文件输入输出文件名/Set File I/O Names",
+        "icon": "$(files)"
       },
       {
         "command": "oijudger.setProblemStandard",
@@ -370,6 +382,11 @@
           "group": "0_judge"
         },
         {
+          "command": "oijudger.setIoMode",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
+          "group": "0_judge@2"
+        },
+        {
           "command": "oijudger.bindStatement",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "1_statement"
@@ -497,6 +514,10 @@
         },
         {
           "command": "oijudger.setProblemStackSize",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setFileIoNames",
           "when": "false"
         },
         {

@@ -11,6 +11,8 @@ import {
   getNextSampleIndex,
   getSampleDisplayNameFromInput,
   normalizeCheckerConfig,
+  normalizeFileIoConfig,
+  normalizeIoMode,
   normalizeJudgeMode,
   normalizeStackConfig,
   normalizeSampleInternalId,
@@ -319,6 +321,28 @@ export async function updateProblemJudgeMode(
   });
 }
 
+export async function updateProblemIoMode(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  ioMode: ProblemConfig['ioMode'],
+  fileIo?: ProblemConfig['fileIo']
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    problem.ioMode = normalizeIoMode(ioMode);
+    problem.fileIo = normalizeFileIoConfig(fileIo ?? problem.fileIo);
+  });
+}
+
+export async function updateProblemFileIo(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  fileIo: ProblemConfig['fileIo']
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    problem.fileIo = normalizeFileIoConfig(fileIo);
+  });
+}
+
 export async function getProblem(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string
@@ -497,6 +521,8 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
     },
     stack: normalizeStackConfig(problem.stack),
     judgeMode: normalizeJudgeMode(problem.judgeMode, problem.checker),
+    ioMode: normalizeIoMode(problem.ioMode),
+    fileIo: normalizeFileIoConfig(problem.fileIo),
     checker: normalizeCheckerConfig(problem.checker),
     samples: (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1)),
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),

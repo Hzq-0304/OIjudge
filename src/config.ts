@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { t } from './i18n';
-import { CheckerConfig, JudgeMode, OITestConfig, SampleConfig, StackConfig } from './types';
+import { CheckerConfig, FileIoConfig, IoMode, JudgeMode, OITestConfig, SampleConfig, StackConfig } from './types';
 
 export function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
   const editor = vscode.window.activeTextEditor;
@@ -174,6 +174,11 @@ export function createDefaultConfig(): OITestConfig {
       sizeMb: null
     },
     judgeMode: 'normal',
+    ioMode: 'stdio',
+    fileIo: {
+      inputFileName: 'input.txt',
+      outputFileName: 'output.txt'
+    },
     checker: {
       enabled: false,
       type: 'none'
@@ -250,6 +255,8 @@ function normalizeConfig(config: OITestConfig): OITestConfig {
     },
     stack: normalizeStackConfig(config.stack),
     judgeMode: normalizeJudgeMode(config.judgeMode, config.checker),
+    ioMode: normalizeIoMode(config.ioMode),
+    fileIo: normalizeFileIoConfig(config.fileIo),
     checker: normalizeCheckerConfig(config.checker),
     samples: config.samples ?? []
   };
@@ -291,6 +298,17 @@ export function normalizeJudgeMode(
     return judgeMode;
   }
   return checker?.enabled && checker.type !== 'none' ? 'checker' : 'normal';
+}
+
+export function normalizeIoMode(ioMode: IoMode | undefined): IoMode {
+  return ioMode === 'fileio' ? 'fileio' : 'stdio';
+}
+
+export function normalizeFileIoConfig(fileIo: FileIoConfig | undefined): FileIoConfig {
+  return {
+    inputFileName: fileIo?.inputFileName || 'input.txt',
+    outputFileName: fileIo?.outputFileName || 'output.txt'
+  };
 }
 
 export function getNextSampleIndex(config: Pick<OITestConfig, 'samples'>): number {

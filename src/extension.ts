@@ -47,6 +47,8 @@ import {
   unbindProblemStatement,
   updateProblemChecker,
   updateProblemCompiler,
+  updateProblemFileIo,
+  updateProblemIoMode,
   updateProblemJudgeMode,
   updateProblemLimits,
   updateProblemStack,
@@ -336,6 +338,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.setJudgeMode', async (problemArg?: unknown) => {
       await setJudgeModeCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.setIoMode', async (problemArg?: unknown) => {
+      await setIoModeCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.setFileIoNames', async (problemArg?: unknown) => {
+      await setFileIoNamesCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.setChecker', async (problemArg?: unknown) => {
       await setCheckerCommand(context, readProblemId(problemArg), sampleTreeProvider);
@@ -1018,6 +1026,106 @@ async function setJudgeModeCommand(
   vscode.window.showInformationMessage(
     picked.mode === 'checker' ? t('switchedToCustomChecker') : t('switchedToNormalCompare')
   );
+}
+
+async function setIoModeCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: t('standardIo'), mode: 'stdio' as const },
+      { label: t('fileIo'), mode: 'fileio' as const }
+    ],
+    {
+      title: t('setIoMode'),
+      placeHolder: t('ioMode')
+    }
+  );
+  if (!picked) {
+    return;
+  }
+
+  if (picked.mode === 'stdio') {
+    await updateProblemIoMode(context.workspaceFolder, context.problem.id, 'stdio', context.problem.fileIo);
+    sampleTreeProvider.refresh();
+    vscode.window.showInformationMessage(t('switchedToStandardIo'));
+    return;
+  }
+
+  const fileIo = await readFileIoNames(context.problem.fileIo);
+  if (!fileIo) {
+    return;
+  }
+
+  await updateProblemIoMode(context.workspaceFolder, context.problem.id, 'fileio', fileIo);
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('switchedToFileIo'));
+}
+
+async function setFileIoNamesCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const fileIo = await readFileIoNames(context.problem.fileIo);
+  if (!fileIo) {
+    return;
+  }
+
+  await updateProblemFileIo(context.workspaceFolder, context.problem.id, fileIo);
+  sampleTreeProvider.refresh();
+}
+
+async function readFileIoNames(
+  current: ProblemConfig['fileIo'] | undefined
+): Promise<{ inputFileName: string; outputFileName: string } | undefined> {
+  const inputFileName = await vscode.window.showInputBox({
+    title: t('setFileIoNames'),
+    prompt: t('inputFileName'),
+    value: current?.inputFileName || 'input.txt',
+    validateInput: validateFileIoName
+  });
+  if (inputFileName === undefined) {
+    return undefined;
+  }
+
+  const outputFileName = await vscode.window.showInputBox({
+    title: t('setFileIoNames'),
+    prompt: t('outputFileName'),
+    value: current?.outputFileName || 'output.txt',
+    validateInput: validateFileIoName
+  });
+  if (outputFileName === undefined) {
+    return undefined;
+  }
+
+  return { inputFileName, outputFileName };
+}
+
+function validateFileIoName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (
+    trimmed.length === 0 ||
+    trimmed === '.' ||
+    trimmed === '..' ||
+    path.isAbsolute(trimmed) ||
+    /[\\/]/u.test(trimmed) ||
+    trimmed.includes('..') ||
+    !/^[A-Za-z0-9_.-]+$/u.test(trimmed)
+  ) {
+    return t('invalidFileIoName');
+  }
+  return undefined;
 }
 
 async function setCheckerCommand(
