@@ -420,7 +420,7 @@ function createRuntimeTooltipLines(report: SampleReport | undefined): string[] {
     !report.spawnError &&
     !report.runnerError
   ) {
-    lines.push('Runtime Error: missing diagnostic information. This is an OIjudger internal issue. See Output Channel.');
+    lines.push('Runtime Error: missing diagnostic information. This is an OI Judge internal issue. See Output Channel.');
   }
   return lines;
 }

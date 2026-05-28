@@ -1,12 +1,12 @@
 # Bundled testlib.h
 
-This directory contains the bundled `testlib.h` used by OIjudger as an optional fallback for testlib checkers.
+This directory contains the bundled `testlib.h` used by OI Judge as an optional fallback for testlib checkers.
 
 Version/source archive used during bundling:
 
 - `testlib-0.9.41.zip`
 
-OIjudger does not force users to use this bundled copy. The resolver still prefers:
+OI Judge does not force users to use this bundled copy. The resolver still prefers:
 
 1. `testlib.h` next to `checker.cpp`
 2. `testlib.h` in the workspace root

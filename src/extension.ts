@@ -73,7 +73,7 @@ import { SampleTreeProvider } from './sampleTreeProvider';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
 import { PlainCheckerConfig, ProblemConfig } from './types';
 
-const output = vscode.window.createOutputChannel('OIjudger');
+const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 let activeProblemId: string | undefined;
 
@@ -2106,7 +2106,7 @@ function getEffectiveJudgeMode(problem: ProblemConfig): 'normal' | 'checker' {
 async function updateStatusBar(problemId: string | undefined = activeProblemId): Promise<void> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) {
-    statusBar.text = 'OIjudger';
+    statusBar.text = 'OI Judge';
     return;
   }
 
@@ -2115,13 +2115,13 @@ async function updateStatusBar(problemId: string | undefined = activeProblemId):
     ? config.problems.find((entry) => entry.id === problemId)
     : config.problems[0];
   if (!problem) {
-    statusBar.text = 'OIjudger';
+    statusBar.text = 'OI Judge';
     return;
   }
 
   activeProblemId = problem.id;
   if (!getDefaultProblemSource(problem)) {
-    statusBar.text = `OIjudger: ${problem.name}  ${t('noProgramSet')}`;
+    statusBar.text = `OI Judge: ${problem.name}  ${t('noProgramSet')}`;
     return;
   }
 
@@ -2130,12 +2130,12 @@ async function updateStatusBar(problemId: string | undefined = activeProblemId):
       summary?: { accepted: number; total: number };
     };
     if (report.summary) {
-      statusBar.text = `OIjudger: ${problem.name}  ${report.summary.accepted}/${report.summary.total} ${t('statusAC')}`;
+      statusBar.text = `OI Judge: ${problem.name}  ${report.summary.accepted}/${report.summary.total} ${t('statusAC')}`;
       return;
     }
   } catch {
     // Ignore missing or invalid report for the compact status item.
   }
 
-  statusBar.text = `OIjudger: ${problem.name}`;
+  statusBar.text = `OI Judge: ${problem.name}`;
 }

@@ -1,6 +1,14 @@
-# OIjudger
+# OI Judge
 
-OIjudger is a VSCode extension for local OI-style sample judging.
+OI Judge is a VSCode extension for local OI-style sample judging.
+
+Marketplace extension ID: `Hzq.oijudge`
+
+Repository: `https://github.com/Hzq-0304/OIjudge.git`
+
+VSIX package name format: `oijudge-<version>.vsix`
+
+For compatibility with earlier versions, internal command IDs and settings may still use the `oijudger` prefix, such as `oijudger.language`.
 
 First-version features:
 
@@ -11,7 +19,7 @@ First-version features:
 - Add multiple samples under `.oitest/samples` or `.oitest/problems/<problemId>/samples`
 - Add samples by pasting text or selecting input/output files
 - Batch add samples from a folder by matching input and answer suffixes
-- Delete samples from the OIjudger sidebar
+- Delete samples from the OI Judge sidebar
 - Set time and memory limits
 - Automatically set Windows MinGW/g++ stack size from the memory limit
 - Detect or select a local C++ compiler
@@ -19,7 +27,7 @@ First-version features:
 - Run all configured samples
 - Compare standard output
 - Save user output and `.oitest/outputs/report.json`
-- Show an `OIjudger` sidebar with current file, limits, sample status, and quick actions
+- Show an `OI Judge` sidebar with current file, limits, sample status, and quick actions
 - Open report and sample detail pages from the sidebar
 - Switch UI text with `oijudger.language` (`auto`, `en`, `zh`)
 - Manage multiple problems in one workspace with `.oitest/problems.json`
@@ -27,16 +35,16 @@ First-version features:
 
 Problem workflow:
 
-- `OIjudger: Create Problem` creates a problem entry and its `.oitest/problems/<problemId>/` folders without requiring a source file.
-- `OIjudger: Bind Statement` links a statement file. OIjudger stores the original file path only; it does not copy, modify, or delete the statement file.
-- `OIjudger: Add Program To Problem` links a C++ program. Programs are path references only; source files are not copied into `.oitest`.
-- `OIjudger: Set Default Program` chooses the program used by `Run All Samples`.
-- `OIjudger: Run Samples With Program` lets you temporarily choose any linked or newly selected `.cpp` file for one run.
-- `OIjudger: Add Problem From Current File` and `OIjudger: Add Problem From File` still work as shortcuts: they create a problem and set the selected file as the default program.
+- `OI Judge: Create Problem` creates a problem entry and its `.oitest/problems/<problemId>/` folders without requiring a source file.
+- `OI Judge: Bind Statement` links a statement file. OI Judge stores the original file path only; it does not copy, modify, or delete the statement file.
+- `OI Judge: Add Program To Problem` links a C++ program. Programs are path references only; source files are not copied into `.oitest`.
+- `OI Judge: Set Default Program` chooses the program used by `Run All Samples`.
+- `OI Judge: Run Samples With Program` lets you temporarily choose any linked or newly selected `.cpp` file for one run.
+- `OI Judge: Add Problem From Current File` and `OI Judge: Add Problem From File` still work as shortcuts: they create a problem and set the selected file as the default program.
 
 Tree view:
 
-- Problem nodes are collapsed by default to keep the OIjudger sidebar compact after VSCode restarts.
+- Problem nodes are collapsed by default to keep the OI Judge sidebar compact after VSCode restarts.
 - Expand a problem manually to view Statement, Programs, Limits, Samples, and Actions.
 - Samples and Actions are also collapsed by default, which keeps large multi-sample problems easier to scan.
 - Click the Default Program, Compiler, or C++ Standard node under a problem to edit the corresponding setting.
@@ -44,21 +52,21 @@ Tree view:
 
 Sample storage:
 
-- Paste manually: OIjudger stores the input and expected output inside `.oitest`. This is best for small samples.
-- Select input/output files: OIjudger stores the original absolute file paths and does not copy the files. This is best for large data files or existing local test data.
+- Paste manually: OI Judge stores the input and expected output inside `.oitest`. This is best for small samples.
+- Select input/output files: OI Judge stores the original absolute file paths and does not copy the files. This is best for large data files or existing local test data.
 - External samples depend on the original files. If an external input or answer file is moved or deleted, the sample is shown as `Missing` and skipped during judging.
-- Deleting a managed sample removes the OIjudger-owned `.oitest` sample files and generated outputs.
-- Deleting an external sample removes only the OIjudger sample record and generated outputs. The original input and answer files are never deleted.
+- Deleting a managed sample removes the OI Judge-owned `.oitest` sample files and generated outputs.
+- Deleting an external sample removes only the OI Judge sample record and generated outputs. The original input and answer files are never deleted.
 
 Batch add samples:
 
-- Run `OIjudger: Batch Add Samples`.
+- Run `OI Judge: Batch Add Samples`.
 - Enter the input file suffix. The default is `.in`; `in` is normalized to `.in`.
 - Enter the answer file suffix. The default is `.out`; `ans` is normalized to `.ans`.
 - Select a samples folder.
-- OIjudger scans only the first level of that folder and matches files by `basename + inputSuffix` and `basename + answerSuffix`.
+- OI Judge scans only the first level of that folder and matches files by `basename + inputSuffix` and `basename + answerSuffix`.
 - For example, `1.in` with `1.out` and `2.in` with `2.out` are added as two samples.
-- Batch-added samples are external samples: OIjudger stores absolute paths only and does not copy or modify the files.
+- Batch-added samples are external samples: OI Judge stores absolute paths only and does not copy or modify the files.
 - Inputs without matching answer files and duplicate sample pairs are skipped and summarized.
 
 Sample names:
@@ -67,8 +75,8 @@ Sample names:
 - Samples added from files use the input file basename as the visible sample name.
 - For example, `book3.in` with `book3.ans` is shown as `book3`; `1.in` with `1.out` is shown as `1`.
 - Batch-added samples use each matched basename as the sample name.
-- OIjudger still uses a stable internal `id` and `index` for output folders such as `outputs/sample-7/`, so display names do not affect deletion, reports, or diff paths.
-- If a sample name already exists, OIjudger appends ` (2)`, ` (3)`, and so on.
+- OI Judge still uses a stable internal `id` and `index` for output folders such as `outputs/sample-7/`, so display names do not affect deletion, reports, or diff paths.
+- If a sample name already exists, OI Judge appends ` (2)`, ` (3)`, and so on.
 
 Sample viewing:
 
@@ -89,16 +97,16 @@ Timing note: sample time only measures the user executable process. On Windows, 
 Windows stack size:
 
 - Deep recursive programs on Windows may exit with `0xC00000FD`, which is a stack overflow exception.
-- By default, OIjudger follows the problem memory limit and adds a MinGW/g++ linker flag when compiling on Windows.
+- By default, OI Judge follows the problem memory limit and adds a MinGW/g++ linker flag when compiling on Windows.
 - For `memoryMb = 256`, the generated flag is `-Wl,--stack,268435456`.
-- Click the Stack node under a problem's Limits section, or run `OIjudger: Set Stack Size`, to choose `Follow Memory Limit`, `Custom Stack Size`, or `Disable Auto Stack Size`.
+- Click the Stack node under a problem's Limits section, or run `OI Judge: Set Stack Size`, to choose `Follow Memory Limit`, `Custom Stack Size`, or `Disable Auto Stack Size`.
 - The stack flag is generated at compile time and is not repeatedly inserted into `compile.args`.
-- If auto stack size is enabled, an existing `-Wl,--stack,...` argument is replaced by the current setting. If auto stack size is disabled, OIjudger does not add a stack flag.
+- If auto stack size is enabled, an existing `-Wl,--stack,...` argument is replaced by the current setting. If auto stack size is disabled, OI Judge does not add a stack flag.
 - This mainly targets Windows + MinGW/g++. Linux/macOS judging environments usually control stack through the runner or system limits, and avoiding very deep recursion is still the safest algorithmic choice.
 
 Runtime Error Explanation:
 
-- OIjudger explains common Runtime Error results from the process exit code or POSIX signal.
+- OI Judge explains common Runtime Error results from the process exit code or POSIX signal.
 - Runtime Error names use common OI/OJ-style English descriptions, such as:
   - Stack overflow
   - Access violation
@@ -118,7 +126,7 @@ Runtime Error Explanation:
 
 Judge Mode:
 
-- OIjudger supports two judge modes for each problem:
+- OI Judge supports two judge modes for each problem:
   - Normal text compare
   - Custom checker
 - Normal text compare directly compares the user program stdout with the expected output file. This is the default mode and fits most ordinary OI problems.
@@ -127,15 +135,15 @@ Judge Mode:
 - Custom checker mode enables Checker actions and supports:
   - Testlib Checker
   - Plain Checker
-- If you run `OIjudger: Set Checker` while a problem is still in normal text compare mode, OIjudger asks whether to switch to custom checker first.
+- If you run `OI Judge: Set Checker` while a problem is still in normal text compare mode, OI Judge asks whether to switch to custom checker first.
 - Switching back to normal text compare does not delete the saved checker configuration, so you can switch back later without reselecting the checker.
 
 I/O Mode:
 
 - Each problem can use either `Standard IO` or `File IO`.
-- `Standard IO` is the default: OIjudger feeds the sample input through stdin and captures stdout as `useroutput.txt`.
+- `Standard IO` is the default: OI Judge feeds the sample input through stdin and captures stdout as `useroutput.txt`.
 - `File IO` is for programs that use files such as `problem.in` and `problem.out`.
-- In File IO mode, OIjudger creates an isolated temporary run directory for every sample:
+- In File IO mode, OI Judge creates an isolated temporary run directory for every sample:
   - `.oitest/problems/<problemId>/outputs/sample-<index>/run/`
   - writes the sample input to the configured input file name
   - runs the executable with `cwd` set to that run directory
@@ -144,7 +152,7 @@ I/O Mode:
 - Diff, normal compare, testlib Checker, Plain Checker, and Result Panel all continue to use `useroutput.txt`.
 - Program stdout in File IO mode is diagnostic only; it is not used as the judged output if the configured output file is missing.
 - File names must be simple names such as `problem.in`; absolute paths, folders, and `..` are rejected.
-- OIjudger never creates the configured input/output files in the source directory, workspace root, sample directory, or checker directory.
+- OI Judge never creates the configured input/output files in the source directory, workspace root, sample directory, or checker directory.
 
 Example File IO program:
 
@@ -163,10 +171,10 @@ int main() {
 
 Testlib Checker:
 
-- OIjudger supports first-version testlib-style checkers for per-problem judging.
-- Run `OIjudger: Set Checker` and choose `Testlib checker`, then select a local `checker.cpp`.
+- OI Judge supports first-version testlib-style checkers for per-problem judging.
+- Run `OI Judge: Set Checker` and choose `Testlib checker`, then select a local `checker.cpp`.
 - A typical checker includes `#include "testlib.h"` and calls `registerTestlibCmd(argc, argv)`.
-- OIjudger runs the checker as:
+- OI Judge runs the checker as:
 
 ```text
 checker.exe input.txt useroutput.txt answer.txt
@@ -177,10 +185,10 @@ checker.exe input.txt useroutput.txt answer.txt
   - the workspace root
   - `.oitest/tools/testlib/testlib.h`
   - a custom path recorded in the checker config
-- OIjudger can install the bundled `testlib.h` shipped with the extension, or import a local copy selected by the user.
+- OI Judge can install the bundled `testlib.h` shipped with the extension, or import a local copy selected by the user.
 - User-provided copies still have higher priority than the bundled copy once installed into the workspace.
-- OIjudger does not download or generate `testlib.h`. If it is missing, run `OIjudger: Import testlib.h`.
-- When bundled resources are available, `OIjudger: Import testlib.h` offers:
+- OI Judge does not download or generate `testlib.h`. If it is missing, run `OI Judge: Import testlib.h`.
+- When bundled resources are available, `OI Judge: Import testlib.h` offers:
   - `Install bundled testlib.h`
   - `Import testlib.h from local file`
 - Bundled source and license details are preserved in `resources/testlib/README.md` and `resources/testlib/LICENSE`.
@@ -196,7 +204,7 @@ checker.exe input.txt useroutput.txt answer.txt
 - Windows DLL note:
   - If a checker exits with code `3221225781` / `0xC0000135`, it usually means `checker.exe` failed to start because a runtime DLL is missing, not that the checker judged `WA`.
   - Common missing DLLs include MinGW `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll`.
-  - OIjudger tries to compile checkers with static linking for MinGW/g++ and prepends the compiler `bin` directory to the checker process `PATH`.
+  - OI Judge tries to compile checkers with static linking for MinGW/g++ and prepends the compiler `bin` directory to the checker process `PATH`.
   - You can also add the MinGW `bin` directory to `PATH`, rebuild the checker with static linking, or put the missing DLL next to `checker.exe`.
 - Normal compare is unchanged when no checker is enabled.
 - Later versions may add `score-json`, `score-plain`, and partial score checker protocols.
@@ -205,7 +213,7 @@ Plain Checker:
 
 Plain Checker is a simple custom checker that does not depend on `testlib.h`.
 
-OIjudger runs it with the same arguments as a testlib checker:
+OI Judge runs it with the same arguments as a testlib checker:
 
 ```text
 checker.exe input.txt useroutput.txt answer.txt
@@ -217,7 +225,7 @@ The default protocol reads the last non-empty line of stdout. That line must be 
 - `WA`
 - a numeric score
 
-You can also run `OIjudger: Set Plain Checker Protocol` to configure:
+You can also run `OI Judge: Set Plain Checker Protocol` to configure:
 
 - whether the verdict is read from the first or last non-empty stdout line
 - the accepted token, default `AC`
@@ -241,9 +249,9 @@ This marks the sample as wrong answer.
 37.5
 ```
 
-This returns a score of `37.5`. OIjudger shows a question mark icon and displays `37.5` on the right side. It does not mark the sample as accepted or wrong.
+This returns a score of `37.5`. OI Judge shows a question mark icon and displays `37.5` on the right side. It does not mark the sample as accepted or wrong.
 
-Important: if you want WA, output the configured wrong-answer token. If you output `0`, OIjudger treats it as score `0`, not as WA. If you output `100`, OIjudger treats it as score `100`, not as AC.
+Important: if you want WA, output the configured wrong-answer token. If you output `0`, OI Judge treats it as score `0`, not as WA. If you output `100`, OI Judge treats it as score `100`, not as AC.
 
 Under the default protocol, invalid verdict lines include:
 
@@ -329,19 +337,19 @@ int main(int argc, char** argv) {
 }
 ```
 
-If the last line is `70.0`, OIjudger shows a question mark icon and score `70.0`.
+If the last line is `70.0`, OI Judge shows a question mark icon and score `70.0`.
 
 Commands:
 
-- `OIjudger: Init Problem`
-- `OIjudger: Add Sample`
-- `OIjudger: Run All Samples`
-- `OIjudger: Set Time Limit`
-- `OIjudger: Set Memory Limit`
-- `OIjudger: Set Stack Size`
-- `OIjudger: Set Plain Checker Protocol`
-- `OIjudger: Open Last Report`
-- `OIjudger: Clear Outputs`
+- `OI Judge: Init Problem`
+- `OI Judge: Add Sample`
+- `OI Judge: Run All Samples`
+- `OI Judge: Set Time Limit`
+- `OI Judge: Set Memory Limit`
+- `OI Judge: Set Stack Size`
+- `OI Judge: Set Plain Checker Protocol`
+- `OI Judge: Open Last Report`
+- `OI Judge: Clear Outputs`
 
 The default compiler command is `g++`. You can edit `.oitest/config.json` to adjust compiler flags.
 
@@ -356,4 +364,4 @@ npm test
 npm pack --dry-run
 ```
 
-Press F5 in VSCode and choose `Run OIjudger Extension` to open the Extension Development Host.
+Press F5 in VSCode and choose `Run OI Judge Extension` to open the Extension Development Host.

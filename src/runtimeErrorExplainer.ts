@@ -67,8 +67,8 @@ const windowsExitCodeMap = new Map<number, RuntimeErrorTemplate>([
     chineseDescription: '程序发生栈溢出，可能是递归层数过深、局部数组过大，或存在无限递归。',
     englishCauses: ['Deep recursion', 'Large local arrays', 'Large objects allocated on the stack', 'Infinite recursion'],
     chineseCauses: ['递归层数过深', '局部数组过大', '在栈上创建过大的对象', '无限递归'],
-    englishSuggestions: ['Rewrite recursion iteratively', 'Move large arrays to global/static storage', 'Adjust OIjudger stack size settings', 'Check for infinite recursion'],
-    chineseSuggestions: ['改为非递归写法', '将大数组改为全局或 static', '调整 OIjudger 栈空间设置', '检查是否存在无限递归']
+    englishSuggestions: ['Rewrite recursion iteratively', 'Move large arrays to global/static storage', 'Adjust OI Judge stack size settings', 'Check for infinite recursion'],
+    chineseSuggestions: ['改为非递归写法', '将大数组改为全局或 static', '调整 OI Judge 栈空间设置', '检查是否存在无限递归']
   }],
   [0xC0000005, {
     kind: 'accessViolation',
@@ -298,8 +298,8 @@ function toHexCode(code: number): string {
 const programNotFoundTemplate: RuntimeErrorTemplate = {
   kind: 'programNotFound',
   englishName: 'Program not found',
-  englishDescription: 'OIjudger failed to start the executable file.',
-  chineseDescription: 'OIjudger 无法启动可执行文件，可能是 exe 文件不存在或路径错误。',
+  englishDescription: 'OI Judge failed to start the executable file.',
+  chineseDescription: 'OI Judge 无法启动可执行文件，可能是 exe 文件不存在或路径错误。',
   englishCauses: ['Executable file does not exist', 'Compilation failed but runner still tried to execute', 'Invalid executable path'],
   chineseCauses: ['可执行文件不存在', '编译失败后仍尝试运行', '可执行文件路径错误'],
   englishSuggestions: ['Rebuild the program', 'Check compiler output path', 'Check the selected program'],
@@ -309,8 +309,8 @@ const programNotFoundTemplate: RuntimeErrorTemplate = {
 const permissionDeniedTemplate: RuntimeErrorTemplate = {
   kind: 'permissionDenied',
   englishName: 'Permission denied',
-  englishDescription: 'OIjudger does not have permission to run the executable file.',
-  chineseDescription: 'OIjudger 没有权限运行该可执行文件，或文件被系统/安全软件阻止。',
+  englishDescription: 'OI Judge does not have permission to run the executable file.',
+  chineseDescription: 'OI Judge 没有权限运行该可执行文件，或文件被系统/安全软件阻止。',
   englishCauses: ['Executable permission is missing', 'The file is blocked by the system or security software'],
   chineseCauses: ['缺少可执行权限', '文件被系统或安全软件阻止'],
   englishSuggestions: ['Check file permissions', 'Check whether security software blocked the executable'],
@@ -320,8 +320,8 @@ const permissionDeniedTemplate: RuntimeErrorTemplate = {
 const runnerInternalErrorTemplate: RuntimeErrorTemplate = {
   kind: 'runnerInternalError',
   englishName: 'Runner internal error',
-  englishDescription: 'OIjudger encountered an internal runner error. This may not be a program error.',
-  chineseDescription: 'OIjudger 运行器发生内部错误，这不一定是用户程序错误。',
+  englishDescription: 'OI Judge encountered an internal runner error. This may not be a program error.',
+  chineseDescription: 'OI Judge 运行器发生内部错误，这不一定是用户程序错误。',
   englishCauses: ['Runner process failed', 'Pipe or process management error'],
   chineseCauses: ['运行器进程失败', '管道或进程管理错误'],
   englishSuggestions: ['See Output Channel and stderr', 'Run again to check whether it is reproducible'],
@@ -331,8 +331,8 @@ const runnerInternalErrorTemplate: RuntimeErrorTemplate = {
 const unknownTemplate: RuntimeErrorTemplate = {
   kind: 'unknown',
   englishName: 'Unknown runtime error',
-  englishDescription: 'The program terminated abnormally, but OIjudger could not classify the runtime error.',
-  chineseDescription: '程序异常退出，但 OIjudger 无法识别具体运行错误类型。',
+  englishDescription: 'The program terminated abnormally, but OI Judge could not classify the runtime error.',
+  chineseDescription: '程序异常退出，但 OI Judge 无法识别具体运行错误类型。',
   englishCauses: ['Unknown abnormal termination', 'Platform-specific runtime error'],
   chineseCauses: ['未知异常退出', '平台相关运行错误'],
   englishSuggestions: ['See Output Channel and stderr', 'Reproduce with a smaller case and debug'],

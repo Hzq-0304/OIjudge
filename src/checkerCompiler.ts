@@ -53,7 +53,7 @@ export async function compileChecker(
   }
 
   if (checker.type === 'testlib' && (!testlib?.found || !testlib.includeDir)) {
-    const message = 'testlib.h not found. Please run OIjudger: Import testlib.h.';
+    const message = 'testlib.h not found. Please run OI Judge: Import testlib.h.';
     await fs.writeFile(stderrPath, `${message}\n`, 'utf8');
     output.appendLine(`  ${message}`);
     return {

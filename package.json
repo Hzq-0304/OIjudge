@@ -1,14 +1,23 @@
 {
-  "name": "oijudger",
-  "displayName": "OIjudger",
-  "description": "A local multi-sample judge for OIers with normal compare, testlib checkers, and configurable plain checkers.",
-  "version": "0.3.2",
-  "publisher": "local",
+  "name": "oijudge",
+  "displayName": "OI Judge",
+  "description": "Local OI sample judge for VS Code with custom checkers, File IO, and runtime diagnostics.",
+  "version": "0.4.0",
+  "publisher": "Hzq",
   "engines": {
     "vscode": "^1.87.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "oi",
+    "competitive-programming",
+    "judge",
+    "checker",
+    "testlib",
+    "cpp",
+    "vscode"
   ],
   "activationEvents": [
     "onCommand:oijudger.initProblem",
@@ -65,254 +74,254 @@
   "main": "./out/extension.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Hzq-0304/OIjudger.git"
+    "url": "https://github.com/Hzq-0304/OIjudge.git"
   },
   "license": "MIT",
   "contributes": {
     "commands": [
       {
         "command": "oijudger.initProblem",
-        "title": "OIjudger: Init Problem",
+        "title": "OI Judge: Init Problem",
         "icon": "$(repo-create)"
       },
       {
         "command": "oijudger.addSample",
-        "title": "OIjudger: Add Sample",
+        "title": "OI Judge: Add Sample",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.runAllSamples",
-        "title": "OIjudger: Run All Samples",
+        "title": "OI Judge: Run All Samples",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.setTimeLimit",
-        "title": "OIjudger: Set Time Limit",
+        "title": "OI Judge: Set Time Limit",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setMemoryLimit",
-        "title": "OIjudger: Set Memory Limit",
+        "title": "OI Judge: Set Memory Limit",
         "icon": "$(server)"
       },
       {
         "command": "oijudger.setStackSize",
-        "title": "OIjudger: 设置栈空间/Set Stack Size",
+        "title": "OI Judge: 设置栈空间/Set Stack Size",
         "icon": "$(layers)"
       },
       {
         "command": "oijudger.selectCompiler",
-        "title": "OIjudger: Select C++ Compiler",
+        "title": "OI Judge: Select C++ Compiler",
         "icon": "$(settings-gear)"
       },
       {
         "command": "oijudger.openLastReport",
-        "title": "OIjudger: Open Last Report",
+        "title": "OI Judge: Open Last Report",
         "icon": "$(preview)"
       },
       {
         "command": "oijudger.openResultPanel",
-        "title": "OIjudger: Open Result Panel",
+        "title": "OI Judge: Open Result Panel",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openSampleDetail",
-        "title": "OIjudger: Open Sample Detail",
+        "title": "OI Judge: Open Sample Detail",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearOutputs",
-        "title": "OIjudger: Clear Outputs",
+        "title": "OI Judge: Clear Outputs",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.refreshView",
-        "title": "OIjudger: Refresh View",
+        "title": "OI Judge: Refresh View",
         "icon": "$(refresh)"
       },
       {
         "command": "oijudger.createProblem",
-        "title": "OIjudger: 创建题目/Create Problem",
+        "title": "OI Judge: 创建题目/Create Problem",
         "icon": "$(new-folder)"
       },
       {
         "command": "oijudger.addProblemFromCurrentFile",
-        "title": "OIjudger: Add Problem From Current File",
+        "title": "OI Judge: Add Problem From Current File",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.addProblemFromFile",
-        "title": "OIjudger: Add Problem From File",
+        "title": "OI Judge: Add Problem From File",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.importLegacyProblem",
-        "title": "OIjudger: Import Legacy Single Problem",
+        "title": "OI Judge: Import Legacy Single Problem",
         "icon": "$(repo-pull)"
       },
       {
         "command": "oijudger.addProblemSample",
-        "title": "OIjudger: Add Problem Sample",
+        "title": "OI Judge: Add Problem Sample",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.addProblemSampleFromFiles",
-        "title": "OIjudger: Add Problem Sample From Files",
+        "title": "OI Judge: Add Problem Sample From Files",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.batchAddSamples",
-        "title": "OIjudger: 批量添加样例/Batch Add Samples",
+        "title": "OI Judge: 批量添加样例/Batch Add Samples",
         "icon": "$(folder-opened)"
       },
       {
         "command": "oijudger.runProblemSamples",
-        "title": "OIjudger: Run Problem Samples",
+        "title": "OI Judge: Run Problem Samples",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.runSamplesWithProgram",
-        "title": "OIjudger: 选择程序评测/Run With Program",
+        "title": "OI Judge: 选择程序评测/Run With Program",
         "icon": "$(run)"
       },
       {
         "command": "oijudger.setProblemTimeLimit",
-        "title": "OIjudger: Set Problem Time Limit",
+        "title": "OI Judge: Set Problem Time Limit",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setProblemMemoryLimit",
-        "title": "OIjudger: Set Problem Memory Limit",
+        "title": "OI Judge: Set Problem Memory Limit",
         "icon": "$(server)"
       },
       {
         "command": "oijudger.setProblemStackSize",
-        "title": "OIjudger: Set Problem Stack Size",
+        "title": "OI Judge: Set Problem Stack Size",
         "icon": "$(layers)"
       },
       {
         "command": "oijudger.setJudgeMode",
-        "title": "OIjudger: 设置评测方式/Set Judge Mode",
+        "title": "OI Judge: 设置评测方式/Set Judge Mode",
         "icon": "$(diff)"
       },
       {
         "command": "oijudger.setIoMode",
-        "title": "OIjudger: 设置输入输出方式/Set I/O Mode",
+        "title": "OI Judge: 设置输入输出方式/Set I/O Mode",
         "icon": "$(terminal)"
       },
       {
         "command": "oijudger.setFileIoNames",
-        "title": "OIjudger: 设置文件输入输出文件名/Set File I/O Names",
+        "title": "OI Judge: 设置文件输入输出文件名/Set File I/O Names",
         "icon": "$(files)"
       },
       {
         "command": "oijudger.setProblemStandard",
-        "title": "OIjudger: Set Problem C++ Standard",
+        "title": "OI Judge: Set Problem C++ Standard",
         "icon": "$(settings)"
       },
       {
         "command": "oijudger.selectProblemCompiler",
-        "title": "OIjudger: Select Problem Compiler",
+        "title": "OI Judge: Select Problem Compiler",
         "icon": "$(settings-gear)"
       },
       {
         "command": "oijudger.bindStatement",
-        "title": "OIjudger: 绑定题面/Bind Statement",
+        "title": "OI Judge: 绑定题面/Bind Statement",
         "icon": "$(link)"
       },
       {
         "command": "oijudger.openStatement",
-        "title": "OIjudger: 打开题面/Open Statement",
+        "title": "OI Judge: 打开题面/Open Statement",
         "icon": "$(book)"
       },
       {
         "command": "oijudger.unbindStatement",
-        "title": "OIjudger: 解绑题面/Unbind Statement",
+        "title": "OI Judge: 解绑题面/Unbind Statement",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "oijudger.addProgramToProblem",
-        "title": "OIjudger: 添加程序/Add Program",
+        "title": "OI Judge: 添加程序/Add Program",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.setDefaultProgram",
-        "title": "OIjudger: 设置默认程序/Set Default Program",
+        "title": "OI Judge: 设置默认程序/Set Default Program",
         "icon": "$(star-full)"
       },
       {
         "command": "oijudger.openProblemResultPanel",
-        "title": "OIjudger: Open Problem Result Panel",
+        "title": "OI Judge: Open Problem Result Panel",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openProblemSampleDetail",
-        "title": "OIjudger: Open Problem Sample Detail",
+        "title": "OI Judge: Open Problem Sample Detail",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleInput",
-        "title": "OIjudger: Open Sample Input",
+        "title": "OI Judge: Open Sample Input",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleAnswer",
-        "title": "OIjudger: Open Expected Output",
+        "title": "OI Judge: Open Expected Output",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleOutput",
-        "title": "OIjudger: Open Run Result",
+        "title": "OI Judge: Open Run Result",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleUserOutput",
-        "title": "OIjudger: Open Run Result",
+        "title": "OI Judge: Open Run Result",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleDiff",
-        "title": "OIjudger: Open Diff",
+        "title": "OI Judge: Open Diff",
         "icon": "$(diff)"
       },
       {
         "command": "oijudger.deleteSample",
-        "title": "OIjudger: 删除样例/Delete Sample",
+        "title": "OI Judge: 删除样例/Delete Sample",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.setChecker",
-        "title": "OIjudger: 设置 Checker/Set Checker",
+        "title": "OI Judge: 设置 Checker/Set Checker",
         "icon": "$(verified)"
       },
       {
         "command": "oijudger.setPlainCheckerProtocol",
-        "title": "OIjudger: 设置 Plain Checker 协议/Set Plain Checker Protocol",
+        "title": "OI Judge: 设置 Plain Checker 协议/Set Plain Checker Protocol",
         "icon": "$(settings)"
       },
       {
         "command": "oijudger.clearChecker",
-        "title": "OIjudger: 清除 Checker/Clear Checker",
+        "title": "OI Judge: 清除 Checker/Clear Checker",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.openChecker",
-        "title": "OIjudger: 打开 Checker/Open Checker",
+        "title": "OI Judge: 打开 Checker/Open Checker",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.importTestlib",
-        "title": "OIjudger: 导入 testlib.h/Import testlib.h",
+        "title": "OI Judge: 导入 testlib.h/Import testlib.h",
         "icon": "$(cloud-download)"
       },
       {
         "command": "oijudger.openTestlib",
-        "title": "OIjudger: 打开 testlib.h/Open testlib.h",
+        "title": "OI Judge: 打开 testlib.h/Open testlib.h",
         "icon": "$(book)"
       },
       {
         "command": "oijudger.openCheckerOutput",
-        "title": "OIjudger: Open Checker Output",
+        "title": "OI Judge: Open Checker Output",
         "icon": "$(output)"
       }
     ],
@@ -320,7 +329,7 @@
       "activitybar": [
         {
           "id": "oijudger",
-          "title": "OIjudger",
+          "title": "OI Judge",
           "icon": "resources/oijudger.svg"
         }
       ]
@@ -329,12 +338,12 @@
       "oijudger": [
         {
           "id": "oijudger.samplesView",
-          "name": "OIjudger"
+          "name": "OI Judge"
         }
       ]
     },
     "configuration": {
-      "title": "OIjudger",
+      "title": "OI Judge",
       "properties": {
         "oijudger.language": {
           "type": "string",
@@ -349,7 +358,7 @@
             "Use English UI text.",
             "Use Chinese UI text."
           ],
-          "description": "Controls OIjudger UI language."
+          "description": "Controls OI Judge UI language."
         }
       }
     },

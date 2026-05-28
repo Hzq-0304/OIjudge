@@ -58,7 +58,7 @@ export async function runAllSamples(
   const totalStartedAt = process.hrtime.bigint();
   output.clear();
   output.show(true);
-  output.appendLine('OIjudger');
+  output.appendLine('OI Judge');
   output.appendLine(`Source: ${sourcePath}`);
   output.appendLine(`Time limit: ${config.limits.timeMs} ms`);
   output.appendLine(`Memory limit: ${config.limits.memoryMb} MB`);
