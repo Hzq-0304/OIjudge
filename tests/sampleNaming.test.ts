@@ -51,6 +51,18 @@ describe('sample naming and internal indices', () => {
     expect(normalizeSampleInternalId(legacy.id, index)).toBe('sample-3');
   });
 
+  it('infers sample-index file names', () => {
+    const named = sample({
+      id: undefined as unknown as string,
+      index: undefined as unknown as number,
+      name: '',
+      input: '.oitest/problems/A/samples/sample-4.in',
+      answer: '.oitest/problems/A/samples/sample-4.ans'
+    });
+
+    expect(resolveSampleIndex(named, 1)).toBe(4);
+  });
+
   it('uses sample index rather than display name for output directory', () => {
     expect(getSampleOutputDirRel('A', 7)).toBe('.oitest/problems/A/outputs/sample-7');
     expect(getSampleOutputDirRel('A', 7)).not.toContain('book3');

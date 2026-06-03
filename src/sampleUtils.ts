@@ -67,6 +67,7 @@ function parseSampleNumber(value: string | undefined): number | undefined {
   const match =
     /\bSample\s+(\d+)\b/iu.exec(value) ??
     /(?:^|[\\/])sample-(\d+)(?:[\\/]|$)/iu.exec(value) ??
+    /(?:^|[\\/])sample-(\d+)\.(?:in|ans|out|err|diff)$/iu.exec(value) ??
     /(?:^|[\\/])(\d+)\.(?:in|ans|out|err|diff)$/iu.exec(value);
   return match ? Number(match[1]) : undefined;
 }

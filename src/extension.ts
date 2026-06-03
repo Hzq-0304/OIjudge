@@ -10,6 +10,7 @@ import {
   getWorkspaceFolder,
   initProblem,
   isCppFile,
+  resolveWorkspacePath,
   setMemoryLimit,
   setStackConfig,
   setTimeLimit,
@@ -36,9 +37,9 @@ import {
 import {
   addProgramToProblem,
   batchAddExternalProblemSamples,
+  addEmptyProblemSample,
   addExternalProblemSample,
   addProblemFromSource,
-  addProblemSample,
   bindProblemStatement,
   clearProblemStdProgram,
   createProblem,
@@ -124,11 +125,13 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       sampleTreeProvider.refresh();
-      vscode.window.showInformationMessage(
-        mode === 'files'
-          ? t('externalSampleFilesAdded')
-          : t('sampleAdded', { sample: sample.name })
-      );
+      if (mode === 'files') {
+        vscode.window.showInformationMessage(t('externalSampleFilesAdded'));
+        return;
+      }
+
+      await openManualSampleFiles(workspaceFolder, sample);
+      await showManualSampleCreatedMessage(sample);
     }),
     vscode.commands.registerCommand('oijudger.runAllSamples', async () => {
       const firstWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -503,28 +506,6 @@ async function pickAddSampleMode(): Promise<AddSampleMode | undefined> {
   return picked?.mode;
 }
 
-async function readSampleFromInputBoxes(): Promise<{ input: string; answer: string } | undefined> {
-  const input = await vscode.window.showInputBox({
-    title: t('addSampleTitle'),
-    prompt: t('sampleInputPrompt'),
-    value: ''
-  });
-  if (input === undefined) {
-    return undefined;
-  }
-
-  const answer = await vscode.window.showInputBox({
-    title: t('addSampleTitle'),
-    prompt: t('sampleAnswerPrompt'),
-    value: ''
-  });
-  if (answer === undefined) {
-    return undefined;
-  }
-
-  return { input, answer };
-}
-
 async function readSampleFilePaths(): Promise<{ inputPath: string; answerPath: string } | undefined> {
   const inputUri = await pickSingleFile(t('selectInputFile'));
   if (!inputUri) {
@@ -546,14 +527,38 @@ async function addManagedSingleSample(
   workspaceFolder: vscode.WorkspaceFolder,
   config: Awaited<ReturnType<typeof ensureConfig>>
 ): Promise<Awaited<ReturnType<typeof addSample>> | undefined> {
-  const content = await readSampleFromInputBoxes();
-  if (!content) {
-    return undefined;
-  }
-
-  return addSample(workspaceFolder, config, content.input, content.answer, {
-    decodeEscapes: true
+  return addSample(workspaceFolder, config, '', '', {
+    decodeEscapes: false
   });
+}
+
+async function openManualSampleFiles(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: Pick<SampleConfig, 'input' | 'answer'>
+): Promise<void> {
+  const inputPath = resolveWorkspacePath(workspaceFolder, sample.input);
+  const answerPath = resolveWorkspacePath(workspaceFolder, sample.answer);
+  const inputDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(inputPath));
+  await vscode.window.showTextDocument(inputDocument, {
+    viewColumn: vscode.ViewColumn.One,
+    preview: false
+  });
+
+  const answerDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(answerPath));
+  await vscode.window.showTextDocument(answerDocument, {
+    viewColumn: vscode.ViewColumn.Beside,
+    preview: false
+  });
+}
+
+async function showManualSampleCreatedMessage(sample: Pick<SampleConfig, 'input' | 'answer'>): Promise<void> {
+  await vscode.window.showInformationMessage(
+    t('manualSampleFilesCreatedMessage', {
+      input: path.basename(sample.input),
+      answer: path.basename(sample.answer)
+    }),
+    { modal: true }
+  );
 }
 
 async function addExternalSingleSample(
@@ -708,29 +713,19 @@ async function addProblemSampleCommand(
 
   const sample = fromFiles
     ? await addExternalProblemSampleFromPicker(context.workspaceFolder, context.problem.id)
-    : await addManagedProblemSampleFromInput(context.workspaceFolder, context.problem.id);
+    : await addEmptyProblemSample(context.workspaceFolder, context.problem.id);
   if (!sample) {
     return;
   }
 
   sampleTreeProvider.refresh();
-  vscode.window.showInformationMessage(
-    fromFiles
-      ? t('externalSampleFilesAdded')
-      : t('problemSamplesAdded', { sample: sample.name, problem: context.problem.name })
-  );
-}
-
-async function addManagedProblemSampleFromInput(
-  workspaceFolder: vscode.WorkspaceFolder,
-  problemId: string
-): Promise<Awaited<ReturnType<typeof addProblemSample>> | undefined> {
-  const content = await readSampleFromInputBoxes();
-  if (!content) {
-    return undefined;
+  if (fromFiles) {
+    vscode.window.showInformationMessage(t('externalSampleFilesAdded'));
+    return;
   }
 
-  return addProblemSample(workspaceFolder, problemId, content.input, content.answer, { decodeEscapes: true });
+  await openManualSampleFiles(context.workspaceFolder, sample);
+  await showManualSampleCreatedMessage(sample);
 }
 
 async function addExternalProblemSampleFromPicker(

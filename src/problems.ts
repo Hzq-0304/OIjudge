@@ -183,6 +183,22 @@ export async function addProblemSample(
   return sample;
 }
 
+export async function addEmptyProblemSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return undefined;
+  }
+
+  const sample = await addProblemSampleFiles(workspaceFolder, problem, '', '');
+  problem.samples.push(sample);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
 export async function addExternalProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -535,9 +551,8 @@ async function addProblemSampleFiles(
   answer: string
 ): Promise<SampleConfig> {
   await ensureProblemFolders(workspaceFolder, problem.id);
-  const index = getNextSampleIndex(problem);
-  const inputRel = toPosixPath(path.join('.oitest', 'problems', problem.id, 'samples', `${index}.in`));
-  const answerRel = toPosixPath(path.join('.oitest', 'problems', problem.id, 'samples', `${index}.ans`));
+  const index = await getNextAvailableProblemSampleIndex(workspaceFolder, problem);
+  const { inputRel, answerRel } = getProblemSampleFilePaths(problem.id, index);
   const outputRel = getProblemSampleOutputPaths(workspaceFolder, problem.id, index).outputRel;
 
   await fs.writeFile(resolveWorkspacePath(workspaceFolder, inputRel), input, 'utf8');
@@ -552,6 +567,38 @@ async function addProblemSampleFiles(
     actualOutput: outputRel,
     sourceType: 'managed'
   };
+}
+
+function getProblemSampleFilePaths(problemId: string, index: number): { inputRel: string; answerRel: string } {
+  return {
+    inputRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.in`)),
+    answerRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`))
+  };
+}
+
+async function getNextAvailableProblemSampleIndex(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<number> {
+  let index = getNextSampleIndex(problem);
+  while (await problemSampleArtifactsExist(workspaceFolder, problem.id, index)) {
+    index += 1;
+  }
+  return index;
+}
+
+async function problemSampleArtifactsExist(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  index: number
+): Promise<boolean> {
+  const { inputRel, answerRel } = getProblemSampleFilePaths(problemId, index);
+  const outputDir = path.dirname(getProblemSampleOutputPaths(workspaceFolder, problemId, index).outputPath);
+  return (
+    (await exists(resolveWorkspacePath(workspaceFolder, inputRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, answerRel))) ||
+    (await exists(outputDir))
+  );
 }
 
 async function ensureProblemFolders(workspaceFolder: vscode.WorkspaceFolder, problemId: string): Promise<void> {
