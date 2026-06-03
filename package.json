@@ -2,7 +2,7 @@
   "name": "oijudge",
   "displayName": "OI Judge",
   "description": "Local OI sample judge for VS Code with custom checkers, File IO, and runtime diagnostics.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "Hzq",
   "icon": "resources/icons/icon.png",
   "engines": {
@@ -37,6 +37,7 @@
     "onCommand:oijudger.addProblemFromCurrentFile",
     "onCommand:oijudger.addProblemFromFile",
     "onCommand:oijudger.importLegacyProblem",
+    "onCommand:oijudger.addSampleFromSamplesGroup",
     "onCommand:oijudger.addProblemSample",
     "onCommand:oijudger.addProblemSampleFromFiles",
     "onCommand:oijudger.batchAddSamples",
@@ -163,6 +164,11 @@
         "command": "oijudger.importLegacyProblem",
         "title": "OI Judge: Import Legacy Single Problem",
         "icon": "$(repo-pull)"
+      },
+      {
+        "command": "oijudger.addSampleFromSamplesGroup",
+        "title": "OI Judge: Add Sample",
+        "icon": "$(add)"
       },
       {
         "command": "oijudger.addProblemSample",
@@ -452,9 +458,9 @@
           "group": "2_program"
         },
         {
-          "command": "oijudger.batchAddSamples",
-          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
-          "group": "2_samples"
+          "command": "oijudger.addSampleFromSamplesGroup",
+          "when": "view == oijudger.samplesView && viewItem == samplesGroup",
+          "group": "inline"
         },
         {
           "command": "oijudger.runSamplesWithProgram",
@@ -555,6 +561,10 @@
       "commandPalette": [
         {
           "command": "oijudger.openSampleDetail",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addSampleFromSamplesGroup",
           "when": "false"
         },
         {

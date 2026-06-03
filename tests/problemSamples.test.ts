@@ -81,8 +81,8 @@ describe('problem sample files', () => {
 
   it('has localized manual sample creation guidance', () => {
     const message = t('manualSampleFilesCreatedMessage', {
-      input: 'sample-1.in',
-      answer: 'sample-1.ans'
+      inputFile: 'sample-1.in',
+      answerFile: 'sample-1.ans'
     });
 
     expect(message).toContain('sample-1.in');

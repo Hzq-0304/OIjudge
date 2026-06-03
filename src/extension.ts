@@ -83,6 +83,8 @@ const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Le
 let activeProblemId: string | undefined;
 
 type AddSampleMode = 'paste' | 'files';
+type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
+type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -327,6 +329,9 @@ export function activate(context: vscode.ExtensionContext): void {
       await updateStatusBar(problem.id);
       vscode.window.showInformationMessage(t('legacyProblemImported', { problem: problem.name }));
     }),
+    vscode.commands.registerCommand('oijudger.addSampleFromSamplesGroup', async (problemArg?: unknown) => {
+      await addSampleFromSamplesGroupCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.addProblemSample', async (problemArg?: unknown) => {
       await addProblemSampleCommand(readProblemId(problemArg), false, sampleTreeProvider);
     }),
@@ -506,6 +511,34 @@ async function pickAddSampleMode(): Promise<AddSampleMode | undefined> {
   return picked?.mode;
 }
 
+export function createProblemSampleAddModeItems(): ProblemSampleAddModeItem[] {
+  return [
+    {
+      label: t('sampleAddManual'),
+      description: t('sampleAddManualDescription'),
+      mode: 'manual'
+    },
+    {
+      label: t('sampleAddImportFiles'),
+      description: t('sampleAddImportFilesDescription'),
+      mode: 'files'
+    },
+    {
+      label: t('sampleAddBatchImport'),
+      description: t('sampleAddBatchImportDescription'),
+      mode: 'batch'
+    }
+  ];
+}
+
+async function pickProblemSampleAddMode(): Promise<ProblemSampleAddMode | undefined> {
+  const picked = await vscode.window.showQuickPick(createProblemSampleAddModeItems(), {
+    title: t('sampleAddTitle'),
+    placeHolder: t('addSamplePlaceHolder')
+  });
+  return picked?.mode;
+}
+
 async function readSampleFilePaths(): Promise<{ inputPath: string; answerPath: string } | undefined> {
   const inputUri = await pickSingleFile(t('selectInputFile'));
   if (!inputUri) {
@@ -554,10 +587,9 @@ async function openManualSampleFiles(
 async function showManualSampleCreatedMessage(sample: Pick<SampleConfig, 'input' | 'answer'>): Promise<void> {
   await vscode.window.showInformationMessage(
     t('manualSampleFilesCreatedMessage', {
-      input: path.basename(sample.input),
-      answer: path.basename(sample.answer)
-    }),
-    { modal: true }
+      inputFile: path.basename(sample.input),
+      answerFile: path.basename(sample.answer)
+    })
   );
 }
 
@@ -726,6 +758,28 @@ async function addProblemSampleCommand(
 
   await openManualSampleFiles(context.workspaceFolder, sample);
   await showManualSampleCreatedMessage(sample);
+}
+
+async function addSampleFromSamplesGroupCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  if (!problemId) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return;
+  }
+
+  const mode = await pickProblemSampleAddMode();
+  if (!mode) {
+    return;
+  }
+
+  if (mode === 'batch') {
+    await batchAddSamplesCommand(problemId, sampleTreeProvider);
+    return;
+  }
+
+  await addProblemSampleCommand(problemId, mode === 'files', sampleTreeProvider);
 }
 
 async function addExternalProblemSampleFromPicker(

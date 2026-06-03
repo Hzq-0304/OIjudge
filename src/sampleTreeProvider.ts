@@ -37,6 +37,7 @@ type TreeNode = {
   collapsibleState?: vscode.TreeItemCollapsibleState;
   group?: NodeGroup;
   problemId?: string;
+  contextValue?: string;
   sampleId?: number;
   sampleStatus?: SampleStatus | 'Not Run';
   hasCheckerOutput?: boolean;
@@ -62,7 +63,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     item.tooltip = element.tooltip;
     item.iconPath = element.icon;
     item.command = element.command;
-    item.contextValue = getContextValue(element);
+      item.contextValue = getContextValue(element);
     return item;
   }
 
@@ -222,7 +223,8 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       icon: new vscode.ThemeIcon('list-tree'),
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'samples',
-      problemId: problem.id
+      problemId: problem.id,
+      contextValue: 'samplesGroup'
     },
     ...(isSetterModeEnabled() ? [{
       kind: 'group' as const,
@@ -348,13 +350,7 @@ async function createSampleNodes(
       {
         kind: 'info',
         label: t('noSamplesTree'),
-        description: t('addSample'),
-        icon: new vscode.ThemeIcon('beaker-stop'),
-        command: {
-          command: 'oijudger.addProblemSample',
-          title: t('addSample'),
-          arguments: [problem.id]
-        }
+        icon: new vscode.ThemeIcon('beaker-stop')
       }
     ];
   }
@@ -518,9 +514,6 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id),
     actionNode(t('runDefaultProgram'), 'oijudger.runProblemSamples', 'run-all', problem.id),
     actionNode(t('runWithProgram'), 'oijudger.runSamplesWithProgram', 'run', problem.id),
-    actionNode(t('addSample'), 'oijudger.addProblemSample', 'add', problem.id),
-    actionNode(t('addSampleFromFiles'), 'oijudger.addProblemSampleFromFiles', 'file-add', problem.id),
-    actionNode(t('batchAddSamples'), 'oijudger.batchAddSamples', 'folder-opened', problem.id),
     actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)
   ];
 }
@@ -820,6 +813,9 @@ function getProblemFileIo(problem: ProblemConfig): { inputFileName: string; outp
 }
 
 function getContextValue(element: TreeNode): string {
+  if (element.contextValue) {
+    return element.contextValue;
+  }
   if (element.kind === 'sample') {
     if (element.hasCheckerOutput && element.sampleStatus !== 'Missing') {
       return element.sampleStatus === 'WA' ? 'sampleWaChecker' : 'sampleChecker';
