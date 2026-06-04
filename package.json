@@ -77,6 +77,12 @@
     "onCommand:oijudger.clearStdProgram",
     "onCommand:oijudger.generateSampleAnswerWithStd",
     "onCommand:oijudger.generateAllSampleAnswersWithStd",
+    "onCommand:oijudger.viewCurrentSampleAnswer",
+    "onCommand:oijudger.viewGeneratedSampleAnswer",
+    "onCommand:oijudger.diffGeneratedSampleAnswer",
+    "onCommand:oijudger.applyGeneratedSampleAnswer",
+    "onCommand:oijudger.deleteGeneratedSampleAnswer",
+    "onCommand:oijudger.applyAllGeneratedSampleAnswers",
     "onCommand:oijudger.selectGeneratorProgram",
     "onCommand:oijudger.openGeneratorProgram",
     "onCommand:oijudger.clearGeneratorProgram",
@@ -367,6 +373,36 @@
         "icon": "$(run-all)"
       },
       {
+        "command": "oijudger.viewCurrentSampleAnswer",
+        "title": "OI Judge: 查看当前答案/View Current Answer",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.viewGeneratedSampleAnswer",
+        "title": "OI Judge: 查看新生成答案/View Generated Answer",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "oijudger.diffGeneratedSampleAnswer",
+        "title": "OI Judge: 对比新生成答案/Compare Generated Answer",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "oijudger.applyGeneratedSampleAnswer",
+        "title": "OI Judge: 应用新生成答案/Apply Generated Answer",
+        "icon": "$(check)"
+      },
+      {
+        "command": "oijudger.deleteGeneratedSampleAnswer",
+        "title": "OI Judge: 删除新生成答案/Delete Generated Answer",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "oijudger.applyAllGeneratedSampleAnswers",
+        "title": "OI Judge: 应用全部新生成答案/Apply All Generated Answers",
+        "icon": "$(check-all)"
+      },
+      {
         "command": "oijudger.selectGeneratorProgram",
         "title": "OI Judge: 选择数据生成器/Select Generator",
         "icon": "$(file-code)"
@@ -495,8 +531,13 @@
         },
         {
           "command": "oijudger.addSampleFromSamplesGroup",
-          "when": "view == oijudger.samplesView && viewItem == samplesGroup",
-          "group": "inline"
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.applyAllGeneratedSampleAnswers",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == samplesGroupWithGeneratedOutputs",
+          "group": "inline@2"
         },
         {
           "command": "oijudger.runSamplesWithProgram",
@@ -510,12 +551,12 @@
         },
         {
           "command": "oijudger.openSampleInput",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "inline@1"
         },
         {
           "command": "oijudger.openSampleAnswer",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleWithGeneratedOutput)",
           "group": "inline@2"
         },
         {
@@ -530,12 +571,12 @@
         },
         {
           "command": "oijudger.deleteSample",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "inline@9"
         },
         {
           "command": "oijudger.deleteSample",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "9_delete"
         },
         {
@@ -575,12 +616,37 @@
         },
         {
           "command": "oijudger.generateSampleAnswerWithStd",
-          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "8_setter@1"
         },
         {
+          "command": "oijudger.viewCurrentSampleAnswer",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
+          "group": "8_generated@1"
+        },
+        {
+          "command": "oijudger.viewGeneratedSampleAnswer",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
+          "group": "8_generated@2"
+        },
+        {
+          "command": "oijudger.diffGeneratedSampleAnswer",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
+          "group": "8_generated@3"
+        },
+        {
+          "command": "oijudger.applyGeneratedSampleAnswer",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
+          "group": "inline@7"
+        },
+        {
+          "command": "oijudger.deleteGeneratedSampleAnswer",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
+          "group": "inline@8"
+        },
+        {
           "command": "oijudger.setSampleName",
-          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "8_setter@2"
         },
         {
@@ -702,6 +768,30 @@
         },
         {
           "command": "oijudger.generateAllSampleAnswersWithStd",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.viewCurrentSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.viewGeneratedSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.diffGeneratedSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.applyGeneratedSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.deleteGeneratedSampleAnswer",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.applyAllGeneratedSampleAnswers",
           "when": "false"
         },
         {

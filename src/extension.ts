@@ -42,13 +42,17 @@ import {
   addExternalProblemSample,
   addProblemInputSample,
   addProblemFromSource,
+  applyAllGeneratedAnswersForProblem,
+  applyGeneratedAnswerForSample,
   bindProblemStatement,
   clearProblemGeneratorProgram,
   clearProblemStdProgram,
   createProblem,
+  deleteGeneratedAnswerForSample,
   deleteProblemSample,
   ensureProblemsConfig,
   getDefaultProblemSource,
+  getSampleGeneratedAnswerStatus,
   getProblem,
   getProblemGeneratorProgram,
   getProblemReportPath,
@@ -60,6 +64,7 @@ import {
   setProblemDefaultSource,
   setProblemGeneratorProgram,
   setProblemStdProgram,
+  writeGeneratedAnswerForSample,
   unbindProblemStatement,
   updateProblemChecker,
   updateProblemCompiler,
@@ -468,6 +473,24 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.generateAllSampleAnswersWithStd', async (problemArg?: unknown) => {
       await generateAllSampleAnswersWithStdCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.viewCurrentSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await viewCurrentSampleAnswerCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
+    }),
+    vscode.commands.registerCommand('oijudger.viewGeneratedSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await viewGeneratedSampleAnswerCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
+    }),
+    vscode.commands.registerCommand('oijudger.diffGeneratedSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await diffGeneratedSampleAnswerCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
+    }),
+    vscode.commands.registerCommand('oijudger.applyGeneratedSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await applyGeneratedSampleAnswerCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.deleteGeneratedSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await deleteGeneratedSampleAnswerCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.applyAllGeneratedSampleAnswers', async (problemArg?: unknown) => {
+      await applyAllGeneratedSampleAnswersCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.selectGeneratorProgram', async (problemArg?: unknown) => {
       await selectGeneratorProgramCommand(readProblemId(problemArg), sampleTreeProvider);
@@ -1887,7 +1910,7 @@ async function generateSampleAnswerWithStdCommand(
   sampleTreeProvider: SampleTreeProvider
 ): Promise<void> {
   const context = await getSampleContext(problemId, sampleId);
-  if (!context || !(await confirmOverwriteAnswer(context.workspaceFolder, context.sample))) {
+  if (!context) {
     return;
   }
 
@@ -1903,9 +1926,9 @@ async function generateSampleAnswerWithStdCommand(
   }
 
   sampleTreeProvider.refresh();
-  vscode.window.showInformationMessage(t('stdAnswerGenerated', {
+  vscode.window.showInformationMessage(t('setter.generatedOutput.generated', {
     sample: context.sample.name,
-    file: path.basename(result.answerPath)
+    file: path.basename(result.generatedPath)
   }));
 }
 
@@ -1915,14 +1938,6 @@ async function generateAllSampleAnswersWithStdCommand(
 ): Promise<void> {
   const context = await getProblemContext(problemId, true);
   if (!context || context.problem.samples.length === 0) {
-    return;
-  }
-  const confirmed = await vscode.window.showWarningMessage(
-    t('overwriteAllAnswersConfirm'),
-    t('continueAction'),
-    t('cancel')
-  );
-  if (confirmed !== t('continueAction')) {
     return;
   }
 
@@ -1948,7 +1963,149 @@ async function generateAllSampleAnswersWithStdCommand(
     vscode.window.showWarningMessage(t('stdAllAnswersGeneratedWithFailures', { count: generated, failed }));
     return;
   }
-  vscode.window.showInformationMessage(t('stdAllAnswersGenerated', { count: generated }));
+  vscode.window.showInformationMessage(t('setter.generatedOutput.generatedAll', { count: generated }));
+}
+
+async function viewCurrentSampleAnswerCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const fileStatus = await getSampleFileStatus(context.workspaceFolder, context.sample);
+  if (fileStatus.answerMissing) {
+    vscode.window.showWarningMessage(t('setter.generatedOutput.currentMissing'));
+    return;
+  }
+
+  await openFileInEditor(fileStatus.answerPath, t('expectedOutputMissing'));
+}
+
+async function viewGeneratedSampleAnswerCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const generated = await getSampleGeneratedAnswerStatus(context.workspaceFolder, context.problem, context.sample);
+  if (!generated.exists || !generated.path) {
+    vscode.window.showWarningMessage(t('setter.generatedOutput.noGenerated'));
+    return;
+  }
+
+  await openFileInEditor(generated.path, t('setter.generatedOutput.noGenerated'));
+}
+
+async function diffGeneratedSampleAnswerCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const fileStatus = await getSampleFileStatus(context.workspaceFolder, context.sample);
+  const generated = await getSampleGeneratedAnswerStatus(context.workspaceFolder, context.problem, context.sample);
+  if (!generated.exists || !generated.path) {
+    vscode.window.showWarningMessage(t('setter.generatedOutput.noGenerated'));
+    return;
+  }
+  if (fileStatus.answerMissing) {
+    vscode.window.showWarningMessage(t('setter.generatedOutput.currentMissing'));
+    await openFileInEditor(generated.path, t('setter.generatedOutput.noGenerated'));
+    return;
+  }
+
+  await vscode.commands.executeCommand(
+    'vscode.diff',
+    vscode.Uri.file(fileStatus.answerPath),
+    vscode.Uri.file(generated.path),
+    t('setter.generatedOutput.compareTitle', { sample: context.sample.name })
+  );
+}
+
+async function applyGeneratedSampleAnswerCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const result = await applyGeneratedAnswerForSample(context.workspaceFolder, context.problem.id, context.sample.index);
+  sampleTreeProvider.refresh();
+  if (!result.ok) {
+    output.appendLine(`[ERR] Failed to apply generated output for ${context.sample.name}: ${result.error ?? 'Unknown error'}`);
+    vscode.window.showWarningMessage(t('setter.generatedOutput.applyFailed'));
+    return;
+  }
+
+  vscode.window.showInformationMessage(t('setter.generatedOutput.applied', {
+    sample: result.sample?.name ?? context.sample.name,
+    file: result.answerPath ? path.basename(result.answerPath) : ''
+  }));
+}
+
+async function applyAllGeneratedSampleAnswersCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const result = await applyAllGeneratedAnswersForProblem(context.workspaceFolder, context.problem.id);
+  sampleTreeProvider.refresh();
+  if (result.applied.length === 0 && result.failed.length === 0) {
+    vscode.window.showInformationMessage(t('setter.generatedOutput.noGenerated'));
+    return;
+  }
+  if (result.failed.length > 0) {
+    output.show();
+    for (const failed of result.failed) {
+      output.appendLine(`[ERR] Failed to apply generated output: ${failed.error ?? 'Unknown error'}`);
+    }
+    vscode.window.showWarningMessage(t('setter.generatedOutput.applyAllFailed', {
+      count: result.applied.length,
+      failed: result.failed.length
+    }));
+    return;
+  }
+
+  vscode.window.showInformationMessage(t('setter.generatedOutput.appliedAll', { count: result.applied.length }));
+}
+
+async function deleteGeneratedSampleAnswerCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const result = await deleteGeneratedAnswerForSample(context.workspaceFolder, context.problem.id, context.sample.index);
+  sampleTreeProvider.refresh();
+  if (!result.ok) {
+    output.appendLine(`[ERR] Failed to delete generated output for ${context.sample.name}: ${result.error ?? 'Unknown error'}`);
+    vscode.window.showWarningMessage(t('setter.generatedOutput.deleteFailed'));
+    return;
+  }
+
+  vscode.window.showInformationMessage(t('setter.generatedOutput.deleted', {
+    sample: result.sample?.name ?? context.sample.name
+  }));
 }
 
 async function selectGeneratorProgramCommand(
@@ -2088,36 +2245,13 @@ async function prepareStdAnswerGeneration(
   return { stdPath, compile };
 }
 
-async function confirmOverwriteAnswer(
-  workspaceFolder: vscode.WorkspaceFolder,
-  sample: SampleConfig
-): Promise<boolean> {
-  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
-  if (!(await exists(answerPath))) {
-    return true;
-  }
-
-  const content = await fs.readFile(answerPath, 'utf8');
-  if (content.length === 0) {
-    return true;
-  }
-
-  const confirmed = await vscode.window.showWarningMessage(
-    t('overwriteAnswerConfirm', { file: path.basename(answerPath) }),
-    t('continueAction'),
-    t('cancel')
-  );
-  return confirmed === t('continueAction');
-}
-
 async function generateAnswerForSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig,
   sample: SampleConfig,
   std: StdAnswerGenerationContext
-): Promise<{ ok: true; answerPath: string } | { ok: false; reason: string }> {
+): Promise<{ ok: true; generatedPath: string } | { ok: false; reason: string }> {
   const inputPath = resolveSamplePath(workspaceFolder, sample.input);
-  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
   if (!(await exists(inputPath))) {
     const reason = `Sample input missing: ${inputPath}`;
     output.appendLine(`[ERR] ${sample.name}: ${reason}`);
@@ -2172,10 +2306,14 @@ async function generateAnswerForSample(
     answer = await fs.readFile(execution.outputPath, 'utf8');
   }
 
-  await fs.mkdir(path.dirname(answerPath), { recursive: true });
-  await fs.writeFile(answerPath, answer, 'utf8');
-  output.appendLine(`[OK] ${sample.name}: wrote ${answerPath}`);
-  return { ok: true, answerPath };
+  const generated = await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample.index, answer);
+  if (!generated.generatedPath) {
+    const reason = 'Sample not found while saving generated output.';
+    output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+    return { ok: false, reason };
+  }
+  output.appendLine(`[OK] ${sample.name}: wrote generated output ${generated.generatedPath}`);
+  return { ok: true, generatedPath: generated.generatedPath };
 }
 
 async function prepareStdSampleExecution(

@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
-import { addEmptyProblemSample, addProblemInputSample, createProblem } from '../src/problems';
+import { addEmptyProblemSample, addProblemInputSample, createProblem, writeGeneratedAnswerForSample } from '../src/problems';
 import { SampleTreeProvider } from '../src/sampleTreeProvider';
 
 const workspaces: string[] = [];
@@ -126,6 +126,35 @@ describe('sample tree add entry', () => {
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).not.toContain('oijudger.openSampleAnswer');
     expect(sampleCommands).not.toContain('oijudger.openSampleUserOutput');
+  });
+
+  it('shows generated output pending actions for samples and the samples group', async () => {
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
+    await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample?.index ?? 0, 'new answer\n');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const treeItem = provider.getTreeItem(sampleNode);
+    const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
+
+    expect(provider.getTreeItem(samplesGroup).contextValue).toBe('samplesGroupWithGeneratedOutputs');
+    expect(sampleNode.description).toBe('Generated output pending');
+    expect(treeItem.contextValue).toBe('sampleWithGeneratedOutput');
+    expect(sampleCommands).toEqual(expect.arrayContaining([
+      'oijudger.viewCurrentSampleAnswer',
+      'oijudger.viewGeneratedSampleAnswer',
+      'oijudger.diffGeneratedSampleAnswer',
+      'oijudger.applyGeneratedSampleAnswer',
+      'oijudger.deleteGeneratedSampleAnswer',
+      'oijudger.generateSampleAnswerWithStd'
+    ]));
   });
 });
 

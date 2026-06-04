@@ -61,6 +61,7 @@ export interface SetterConfig {
   stdProgram?: string;
   dataCases?: SetterDataCaseConfig[];
   generator?: SetterGeneratorConfig;
+  generatedAnswers?: Record<string, string>;
 }
 
 export interface SetterDataCaseConfig {

@@ -129,7 +129,8 @@ export async function runAllSamples(
         problemId,
         compile.stack,
         compile.compilerCommand,
-        checkerContext
+        checkerContext,
+        Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id])
       ));
     }
   }
@@ -306,13 +307,16 @@ async function judgeSample(
   problemId?: string,
   compileStack?: CompileStackReport,
   compilerCommand?: string,
-  checkerContext?: CheckerContext
+  checkerContext?: CheckerContext,
+  generatedAnswerPending = false
 ): Promise<SampleReport> {
   const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
   const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
 
   if (fileStatus.inputMissing || fileStatus.answerMissing) {
-    const message = !fileStatus.inputMissing && fileStatus.answerMissing && isSetterModeEnabled()
+    const message = !fileStatus.inputMissing && fileStatus.answerMissing && generatedAnswerPending && isSetterModeEnabled()
+      ? t('setter.generatedOutput.notAppliedForJudge', { sampleName: sample.name })
+      : !fileStatus.inputMissing && fileStatus.answerMissing && isSetterModeEnabled()
       ? t('setter.sample.noAnswerForJudge', { sampleName: sample.name })
       : 'Sample input or expected output file is missing.';
     output.appendLine(`[Missing] ${sample.name}`);

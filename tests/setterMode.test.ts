@@ -17,7 +17,8 @@ describe('setter mode config helpers', () => {
       generator: {
         enabled: false,
         generators: []
-      }
+      },
+      generatedAnswers: {}
     });
   });
 
@@ -65,6 +66,22 @@ describe('setter mode config helpers', () => {
     };
     const setter = removeSetterDataCaseForSample(initial, sample({ id: 'sample-1', index: 1 }));
     expect(setter.dataCases?.map((entry) => entry.sampleId)).toEqual(['sample-2']);
+  });
+
+  it('removes generated answer mappings for a deleted sample', () => {
+    const initial: SetterConfig = {
+      dataCases: [
+        { id: 'case-sample-1', name: 'one', sampleId: 'sample-1', sampleIndex: 1, role: 'sample' }
+      ],
+      generatedAnswers: {
+        'sample-1': '.oitest/problems/a/generated-answers/sample-1.generated.ans',
+        'sample-2': '.oitest/problems/a/generated-answers/sample-2.generated.ans'
+      }
+    };
+    const setter = removeSetterDataCaseForSample(initial, sample({ id: 'sample-1', index: 1 }));
+    expect(setter.generatedAnswers).toEqual({
+      'sample-2': '.oitest/problems/a/generated-answers/sample-2.generated.ans'
+    });
   });
 
   it('sorts data cases by sample index', () => {

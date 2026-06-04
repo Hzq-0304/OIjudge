@@ -510,6 +510,164 @@ export async function clearProblemGeneratorProgram(
   });
 }
 
+export type GeneratedAnswerStatus = {
+  path?: string;
+  relPath?: string;
+  exists: boolean;
+};
+
+export type ApplyGeneratedAnswerResult = {
+  ok: boolean;
+  sample?: SampleConfig;
+  answerPath?: string;
+  generatedPath?: string;
+  error?: string;
+};
+
+export async function getSampleGeneratedAnswerStatus(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  sample: SampleConfig
+): Promise<GeneratedAnswerStatus> {
+  const relPath = problem.setter?.generatedAnswers?.[sample.id];
+  if (!relPath) {
+    return { exists: false };
+  }
+
+  const generatedPath = resolveProblemReferencePath(workspaceFolder, relPath);
+  return {
+    path: generatedPath,
+    relPath,
+    exists: await exists(generatedPath)
+  };
+}
+
+export async function hasProblemGeneratedAnswers(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<boolean> {
+  for (const sample of problem.samples) {
+    if ((await getSampleGeneratedAnswerStatus(workspaceFolder, problem, sample)).exists) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function writeGeneratedAnswerForSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: number,
+  content: string
+): Promise<{ problem?: ProblemConfig; sample?: SampleConfig; generatedPath?: string }> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sample = problem?.samples.find((entry) => entry.index === sampleId);
+  if (!problem || !sample) {
+    return {};
+  }
+
+  const generatedRel = getGeneratedAnswerRelPath(problem.id, sample);
+  const generatedPath = resolveWorkspacePath(workspaceFolder, generatedRel);
+  await fs.mkdir(path.dirname(generatedPath), { recursive: true });
+  await fs.writeFile(generatedPath, content, 'utf8');
+
+  const setter = normalizeSetterConfig(problem.setter);
+  problem.setter = {
+    ...setter,
+    generatedAnswers: {
+      ...(setter.generatedAnswers ?? {}),
+      [sample.id]: generatedRel
+    }
+  };
+  await writeProblemsConfig(workspaceFolder, problems);
+  return { problem, sample, generatedPath };
+}
+
+export async function applyGeneratedAnswerForSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: number
+): Promise<ApplyGeneratedAnswerResult> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sample = problem?.samples.find((entry) => entry.index === sampleId);
+  if (!problem || !sample) {
+    return { ok: false, error: 'Sample not found.' };
+  }
+
+  const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
+  if (!generatedRel) {
+    return { ok: false, sample, error: 'No generated output exists.' };
+  }
+
+  const generatedPath = resolveProblemReferencePath(workspaceFolder, generatedRel);
+  if (!(await exists(generatedPath))) {
+    clearGeneratedAnswerMapping(problem, sample);
+    await writeProblemsConfig(workspaceFolder, problems);
+    return { ok: false, sample, generatedPath, error: 'Generated output file is missing.' };
+  }
+
+  if (!sample.answer) {
+    sample.answer = getDefaultAnswerPathForSample(sample);
+  }
+  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
+  await fs.mkdir(path.dirname(answerPath), { recursive: true });
+  await fs.copyFile(generatedPath, answerPath);
+  await fs.rm(generatedPath, { force: true });
+  clearGeneratedAnswerMapping(problem, sample);
+  await writeProblemsConfig(workspaceFolder, problems);
+
+  return { ok: true, sample, answerPath, generatedPath };
+}
+
+export async function applyAllGeneratedAnswersForProblem(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<{ applied: ApplyGeneratedAnswerResult[]; failed: ApplyGeneratedAnswerResult[] }> {
+  const problem = await getProblem(workspaceFolder, problemId);
+  if (!problem) {
+    return { applied: [], failed: [{ ok: false, error: 'Problem not found.' }] };
+  }
+
+  const applied: ApplyGeneratedAnswerResult[] = [];
+  const failed: ApplyGeneratedAnswerResult[] = [];
+  for (const sample of problem.samples) {
+    if (!problem.setter?.generatedAnswers?.[sample.id]) {
+      continue;
+    }
+    const result = await applyGeneratedAnswerForSample(workspaceFolder, problemId, sample.index);
+    if (result.ok) {
+      applied.push(result);
+    } else {
+      failed.push(result);
+    }
+  }
+  return { applied, failed };
+}
+
+export async function deleteGeneratedAnswerForSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: number
+): Promise<{ ok: boolean; sample?: SampleConfig; generatedPath?: string; error?: string }> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sample = problem?.samples.find((entry) => entry.index === sampleId);
+  if (!problem || !sample) {
+    return { ok: false, error: 'Sample not found.' };
+  }
+
+  const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
+  const generatedPath = generatedRel ? resolveProblemReferencePath(workspaceFolder, generatedRel) : undefined;
+  if (generatedPath) {
+    await fs.rm(generatedPath, { force: true });
+  }
+  clearGeneratedAnswerMapping(problem, sample);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return { ok: true, sample, generatedPath };
+}
+
 export async function renameProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -548,10 +706,14 @@ export async function deleteProblemSample(
   }
 
   const [sample] = problem.samples.splice(sampleIndex, 1);
+  const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
   problem.setter = removeSetterDataCaseForSample(problem.setter, sample);
   await writeProblemsConfig(workspaceFolder, problems);
 
   const cleanupErrors: string[] = [];
+  if (generatedRel) {
+    await removePath(resolveProblemReferencePath(workspaceFolder, generatedRel), cleanupErrors);
+  }
   if (inferSampleSourceType(workspaceFolder, sample) === 'managed') {
     await removeManagedSampleFiles(workspaceFolder, sample, cleanupErrors);
   }
@@ -657,6 +819,29 @@ function getProblemSampleFilePaths(problemId: string, index: number): { inputRel
     inputRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.in`)),
     answerRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`))
   };
+}
+
+function getGeneratedAnswerRelPath(problemId: string, sample: Pick<SampleConfig, 'id'>): string {
+  const safeId = sample.id.replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'sample';
+  return toPosixPath(path.join('.oitest', 'problems', problemId, 'generated-answers', `${safeId}.generated.ans`));
+}
+
+function clearGeneratedAnswerMapping(problem: ProblemConfig, sample: Pick<SampleConfig, 'id'>): void {
+  const setter = normalizeSetterConfig(problem.setter);
+  const generatedAnswers = { ...(setter.generatedAnswers ?? {}) };
+  delete generatedAnswers[sample.id];
+  problem.setter = {
+    ...setter,
+    generatedAnswers
+  };
+}
+
+function getDefaultAnswerPathForSample(sample: Pick<SampleConfig, 'input'>): string {
+  const parsed = path.parse(sample.input);
+  if (parsed.ext.toLowerCase() === '.in') {
+    return toPosixPath(path.join(parsed.dir, `${parsed.name}.ans`));
+  }
+  return toPosixPath(path.join(parsed.dir, `${parsed.base}.ans`));
 }
 
 async function getNextAvailableProblemSampleIndex(

@@ -25,7 +25,8 @@ export function normalizeSetterConfig(setter: SetterConfig | undefined): SetterC
     generator: {
       enabled: setter?.generator?.enabled ?? false,
       generators: setter?.generator?.generators ?? []
-    }
+    },
+    generatedAnswers: { ...(setter?.generatedAnswers ?? {}) }
   };
 }
 
@@ -64,7 +65,8 @@ export function removeSetterDataCaseForSample(
     ...normalized,
     dataCases: (normalized.dataCases ?? []).filter((entry) =>
       entry.sampleId !== sampleId && (sampleIndex === undefined || entry.sampleIndex !== sampleIndex)
-    )
+    ),
+    generatedAnswers: removeGeneratedAnswer(normalized.generatedAnswers, sampleId)
   };
 }
 
@@ -86,4 +88,13 @@ function sortSetterDataCases(dataCases: SetterDataCaseConfig[]): SetterDataCaseC
     }
     return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
   });
+}
+
+function removeGeneratedAnswer(
+  generatedAnswers: Record<string, string> | undefined,
+  sampleId: string
+): Record<string, string> {
+  const next = { ...(generatedAnswers ?? {}) };
+  delete next[sampleId];
+  return next;
 }

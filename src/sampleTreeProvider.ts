@@ -10,6 +10,8 @@ import {
   getDefaultProblemSource,
   getProblemGeneratorProgram,
   getProblemReportPath,
+  getSampleGeneratedAnswerStatus,
+  hasProblemGeneratedAnswers,
   resolveProblemReferencePath
 } from './problems';
 import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
@@ -43,6 +45,7 @@ type TreeNode = {
   sampleStatus?: SampleStatus | 'Not Run';
   hasCheckerOutput?: boolean;
   answerPending?: boolean;
+  hasGeneratedAnswer?: boolean;
   problemJudgeMode?: JudgeMode;
   problemCheckerType?: CheckerType;
 };
@@ -65,7 +68,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     item.tooltip = element.tooltip;
     item.iconPath = element.icon;
     item.command = element.command;
-      item.contextValue = getContextValue(element);
+    item.contextValue = getContextValue(element);
     return item;
   }
 
@@ -118,7 +121,8 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
           element.sampleId,
           element.sampleStatus,
           element.hasCheckerOutput,
-          element.answerPending
+          element.answerPending,
+          element.hasGeneratedAnswer
         );
       default:
         return [];
@@ -173,7 +177,11 @@ function createNoProblemsNode(): TreeNode {
   };
 }
 
-function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
+async function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): Promise<TreeNode[]> {
+  const samplesContextValue = await hasProblemGeneratedAnswers(workspaceFolder, problem)
+    ? 'samplesGroupWithGeneratedOutputs'
+    : 'samplesGroup';
+
   return [
     {
       kind: 'group',
@@ -232,7 +240,7 @@ function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, problem:
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'samples',
       problemId: problem.id,
-      contextValue: 'samplesGroup'
+      contextValue: samplesContextValue
     },
     ...(isSetterModeEnabled() ? [{
       kind: 'group' as const,
@@ -369,11 +377,17 @@ async function createSampleNodes(
       entry.id === sample.id || entry.index === sample.index || entry.name === sample.name
     );
     const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
+    const generatedAnswer = await getSampleGeneratedAnswerStatus(workspaceFolder, problem, sample);
+    const hasGeneratedAnswer = generatedAnswer.exists;
     const answerPending = isSetterModeEnabled() && !fileStatus.inputMissing && fileStatus.answerMissing;
     const missing = fileStatus.inputMissing || (fileStatus.answerMissing && !answerPending);
     const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
     const elapsed = sampleReport && !missing ? formatElapsed(sampleReport) : '';
-    const description = answerPending ? t('setter.sample.answerMissing') : formatSampleDescription(status, sampleReport, elapsed);
+    const description = hasGeneratedAnswer
+      ? t('setter.generatedOutput.pending')
+      : answerPending
+        ? t('setter.sample.answerMissing')
+        : formatSampleDescription(status, sampleReport, elapsed);
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
       ? answerPending
@@ -389,6 +403,7 @@ async function createSampleNodes(
         `${t('internalId')}: ${sample.id}`,
         `${t('sampleInput')}: ${fileStatus.inputPath}`,
         `${t('expectedOutput')}: ${answerPending ? t('setter.sample.answerMissing') : fileStatus.answerPath}`,
+        ...(hasGeneratedAnswer && generatedAnswer.path ? [`${t('setter.generatedOutput.status')}: ${generatedAnswer.path}`] : []),
         `${t('source')}: ${t(sourceType === 'external' ? 'externalSample' : 'managedSample')}${missingDetail}`,
         ...(sampleReport?.status === 'Scored' ? [
           `${t('status')}: ${t('statusScored')}`,
@@ -400,7 +415,9 @@ async function createSampleNodes(
         ...(sampleReport?.checker?.output ? [`${t('checkerOutput')}: ${sampleReport.checker.output}`] : []),
         ...createRuntimeTooltipLines(sampleReport)
       ].join('\n'),
-      icon: answerPending
+      icon: hasGeneratedAnswer
+        ? new vscode.ThemeIcon('diff')
+        : answerPending
         ? new vscode.ThemeIcon('warning')
         : status === 'Missing'
         ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
@@ -411,7 +428,8 @@ async function createSampleNodes(
       sampleId: sample.index,
       sampleStatus: status,
       hasCheckerOutput: Boolean(sampleReport?.checker?.output || sampleReport?.checker?.stdout || sampleReport?.checker?.stderr),
-      answerPending
+      answerPending,
+      hasGeneratedAnswer
     };
   }));
 }
@@ -479,7 +497,8 @@ function createSampleActionNodes(
   sampleId: number | undefined,
   status: SampleStatus | 'Not Run' | undefined,
   hasCheckerOutput = false,
-  answerPending = false
+  answerPending = false,
+  hasGeneratedAnswer = false
 ): TreeNode[] {
   if (sampleId === undefined) {
     return [];
@@ -502,6 +521,13 @@ function createSampleActionNodes(
   }
   if (hasCheckerOutput) {
     nodes.push(sampleActionNode(t('checkerOutput'), 'oijudger.openCheckerOutput', 'output', problemId, sampleId));
+  }
+  if (hasGeneratedAnswer) {
+    nodes.push(sampleActionNode(t('setter.generatedOutput.viewCurrent'), 'oijudger.viewCurrentSampleAnswer', 'go-to-file', problemId, sampleId));
+    nodes.push(sampleActionNode(t('setter.generatedOutput.viewGenerated'), 'oijudger.viewGeneratedSampleAnswer', 'preview', problemId, sampleId));
+    nodes.push(sampleActionNode(t('setter.generatedOutput.compare'), 'oijudger.diffGeneratedSampleAnswer', 'diff', problemId, sampleId));
+    nodes.push(sampleActionNode(t('setter.generatedOutput.apply'), 'oijudger.applyGeneratedSampleAnswer', 'check', problemId, sampleId));
+    nodes.push(sampleActionNode(t('setter.generatedOutput.delete'), 'oijudger.deleteGeneratedSampleAnswer', 'trash', problemId, sampleId));
   }
   if (isSetterModeEnabled()) {
     nodes.push(sampleActionNode(t('generateAnswerWithStd'), 'oijudger.generateSampleAnswerWithStd', 'run', problemId, sampleId));
@@ -869,6 +895,9 @@ function getContextValue(element: TreeNode): string {
     return element.contextValue;
   }
   if (element.kind === 'sample') {
+    if (element.hasGeneratedAnswer) {
+      return 'sampleWithGeneratedOutput';
+    }
     if (element.answerPending) {
       return 'sampleAnswerPending';
     }
