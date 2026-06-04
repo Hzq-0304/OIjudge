@@ -2,11 +2,23 @@ export const env = {
   language: 'en'
 };
 
+const configurationValues = new Map<string, unknown>();
+
+export function __setConfiguration(key: string, value: unknown): void {
+  configurationValues.set(key, value);
+}
+
+export function __resetConfiguration(): void {
+  configurationValues.clear();
+}
+
 export const workspace = {
   workspaceFolders: undefined as unknown,
   getConfiguration: () => ({
-    get: <T>(_key: string, defaultValue: T): T => defaultValue
+    get: <T>(key: string, defaultValue: T): T =>
+      configurationValues.has(key) ? configurationValues.get(key) as T : defaultValue
   }),
+  saveAll: async () => true,
   openTextDocument: async (uri: unknown) => ({ uri })
 };
 

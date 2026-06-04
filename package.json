@@ -75,6 +75,11 @@
     "onCommand:oijudger.selectStdProgram",
     "onCommand:oijudger.openStdProgram",
     "onCommand:oijudger.clearStdProgram",
+    "onCommand:oijudger.generateSampleAnswerWithStd",
+    "onCommand:oijudger.generateAllSampleAnswersWithStd",
+    "onCommand:oijudger.selectGeneratorProgram",
+    "onCommand:oijudger.openGeneratorProgram",
+    "onCommand:oijudger.clearGeneratorProgram",
     "onCommand:oijudger.setSampleName"
   ],
   "main": "./out/extension.js",
@@ -351,6 +356,31 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "oijudger.generateSampleAnswerWithStd",
+        "title": "OI Judge: 用 STD 生成答案/Generate Answer with STD",
+        "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.generateAllSampleAnswersWithStd",
+        "title": "OI Judge: 用 STD 生成全部样例答案/Generate All Sample Answers with STD",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "oijudger.selectGeneratorProgram",
+        "title": "OI Judge: 选择数据生成器/Select Generator",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "oijudger.openGeneratorProgram",
+        "title": "OI Judge: 打开数据生成器/Open Generator",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.clearGeneratorProgram",
+        "title": "OI Judge: 清除数据生成器/Clear Generator",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "oijudger.setSampleName",
         "title": "OI Judge: 设置样例名称/Set Sample Name",
         "icon": "$(tag)"
@@ -538,9 +568,14 @@
           "group": "inline@6"
         },
         {
+          "command": "oijudger.generateSampleAnswerWithStd",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "group": "8_setter@1"
+        },
+        {
           "command": "oijudger.setSampleName",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
-          "group": "8_setter"
+          "group": "8_setter@2"
         },
         {
           "command": "oijudger.selectStdProgram",
@@ -556,6 +591,26 @@
           "command": "oijudger.clearStdProgram",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@3"
+        },
+        {
+          "command": "oijudger.generateAllSampleAnswersWithStd",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "4_setter@4"
+        },
+        {
+          "command": "oijudger.selectGeneratorProgram",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "4_setter@5"
+        },
+        {
+          "command": "oijudger.openGeneratorProgram",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "4_setter@6"
+        },
+        {
+          "command": "oijudger.clearGeneratorProgram",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "4_setter@7"
         }
       ],
       "commandPalette": [
@@ -633,6 +688,26 @@
         },
         {
           "command": "oijudger.openCheckerOutput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.generateSampleAnswerWithStd",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.generateAllSampleAnswersWithStd",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.selectGeneratorProgram",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openGeneratorProgram",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.clearGeneratorProgram",
           "when": "false"
         }
       ]

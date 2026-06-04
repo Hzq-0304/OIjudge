@@ -449,6 +449,50 @@ export async function clearProblemStdProgram(
   });
 }
 
+export function getProblemGeneratorProgram(problem: ProblemConfig): string | undefined {
+  return problem.setter?.generator?.generators?.[0]?.source;
+}
+
+export async function setProblemGeneratorProgram(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  generatorPath: string
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    const source = createProblemSource(workspaceFolder, generatorPath);
+    const setter = normalizeSetterConfig(problem.setter);
+    problem.setter = {
+      ...setter,
+      generator: {
+        enabled: true,
+        generators: [
+          {
+            id: 'default-generator',
+            name: source.name ?? path.basename(generatorPath),
+            source: source.path
+          }
+        ]
+      }
+    };
+  });
+}
+
+export async function clearProblemGeneratorProgram(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    const setter = normalizeSetterConfig(problem.setter);
+    problem.setter = {
+      ...setter,
+      generator: {
+        enabled: false,
+        generators: []
+      }
+    };
+  });
+}
+
 export async function renameProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,

@@ -8,6 +8,7 @@ import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErr
 import {
   ensureProblemsConfig,
   getDefaultProblemSource,
+  getProblemGeneratorProgram,
   getProblemReportPath,
   resolveProblemReferencePath
 } from './problems';
@@ -107,7 +108,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       case 'samples':
         return createSampleNodes(workspaceFolder, problem);
       case 'setter':
-        return createSetterNodes(problem);
+        return createSetterNodes(workspaceFolder, problem);
       case 'actions':
         return createProblemActionNodes(problem);
       case 'sampleActions':
@@ -486,6 +487,7 @@ function createSampleActionNodes(
     nodes.push(sampleActionNode(t('checkerOutput'), 'oijudger.openCheckerOutput', 'output', problemId, sampleId));
   }
   if (isSetterModeEnabled()) {
+    nodes.push(sampleActionNode(t('generateAnswerWithStd'), 'oijudger.generateSampleAnswerWithStd', 'run', problemId, sampleId));
     nodes.push(sampleActionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problemId, sampleId));
   }
 
@@ -518,13 +520,45 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
   ];
 }
 
-function createSetterNodes(problem: ProblemConfig): TreeNode[] {
+function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
   return [
+    createGeneratorInfoNode(workspaceFolder, problem),
+    actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id),
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),
     actionNode(t('openStd'), 'oijudger.openStdProgram', 'go-to-file', problem.id),
     actionNode(t('clearStd'), 'oijudger.clearStdProgram', 'clear-all', problem.id),
+    actionNode(t('selectGenerator'), 'oijudger.selectGeneratorProgram', 'file-code', problem.id),
+    actionNode(t('openGenerator'), 'oijudger.openGeneratorProgram', 'go-to-file', problem.id),
+    actionNode(t('clearGenerator'), 'oijudger.clearGeneratorProgram', 'clear-all', problem.id),
+    infoNode(t('generatorGenerationNotImplemented'), 'info'),
     actionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problem.id)
   ];
+}
+
+function createGeneratorInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode {
+  const generator = getProblemGeneratorProgram(problem);
+  const generatorPath = generator ? resolveProblemReferencePath(workspaceFolder, generator) : undefined;
+  const missing = Boolean(generatorPath && !existsSync(generatorPath));
+  const label = generatorPath
+    ? `${t('generatorLabel')}: ${path.basename(generatorPath)}`
+    : `${t('generatorLabel')}: ${t('generatorNotSet')}`;
+  return {
+    kind: 'info',
+    label,
+    description: missing ? t('statusMissing') : undefined,
+    tooltip: generatorPath
+      ? `${generatorPath}\n${t('generatorGenerationNotImplemented')}`
+      : t('generatorGenerationNotImplemented'),
+    icon: missing
+      ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+      : new vscode.ThemeIcon('file-code'),
+    problemId: problem.id,
+    command: {
+      command: generatorPath ? 'oijudger.openGeneratorProgram' : 'oijudger.selectGeneratorProgram',
+      title: generatorPath ? t('openGenerator') : t('selectGenerator'),
+      arguments: [problem.id]
+    }
+  };
 }
 
 function createStdInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode {

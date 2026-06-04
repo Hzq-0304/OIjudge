@@ -16,6 +16,7 @@ import {
   setTimeLimit,
   validatePositiveInteger
 } from './config';
+import { compileSource } from './compiler';
 import { ensureCompilerConfigured, findCompiler, pickCompilerPath, selectCompiler } from './compilerDetection';
 import { t } from './i18n';
 import { runAllSamples } from './judge';
@@ -41,12 +42,14 @@ import {
   addExternalProblemSample,
   addProblemFromSource,
   bindProblemStatement,
+  clearProblemGeneratorProgram,
   clearProblemStdProgram,
   createProblem,
   deleteProblemSample,
   ensureProblemsConfig,
   getDefaultProblemSource,
   getProblem,
+  getProblemGeneratorProgram,
   getProblemReportPath,
   getProblemSourcePath,
   importLegacyProblem,
@@ -54,6 +57,7 @@ import {
   renameProblemSample,
   saveProblemReport,
   setProblemDefaultSource,
+  setProblemGeneratorProgram,
   setProblemStdProgram,
   unbindProblemStatement,
   updateProblemChecker,
@@ -71,12 +75,14 @@ import {
   findExistingUserOutput,
   getProblemSampleOutputPaths,
   getSampleFileStatus,
-  inferSampleSourceType
+  inferSampleSourceType,
+  resolveSamplePath
 } from './sampleFiles';
 import { SampleTreeProvider } from './sampleTreeProvider';
 import { isSetterModeEnabled, validateSetterSampleName } from './setterMode';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
-import { PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
+import { runProcess } from './runner';
+import { CompileResult, FileIoConfig, IoMode, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
 
 const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -455,6 +461,21 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.clearStdProgram', async (problemArg?: unknown) => {
       await clearStdProgramCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
+    vscode.commands.registerCommand('oijudger.generateSampleAnswerWithStd', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await generateSampleAnswerWithStdCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.generateAllSampleAnswersWithStd', async (problemArg?: unknown) => {
+      await generateAllSampleAnswersWithStdCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.selectGeneratorProgram', async (problemArg?: unknown) => {
+      await selectGeneratorProgramCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.openGeneratorProgram', async (problemArg?: unknown) => {
+      await openGeneratorProgramCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.clearGeneratorProgram', async (problemArg?: unknown) => {
+      await clearGeneratorProgramCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.setSampleName', async (problemArg?: unknown, sampleArg?: unknown) => {
       await setSampleNameCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
     }),
@@ -626,6 +647,21 @@ async function pickSourceFile(): Promise<vscode.Uri | undefined> {
     openLabel: t('select'),
     filters: {
       'C++ Source': ['cpp', 'cc', 'cxx', 'c++']
+    }
+  });
+
+  return uris?.[0];
+}
+
+async function pickGeneratorFile(): Promise<vscode.Uri | undefined> {
+  const uris = await vscode.window.showOpenDialog({
+    title: t('selectGenerator'),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: t('select'),
+    filters: {
+      'C/C++ Source': ['cpp', 'cc', 'cxx', 'c', 'c++']
     }
   });
 
@@ -1821,6 +1857,326 @@ async function clearStdProgramCommand(
   await clearProblemStdProgram(context.workspaceFolder, context.problem.id);
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(t('stdCleared'));
+}
+
+async function generateSampleAnswerWithStdCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context || !(await confirmOverwriteAnswer(context.workspaceFolder, context.sample))) {
+    return;
+  }
+
+  const std = await prepareStdAnswerGeneration(context.workspaceFolder, context.problem);
+  if (!std) {
+    return;
+  }
+
+  const result = await generateAnswerForSample(context.workspaceFolder, context.problem, context.sample, std);
+  if (!result.ok) {
+    vscode.window.showErrorMessage(t('stdRunFailed'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('stdAnswerGenerated', {
+    sample: context.sample.name,
+    file: path.basename(result.answerPath)
+  }));
+}
+
+async function generateAllSampleAnswersWithStdCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context || context.problem.samples.length === 0) {
+    return;
+  }
+  const confirmed = await vscode.window.showWarningMessage(
+    t('overwriteAllAnswersConfirm'),
+    t('continueAction'),
+    t('cancel')
+  );
+  if (confirmed !== t('continueAction')) {
+    return;
+  }
+
+  const std = await prepareStdAnswerGeneration(context.workspaceFolder, context.problem);
+  if (!std) {
+    return;
+  }
+
+  let generated = 0;
+  let failed = 0;
+  for (const sample of context.problem.samples) {
+    const result = await generateAnswerForSample(context.workspaceFolder, context.problem, sample, std);
+    if (result.ok) {
+      generated += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  sampleTreeProvider.refresh();
+  if (failed > 0) {
+    output.show();
+    vscode.window.showWarningMessage(t('stdAllAnswersGeneratedWithFailures', { count: generated, failed }));
+    return;
+  }
+  vscode.window.showInformationMessage(t('stdAllAnswersGenerated', { count: generated }));
+}
+
+async function selectGeneratorProgramCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const uri = await pickGeneratorFile();
+  if (!uri) {
+    return;
+  }
+
+  await setProblemGeneratorProgram(context.workspaceFolder, context.problem.id, uri.fsPath);
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('generatorBound', { name: path.basename(uri.fsPath) }));
+}
+
+async function openGeneratorProgramCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const generator = getProblemGeneratorProgram(context.problem);
+  if (!generator) {
+    vscode.window.showWarningMessage(t('generatorMissingSelectFirst'));
+    return;
+  }
+
+  const generatorPath = resolveProblemReferencePath(context.workspaceFolder, generator);
+  if (!(await exists(generatorPath))) {
+    const choice = await vscode.window.showWarningMessage(
+      t('generatorMissing'),
+      t('selectGenerator'),
+      t('cancel')
+    );
+    if (choice === t('selectGenerator')) {
+      await selectGeneratorProgramCommand(context.problem.id, sampleTreeProvider);
+    }
+    return;
+  }
+
+  await openFileInEditor(generatorPath, t('generatorMissing'));
+}
+
+async function clearGeneratorProgramCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  await clearProblemGeneratorProgram(context.workspaceFolder, context.problem.id);
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('generatorCleared'));
+}
+
+type StdAnswerGenerationContext = {
+  stdPath: string;
+  compile: CompileResult;
+};
+
+type StdSampleExecution = {
+  stdin: string;
+  cwd: string;
+  outputPath?: string;
+};
+
+async function prepareStdAnswerGeneration(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<StdAnswerGenerationContext | undefined> {
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return undefined;
+  }
+  if (!problem.setter?.stdProgram) {
+    vscode.window.showWarningMessage(t('stdMissingSelectFirst'));
+    return undefined;
+  }
+
+  const stdPath = resolveProblemReferencePath(workspaceFolder, problem.setter.stdProgram);
+  if (!(await exists(stdPath))) {
+    vscode.window.showWarningMessage(t('stdFileMissing'));
+    return undefined;
+  }
+
+  const saved = await vscode.workspace.saveAll(false);
+  if (!saved) {
+    output.appendLine('[ERR] Failed to save files before generating answers with STD.');
+    vscode.window.showWarningMessage(t('seeOutputAndStderr'));
+    return undefined;
+  }
+
+  output.appendLine('');
+  output.appendLine(`Generate sample answers with STD: ${stdPath}`);
+  const compile = await compileSource(workspaceFolder, stdPath, problem, output);
+  if (!compile) {
+    vscode.window.showErrorMessage(t('stdCompileFailed'));
+    return undefined;
+  }
+
+  return { stdPath, compile };
+}
+
+async function confirmOverwriteAnswer(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig
+): Promise<boolean> {
+  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
+  if (!(await exists(answerPath))) {
+    return true;
+  }
+
+  const content = await fs.readFile(answerPath, 'utf8');
+  if (content.length === 0) {
+    return true;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    t('overwriteAnswerConfirm', { file: path.basename(answerPath) }),
+    t('continueAction'),
+    t('cancel')
+  );
+  return confirmed === t('continueAction');
+}
+
+async function generateAnswerForSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  sample: SampleConfig,
+  std: StdAnswerGenerationContext
+): Promise<{ ok: true; answerPath: string } | { ok: false; reason: string }> {
+  const inputPath = resolveSamplePath(workspaceFolder, sample.input);
+  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
+  if (!(await exists(inputPath))) {
+    const reason = `Sample input missing: ${inputPath}`;
+    output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+    return { ok: false, reason };
+  }
+
+  const input = await fs.readFile(inputPath, 'utf8');
+  const execution = await prepareStdSampleExecution(workspaceFolder, problem, sample, input);
+  let result;
+  try {
+    result = await runProcess(
+      std.compile.executablePath,
+      [],
+      execution.stdin,
+      execution.cwd,
+      problem.limits.timeMs,
+      createStdExecutionEnv(std.compile.executablePath)
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    output.appendLine(`[ERR] ${sample.name}: STD failed to start: ${reason}`);
+    return { ok: false, reason };
+  }
+
+  if (result.timedOut || result.code !== 0 || result.signal) {
+    const reason = result.timedOut
+      ? `STD timed out after ${Math.round(result.timeMs)} ms.`
+      : `STD exited abnormally: code=${result.code ?? 'null'}, signal=${result.signal ?? 'null'}.`;
+    output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+    if (result.stderr.trim()) {
+      output.appendLine(result.stderr.trimEnd());
+    }
+    if (result.stdinError || result.stdoutError || result.stderrError) {
+      output.appendLine(`stdio errors: ${[result.stdinError, result.stdoutError, result.stderrError].filter(Boolean).join('; ')}`);
+    }
+    return { ok: false, reason };
+  }
+
+  if (result.stderr.trim()) {
+    output.appendLine(`[STD stderr] ${sample.name}:`);
+    output.appendLine(result.stderr.trimEnd());
+  }
+
+  let answer = result.stdout;
+  if (execution.outputPath) {
+    if (!(await exists(execution.outputPath))) {
+      const fileIo = getProblemFileIoForRun(problem);
+      const reason = `STD did not create File IO output file: ${fileIo.outputFileName}`;
+      output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+      return { ok: false, reason };
+    }
+    answer = await fs.readFile(execution.outputPath, 'utf8');
+  }
+
+  await fs.mkdir(path.dirname(answerPath), { recursive: true });
+  await fs.writeFile(answerPath, answer, 'utf8');
+  output.appendLine(`[OK] ${sample.name}: wrote ${answerPath}`);
+  return { ok: true, answerPath };
+}
+
+async function prepareStdSampleExecution(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  sample: SampleConfig,
+  input: string
+): Promise<StdSampleExecution> {
+  if (getProblemIoModeForRun(problem) !== 'fileio') {
+    return {
+      stdin: input,
+      cwd: workspaceFolder.uri.fsPath
+    };
+  }
+
+  const fileIo = getProblemFileIoForRun(problem);
+  const outputPaths = getProblemSampleOutputPaths(workspaceFolder, problem.id, sample.index);
+  await fs.rm(outputPaths.runDirPath, { recursive: true, force: true });
+  await fs.mkdir(outputPaths.runDirPath, { recursive: true });
+  await fs.writeFile(path.join(outputPaths.runDirPath, fileIo.inputFileName), input, 'utf8');
+
+  return {
+    stdin: '',
+    cwd: outputPaths.runDirPath,
+    outputPath: path.join(outputPaths.runDirPath, fileIo.outputFileName)
+  };
+}
+
+function getProblemIoModeForRun(problem: ProblemConfig): IoMode {
+  return problem.ioMode === 'fileio' ? 'fileio' : 'stdio';
+}
+
+function getProblemFileIoForRun(problem: ProblemConfig): FileIoConfig {
+  return {
+    inputFileName: problem.fileIo?.inputFileName || 'input.txt',
+    outputFileName: problem.fileIo?.outputFileName || 'output.txt'
+  };
+}
+
+function createStdExecutionEnv(executablePath: string): NodeJS.ProcessEnv {
+  const executableDir = path.dirname(executablePath);
+  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+  return {
+    ...process.env,
+    [pathKey]: [executableDir, process.env[pathKey], process.env.PATH]
+      .filter(Boolean)
+      .join(path.delimiter)
+  };
 }
 
 async function setSampleNameCommand(
