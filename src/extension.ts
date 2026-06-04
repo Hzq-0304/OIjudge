@@ -519,6 +519,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (
         document.uri.fsPath.endsWith('config.json') ||
         document.uri.fsPath.endsWith('problems.json') ||
+        path.basename(document.uri.fsPath) === '.OIJudge' ||
         document.uri.fsPath.endsWith('report.json')
       ) {
         sampleTreeProvider.refresh();

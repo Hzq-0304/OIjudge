@@ -58,6 +58,10 @@ export function getOITestDir(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(workspaceFolder.uri.fsPath, '.oitest');
 }
 
+export function getOiJudgeConfigPath(workspaceFolder: vscode.WorkspaceFolder): string {
+  return path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge');
+}
+
 export function getConfigPath(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(getOITestDir(workspaceFolder), 'config.json');
 }

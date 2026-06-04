@@ -14,7 +14,7 @@ For compatibility with earlier versions, internal command IDs and settings may s
 
 First-version features:
 
-- Initialize `.oitest/config.json`
+- Initialize workspace problem config at `.vscode/.OIJudge`
 - Create a problem without immediately binding a source file
 - Bind a local statement file (`.md`, `.pdf`, or `.txt`) to a problem
 - Add one or more C++ programs to a problem and choose a default program
@@ -32,8 +32,8 @@ First-version features:
 - Show an `OI Judge` sidebar with current file, limits, sample status, and quick actions
 - Open report and sample detail pages from the sidebar
 - Switch UI text with `oijudger.language` (`auto`, `en`, `zh`)
-- Manage multiple problems in one workspace with `.oitest/problems.json`
-- Keep legacy single-problem `.oitest/config.json` data intact and import it when needed
+- Manage multiple problems in one workspace with `.vscode/.OIJudge`
+- Keep legacy `.oitest/problems.json` and single-problem `.oitest/config.json` data intact and import or migrate it when needed
 
 Problem workflow:
 
@@ -370,7 +370,7 @@ Commands:
 - `OI Judge: Open Last Report`
 - `OI Judge: Clear Outputs`
 
-The default compiler command is `g++`. You can edit `.oitest/config.json` to adjust compiler flags.
+The default compiler command is `g++`. You can edit `.vscode/.OIJudge` to adjust per-problem compiler flags.
 
 ## Development
 

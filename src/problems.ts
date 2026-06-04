@@ -5,6 +5,7 @@ import {
   createDefaultConfig,
   exists,
   getConfigPath,
+  getOiJudgeConfigPath,
   getOITestDir,
   readConfig,
   createSampleInternalId,
@@ -44,6 +45,10 @@ import {
 } from './types';
 
 export function getProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
+  return getOiJudgeConfigPath(workspaceFolder);
+}
+
+export function getLegacyProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(getOITestDir(workspaceFolder), 'problems.json');
 }
 
@@ -60,16 +65,98 @@ export function getProblemConfigPath(workspaceFolder: vscode.WorkspaceFolder, pr
 }
 
 export async function ensureProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig> {
-  if (!(await exists(getProblemsPath(workspaceFolder)))) {
-    const config: ProblemsConfig = { version: 1, problems: [] };
-    await writeProblemsConfig(workspaceFolder, config);
-    return config;
+  if (await exists(getProblemsPath(workspaceFolder))) {
+    return readProblemsConfig(workspaceFolder);
   }
-  return readProblemsConfig(workspaceFolder);
+
+  const migrated =
+    await readLegacyProblemsConfig(workspaceFolder) ??
+    await readLegacyProblemFolderConfigs(workspaceFolder) ??
+    await readLegacySingleProblemConfig(workspaceFolder);
+  if (migrated) {
+    await writeProblemsConfig(workspaceFolder, migrated);
+    return migrated;
+  }
+
+  const config: ProblemsConfig = { version: 1, problems: [] };
+  await writeProblemsConfig(workspaceFolder, config);
+  return config;
+}
+
+async function readLegacyProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  const legacyPath = getLegacyProblemsPath(workspaceFolder);
+  if (!(await exists(legacyPath))) {
+    return undefined;
+  }
+  return readProblemsConfigFromPath(workspaceFolder, legacyPath);
+}
+
+async function readLegacyProblemFolderConfigs(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  const legacyProblemsDir = path.join(getOITestDir(workspaceFolder), 'problems');
+  let entries: import('fs').Dirent[];
+  try {
+    entries = await fs.readdir(legacyProblemsDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  }
+
+  const config: ProblemsConfig = { version: 1, problems: [] };
+  for (const entry of entries.filter((candidate) => candidate.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+    const legacyPath = path.join(legacyProblemsDir, entry.name, 'config.json');
+    if (!(await exists(legacyPath))) {
+      continue;
+    }
+
+    const parsed = JSON.parse(await fs.readFile(legacyPath, 'utf8')) as Partial<ProblemConfig>;
+    const problem = {
+      ...createDefaultConfig(),
+      ...parsed,
+      id: parsed.id ?? entry.name,
+      name: parsed.name ?? entry.name,
+      standard: parsed.standard ?? getStandardFromArgs((parsed.compiler ?? parsed.compile ?? createDefaultConfig().compiler).args),
+      samples: parsed.samples ?? []
+    } as ProblemConfig;
+    config.problems.push(normalizeProblem(workspaceFolder, problem));
+  }
+
+  return config.problems.length > 0 ? config : undefined;
+}
+
+async function readLegacySingleProblemConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  if (!(await exists(getConfigPath(workspaceFolder)))) {
+    return undefined;
+  }
+
+  const legacy = await readConfig(workspaceFolder);
+  const source = guessLegacySource(workspaceFolder);
+  const baseName = source ? path.basename(source, path.extname(source)) : 'legacy';
+  const config: ProblemsConfig = { version: 1, problems: [] };
+  const problem: ProblemConfig = {
+    ...legacy,
+    id: createProblemId(baseName, config),
+    name: createProblemName(baseName, config),
+    source: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : '',
+    defaultSource: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : undefined,
+    sources: source ? [createProblemSource(workspaceFolder, source)] : [],
+    standard: getStandardFromArgs(legacy.compiler.args)
+  };
+
+  config.problems.push(normalizeProblem(workspaceFolder, problem));
+  return config;
 }
 
 export async function readProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig> {
-  const raw = await fs.readFile(getProblemsPath(workspaceFolder), 'utf8');
+  return readProblemsConfigFromPath(workspaceFolder, getProblemsPath(workspaceFolder));
+}
+
+async function readProblemsConfigFromPath(
+  workspaceFolder: vscode.WorkspaceFolder,
+  configPath: string
+): Promise<ProblemsConfig> {
+  const raw = await fs.readFile(configPath, 'utf8');
   const parsed = JSON.parse(raw) as ProblemsConfig;
   return {
     version: 1,
@@ -83,7 +170,6 @@ export async function writeProblemsConfig(
 ): Promise<void> {
   await fs.mkdir(path.dirname(getProblemsPath(workspaceFolder)), { recursive: true });
   await fs.writeFile(getProblemsPath(workspaceFolder), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  await Promise.all(config.problems.map((problem) => writeProblemConfig(workspaceFolder, problem)));
 }
 
 export async function createProblem(
@@ -836,11 +922,6 @@ async function updateProblem(
   update(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return problem;
-}
-
-async function writeProblemConfig(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): Promise<void> {
-  await fs.mkdir(getProblemRoot(workspaceFolder, problem.id), { recursive: true });
-  await fs.writeFile(getProblemConfigPath(workspaceFolder, problem.id), `${JSON.stringify(problem, null, 2)}\n`, 'utf8');
 }
 
 async function addProblemSampleFiles(
