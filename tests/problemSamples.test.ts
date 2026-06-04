@@ -7,6 +7,7 @@ import { t } from '../src/i18n';
 import {
   addEmptyProblemSample,
   addExternalProblemSample,
+  addProblemInputSample,
   addProblemSample,
   createProblem,
   getProblem
@@ -49,6 +50,30 @@ describe('problem sample files', () => {
     expect(saved?.samples[0].answer.endsWith('.ans')).toBe(true);
   });
 
+  it('creates a setter input sample without creating its reserved answer file', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+
+    const sample = await addProblemInputSample(workspaceFolder, problem.id);
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(sample).toMatchObject({
+      index: 1,
+      id: 'sample-1',
+      name: 'sample-1',
+      input: `.oitest/problems/${problem.id}/samples/sample-1.in`,
+      answer: `.oitest/problems/${problem.id}/samples/sample-1.ans`,
+      sourceType: 'managed'
+    });
+    expect(saved?.setter?.dataCases?.[0]).toMatchObject({
+      sampleId: 'sample-1',
+      sampleIndex: 1,
+      name: 'sample-1'
+    });
+    await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''), 'utf8')).resolves.toBe('');
+    await expect(fs.access(path.join(workspaceFolder.uri.fsPath, sample?.answer ?? ''))).rejects.toThrow();
+  });
+
   it('skips existing sample files before choosing the next index', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
@@ -88,6 +113,17 @@ describe('problem sample files', () => {
     expect(message).toContain('sample-1.in');
     expect(message).toContain('sample-1.ans');
     expect(message).toContain('Ctrl+S');
+  });
+
+  it('has localized setter input sample guidance', () => {
+    const message = t('setter.sample.inputCreated', {
+      inputFile: 'sample-1.in'
+    });
+
+    expect(message).toContain('sample-1.in');
+    expect(message).toContain('Ctrl+S');
+    expect(t('setter.sample.answerMissing')).toBeTruthy();
+    expect(t('setter.sample.noAnswerForJudge', { sampleName: 'sample-1' })).toContain('sample-1');
   });
 });
 

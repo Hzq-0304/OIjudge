@@ -2,6 +2,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { getPlainCheckerInvalidMessage, parsePlainCheckerOutput, PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 import { runProcess } from './runner';
+import { withCompilerPathEnv } from './compilerRuntime';
 import { getLocale } from './i18n';
 import { explainRuntimeError } from './runtimeErrorExplainer';
 import { CheckerSampleReport } from './types';
@@ -433,9 +434,5 @@ function createCheckerEnv(compilerBin: string | undefined): NodeJS.ProcessEnv | 
   if (!compilerBin) {
     return undefined;
   }
-  const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
-  return {
-    ...process.env,
-    [pathKey]: `${compilerBin}${path.delimiter}${process.env[pathKey] ?? ''}`
-  };
+  return withCompilerPathEnv(path.join(compilerBin, process.platform === 'win32' ? 'g++.exe' : 'g++'));
 }

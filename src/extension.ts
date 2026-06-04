@@ -40,6 +40,7 @@ import {
   batchAddExternalProblemSamples,
   addEmptyProblemSample,
   addExternalProblemSample,
+  addProblemInputSample,
   addProblemFromSource,
   bindProblemStatement,
   clearProblemGeneratorProgram,
@@ -82,6 +83,7 @@ import { SampleTreeProvider } from './sampleTreeProvider';
 import { isSetterModeEnabled, validateSetterSampleName } from './setterMode';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
 import { runProcess } from './runner';
+import { withCompilerPathEnv } from './compilerRuntime';
 import { CompileResult, FileIoConfig, IoMode, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
 
 const output = vscode.window.createOutputChannel('OI Judge');
@@ -476,6 +478,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.clearGeneratorProgram', async (problemArg?: unknown) => {
       await clearGeneratorProgramCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
+    vscode.commands.registerCommand('oijudger.addSetterInputSample', async (problemArg?: unknown) => {
+      await addSetterInputSampleCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.setSampleName', async (problemArg?: unknown, sampleArg?: unknown) => {
       await setSampleNameCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
     }),
@@ -605,6 +610,17 @@ async function openManualSampleFiles(
   });
 }
 
+async function openInputSampleFile(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: Pick<SampleConfig, 'input'>
+): Promise<void> {
+  const inputPath = resolveWorkspacePath(workspaceFolder, sample.input);
+  const inputDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(inputPath));
+  await vscode.window.showTextDocument(inputDocument, {
+    preview: false
+  });
+}
+
 async function showManualSampleCreatedMessage(sample: Pick<SampleConfig, 'input' | 'answer'>): Promise<void> {
   await vscode.window.showInformationMessage(
     t('manualSampleFilesCreatedMessage', {
@@ -612,6 +628,12 @@ async function showManualSampleCreatedMessage(sample: Pick<SampleConfig, 'input'
       answerFile: path.basename(sample.answer)
     })
   );
+}
+
+async function showSetterInputSampleCreatedMessage(sample: Pick<SampleConfig, 'input'>): Promise<void> {
+  await vscode.window.showInformationMessage(t('setter.sample.inputCreated', {
+    inputFile: path.basename(sample.input)
+  }));
 }
 
 async function addExternalSingleSample(
@@ -1993,6 +2015,29 @@ async function clearGeneratorProgramCommand(
   vscode.window.showInformationMessage(t('generatorCleared'));
 }
 
+async function addSetterInputSampleCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const sample = await addProblemInputSample(context.workspaceFolder, context.problem.id);
+  if (!sample) {
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  await openInputSampleFile(context.workspaceFolder, sample);
+  await showSetterInputSampleCreatedMessage(sample);
+}
+
 type StdAnswerGenerationContext = {
   stdPath: string;
   compile: CompileResult;
@@ -2032,6 +2077,8 @@ async function prepareStdAnswerGeneration(
 
   output.appendLine('');
   output.appendLine(`Generate sample answers with STD: ${stdPath}`);
+  output.appendLine('STD compile:');
+  output.appendLine(`STD source: ${stdPath}`);
   const compile = await compileSource(workspaceFolder, stdPath, problem, output);
   if (!compile) {
     vscode.window.showErrorMessage(t('stdCompileFailed'));
@@ -2087,7 +2134,7 @@ async function generateAnswerForSample(
       execution.stdin,
       execution.cwd,
       problem.limits.timeMs,
-      createStdExecutionEnv(std.compile.executablePath)
+      createStdExecutionEnv(std.compile.executablePath, std.compile.compilerCommand)
     );
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -2168,12 +2215,13 @@ function getProblemFileIoForRun(problem: ProblemConfig): FileIoConfig {
   };
 }
 
-function createStdExecutionEnv(executablePath: string): NodeJS.ProcessEnv {
+function createStdExecutionEnv(executablePath: string, compilerCommand: string | undefined): NodeJS.ProcessEnv {
   const executableDir = path.dirname(executablePath);
   const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+  const env = withCompilerPathEnv(compilerCommand);
   return {
-    ...process.env,
-    [pathKey]: [executableDir, process.env[pathKey], process.env.PATH]
+    ...env,
+    [pathKey]: [executableDir, env[pathKey], env.PATH]
       .filter(Boolean)
       .join(path.delimiter)
   };

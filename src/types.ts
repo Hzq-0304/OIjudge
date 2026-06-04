@@ -154,6 +154,8 @@ export type CompileReport = {
 };
 
 export type CompileResult = CompileReport & {
+  compilerCommand?: string;
+  compilerBin?: string;
   executablePath: string;
 };
 

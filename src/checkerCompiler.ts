@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { getOITestDir } from './config';
+import { findCompiler } from './compilerDetection';
+import { getCompilerDir, withCompilerPathEnv } from './compilerRuntime';
 import { runProcess } from './runner';
 import { resolveTestlibForChecker, TestlibResolveResult } from './testlibResolver';
 import { CheckerConfig, OITestConfig } from './types';
@@ -62,7 +64,7 @@ export async function compileChecker(
       source: checkerSource,
       exe: checkerExe,
       compilerCommand: config.compiler.command,
-      compilerBin: getCompilerBin(config.compiler.command),
+      compilerBin: getCompilerDir(config.compiler.command),
       testlib,
       stderrPath,
       message
@@ -78,10 +80,19 @@ export async function compileChecker(
   if (checker.type === 'testlib' && testlib?.includeDir) {
     args.push(`-I${testlib.includeDir}`);
   }
-  const staticLinkArgs = getCheckerStaticLinkArgs(config.compiler.command);
+  const compiler = await findCompiler(workspaceFolder, config);
+  const compilerCommand = compiler?.command ?? config.compiler.command;
+  const compilerBin = getCompilerDir(compilerCommand);
+  const env = withCompilerPathEnv(compilerCommand);
+  const staticLinkArgs = getCheckerStaticLinkArgs(compilerCommand);
   args.push(...staticLinkArgs);
   args.push('-o', checkerExe);
-  output.appendLine(`  compiler: ${config.compiler.command}`);
+  output.appendLine(`  compiler requested: ${config.compiler.command}`);
+  output.appendLine(`  compiler: ${compilerCommand}`);
+  if (compiler?.source) {
+    output.appendLine(`  compiler source: ${compiler.source}`);
+  }
+  output.appendLine(`  compiler dir: ${compilerBin ?? 'not an absolute compiler path'}`);
   if (staticLinkArgs.length > 0) {
     output.appendLine(`  static link args: ${staticLinkArgs.join(' ')}`);
   }
@@ -90,12 +101,12 @@ export async function compileChecker(
   let result;
   let finalArgs = args;
   try {
-    result = await runProcess(config.compiler.command, args, '', workspaceFolder.uri.fsPath, 60_000);
+    result = await runProcess(compilerCommand, args, '', workspaceFolder.uri.fsPath, 60_000, env);
     if ((result.code !== 0 || result.timedOut) && staticLinkArgs.length > 0) {
       const fallbackArgs = args.filter((arg) => !staticLinkArgs.includes(arg));
       output.appendLine('  Checker static linking failed; retrying without static link args.');
       output.appendLine(`  fallback args: ${fallbackArgs.map(quoteArg).join(' ')}`);
-      const fallbackResult = await runProcess(config.compiler.command, fallbackArgs, '', workspaceFolder.uri.fsPath, 60_000);
+      const fallbackResult = await runProcess(compilerCommand, fallbackArgs, '', workspaceFolder.uri.fsPath, 60_000, env);
       if (fallbackResult.code === 0 && !fallbackResult.timedOut) {
         result = fallbackResult;
         finalArgs = fallbackArgs;
@@ -111,8 +122,8 @@ export async function compileChecker(
       type: checker.type,
       source: checkerSource,
       exe: checkerExe,
-      compilerCommand: config.compiler.command,
-      compilerBin: getCompilerBin(config.compiler.command),
+      compilerCommand,
+      compilerBin,
       testlib,
       stderrPath,
       message
@@ -134,8 +145,8 @@ export async function compileChecker(
       type: checker.type,
       source: checkerSource,
       exe: checkerExe,
-      compilerCommand: config.compiler.command,
-      compilerBin: getCompilerBin(config.compiler.command),
+      compilerCommand,
+      compilerBin,
       testlib,
       timeMs: result.timeMs,
       stderrPath,
@@ -152,8 +163,8 @@ export async function compileChecker(
     type: checker.type,
     source: checkerSource,
     exe: checkerExe,
-    compilerCommand: config.compiler.command,
-    compilerBin: getCompilerBin(config.compiler.command),
+    compilerCommand,
+    compilerBin,
     testlib,
     timeMs: result.timeMs,
     stderrPath
@@ -191,8 +202,4 @@ function getCheckerStaticLinkArgs(compilerCommand: string): string[] {
 function isGnuGppCompiler(compilerCommand: string): boolean {
   const base = path.basename(compilerCommand).toLowerCase();
   return base === 'g++.exe' || base === 'g++' || base === 'c++.exe' || base === 'c++';
-}
-
-function getCompilerBin(compilerCommand: string): string | undefined {
-  return path.isAbsolute(compilerCommand) ? path.dirname(compilerCommand) : undefined;
 }

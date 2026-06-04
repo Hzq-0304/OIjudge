@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { getOITestDir } from './config';
+import { findCompiler } from './compilerDetection';
+import { envPathIncludesDir, getCompilerDir, withCompilerPathEnv } from './compilerRuntime';
 import { t } from './i18n';
 import { runProcess } from './runner';
 import { CompileResult, CompileStackReport, OITestConfig, ProcessResult } from './types';
@@ -20,9 +22,27 @@ export async function compileSource(
 
   const executableName = process.platform === 'win32' ? 'main.exe' : 'main';
   const executablePath = path.join(buildDir, executableName);
-  const { args, stack } = buildCompileArgs(workspaceFolder, config, sourcePath, executablePath);
+  const compiler = await findCompiler(workspaceFolder, config);
+  const compilerCommand = compiler?.command ?? config.compiler.command;
+  const compileConfig: OITestConfig = {
+    ...config,
+    compiler: {
+      ...config.compiler,
+      command: compilerCommand
+    }
+  };
+  const { args, stack } = buildCompileArgs(workspaceFolder, compileConfig, sourcePath, executablePath);
+  const compilerDir = getCompilerDir(compilerCommand);
+  const env = withCompilerPathEnv(compilerCommand);
 
-  output.appendLine(`Compiler: ${config.compiler.command}`);
+  output.appendLine(`Source: ${sourcePath}`);
+  output.appendLine(`Compiler requested: ${config.compiler.command}`);
+  output.appendLine(`Compiler: ${compilerCommand}`);
+  if (compiler?.source) {
+    output.appendLine(`Compiler source: ${compiler.source}`);
+  }
+  output.appendLine(`Compiler dir: ${compilerDir ?? 'not an absolute compiler path'}`);
+  output.appendLine(`Compiler dir in PATH: ${compilerDir ? (envPathIncludesDir(env, compilerDir) ? 'yes' : 'no') : 'n/a'}`);
   output.appendLine(`Compiler family: ${stack.compilerFamily ?? 'unknown'}`);
   output.appendLine(`Memory limit: ${config.limits.memoryMb} MB`);
   output.appendLine(`Auto stack size: ${stack.enabled ? 'enabled' : 'disabled'}`);
@@ -34,13 +54,18 @@ export async function compileSource(
     output.appendLine(`Auto stack size: unsupported for compiler family: ${stack.compilerFamily ?? 'unknown'}`);
   }
   output.appendLine(`Final compile args: ${args.map(quoteArg).join(' ')}`);
-  output.appendLine(`Compile: ${config.compiler.command} ${args.map(quoteArg).join(' ')}`);
+  output.appendLine(`Compile cwd: ${workspaceFolder.uri.fsPath}`);
+  output.appendLine(`Compile: ${compilerCommand} ${args.map(quoteArg).join(' ')}`);
 
   let result: ProcessResult;
   try {
-    result = await runProcess(config.compiler.command, args, '', workspaceFolder.uri.fsPath, 60_000);
+    result = await runProcess(compilerCommand, args, '', workspaceFolder.uri.fsPath, 60_000, env);
   } catch (error) {
-    output.appendLine(`Compile failed to start: ${String(error)}`);
+    output.appendLine('Compile failed to start.');
+    output.appendLine(`Compiler: ${compilerCommand}`);
+    output.appendLine(`cwd: ${workspaceFolder.uri.fsPath}`);
+    output.appendLine(`args: ${args.map(quoteArg).join(' ')}`);
+    output.appendLine(formatSpawnError(error));
     vscode.window.showErrorMessage(t('compileStartFailed'));
     return undefined;
   }
@@ -64,6 +89,8 @@ export async function compileSource(
     status: 'OK',
     timeMs: result.timeMs,
     stack,
+    compilerCommand,
+    compilerBin: compilerDir,
     executablePath
   };
 }
@@ -158,4 +185,19 @@ function quoteArg(value: string): string {
 
 function formatMs(value: number): number {
   return Math.round(value);
+}
+
+function formatSpawnError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const details = error as NodeJS.ErrnoException;
+  return [
+    `message: ${error.message}`,
+    details.code ? `code: ${details.code}` : undefined,
+    details.errno !== undefined ? `errno: ${details.errno}` : undefined,
+    details.path ? `path: ${details.path}` : undefined,
+    details.syscall ? `syscall: ${details.syscall}` : undefined
+  ].filter(Boolean).join('\n');
 }

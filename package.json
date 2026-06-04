@@ -80,6 +80,7 @@
     "onCommand:oijudger.selectGeneratorProgram",
     "onCommand:oijudger.openGeneratorProgram",
     "onCommand:oijudger.clearGeneratorProgram",
+    "onCommand:oijudger.addSetterInputSample",
     "onCommand:oijudger.setSampleName"
   ],
   "main": "./out/extension.js",
@@ -381,6 +382,11 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "oijudger.addSetterInputSample",
+        "title": "OI Judge: 添加输入样例/Add Input Sample",
+        "icon": "$(file-add)"
+      },
+      {
         "command": "oijudger.setSampleName",
         "title": "OI Judge: 设置样例名称/Set Sample Name",
         "icon": "$(tag)"
@@ -504,7 +510,7 @@
         },
         {
           "command": "oijudger.openSampleInput",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
           "group": "inline@1"
         },
         {
@@ -524,12 +530,12 @@
         },
         {
           "command": "oijudger.deleteSample",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
           "group": "inline@9"
         },
         {
           "command": "oijudger.deleteSample",
-          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
           "group": "9_delete"
         },
         {
@@ -569,12 +575,12 @@
         },
         {
           "command": "oijudger.generateSampleAnswerWithStd",
-          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
           "group": "8_setter@1"
         },
         {
           "command": "oijudger.setSampleName",
-          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing)",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending)",
           "group": "8_setter@2"
         },
         {
@@ -708,6 +714,10 @@
         },
         {
           "command": "oijudger.clearGeneratorProgram",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addSetterInputSample",
           "when": "false"
         }
       ]

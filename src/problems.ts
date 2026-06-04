@@ -199,6 +199,23 @@ export async function addEmptyProblemSample(
   return sample;
 }
 
+export async function addProblemInputSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return undefined;
+  }
+
+  const sample = await addProblemInputSampleFile(workspaceFolder, problem);
+  problem.samples.push(sample);
+  problem.setter = upsertSetterDataCaseForSample(problem.setter, sample);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
 export async function addExternalProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -606,6 +623,28 @@ async function addProblemSampleFiles(
     id: createSampleInternalId(index),
     index,
     name: `Sample ${index}`,
+    input: inputRel,
+    answer: answerRel,
+    actualOutput: outputRel,
+    sourceType: 'managed'
+  };
+}
+
+async function addProblemInputSampleFile(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<SampleConfig> {
+  await ensureProblemFolders(workspaceFolder, problem.id);
+  const index = await getNextAvailableProblemSampleIndex(workspaceFolder, problem);
+  const { inputRel, answerRel } = getProblemSampleFilePaths(problem.id, index);
+  const outputRel = getProblemSampleOutputPaths(workspaceFolder, problem.id, index).outputRel;
+
+  await fs.writeFile(resolveWorkspacePath(workspaceFolder, inputRel), '', 'utf8');
+
+  return {
+    id: createSampleInternalId(index),
+    index,
+    name: `sample-${index}`,
     input: inputRel,
     answer: answerRel,
     actualOutput: outputRel,

@@ -63,9 +63,10 @@ export async function findCompiler(
   config: OITestConfig
 ): Promise<CompilerCandidate | undefined> {
   const candidates: CompilerCandidate[] = [
-    ...(await readCppPropertiesCandidates(workspaceFolder)),
-    ...readCppSettingCandidates(workspaceFolder),
     ...readOIJudgerConfigCandidates(config),
+    ...(await readCppSettingsFileCandidates(workspaceFolder)),
+    ...readCppSettingCandidates(workspaceFolder),
+    ...(await readCppPropertiesCandidates(workspaceFolder)),
     ...(await readPathCandidates()),
     ...(await readWindowsMingwCandidates())
   ];
@@ -95,6 +96,24 @@ async function saveCompiler(
 ): Promise<void> {
   setCompilerCommand(config, command);
   await writeConfig(workspaceFolder, config);
+}
+
+async function readCppSettingsFileCandidates(workspaceFolder: vscode.WorkspaceFolder): Promise<CompilerCandidate[]> {
+  const filePath = resolveWorkspacePath(workspaceFolder, path.join('.vscode', 'settings.json'));
+  if (!(await exists(filePath))) {
+    return [];
+  }
+
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(stripJson(raw)) as { 'C_Cpp.default.compilerPath'?: string };
+    const compilerPath = parsed['C_Cpp.default.compilerPath'];
+    return compilerPath?.trim()
+      ? [{ command: compilerPath, source: '.vscode/settings.json C_Cpp.default.compilerPath' }]
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 async function readCppPropertiesCandidates(workspaceFolder: vscode.WorkspaceFolder): Promise<CompilerCandidate[]> {
@@ -148,6 +167,9 @@ function sortCppConfigurationsByCurrentSetting(
 
 function readCppSettingCandidates(workspaceFolder: vscode.WorkspaceFolder): CompilerCandidate[] {
   const configuration = vscode.workspace.getConfiguration('C_Cpp', workspaceFolder.uri);
+  if (typeof configuration.inspect !== 'function') {
+    return [];
+  }
   const inspected = configuration.inspect<string>('default.compilerPath');
   const candidates: CompilerCandidate[] = [];
 

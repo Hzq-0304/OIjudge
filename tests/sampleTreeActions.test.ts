@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
-import { addEmptyProblemSample, createProblem } from '../src/problems';
+import { addEmptyProblemSample, addProblemInputSample, createProblem } from '../src/problems';
 import { SampleTreeProvider } from '../src/sampleTreeProvider';
 
 const workspaces: string[] = [];
@@ -84,12 +84,48 @@ describe('sample tree add entry', () => {
     const setterCommands = (await provider.getChildren(setterGroup)).map((node) => node.command?.command);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
+    expect(setterCommands).toContain('oijudger.addSetterInputSample');
     expect(setterCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
     expect(setterCommands).toContain('oijudger.selectGeneratorProgram');
     expect(setterCommands).toContain('oijudger.openGeneratorProgram');
     expect(setterCommands).toContain('oijudger.clearGeneratorProgram');
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).toContain('oijudger.setSampleName');
+  });
+
+  it('does not show setter input sample actions when setter mode is disabled', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const problemChildren = await provider.getChildren(problemNode);
+
+    expect(problemChildren.find((node) => node.group === 'setter')).toBeUndefined();
+  });
+
+  it('marks setter input-only samples as answer not generated without an error context', async () => {
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    await addProblemInputSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const treeItem = provider.getTreeItem(sampleNode);
+    const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
+
+    expect(sampleNode.description).toBe('Answer not generated');
+    expect(treeItem.contextValue).toBe('sampleAnswerPending');
+    expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
+    expect(sampleCommands).not.toContain('oijudger.openSampleAnswer');
+    expect(sampleCommands).not.toContain('oijudger.openSampleUserOutput');
   });
 });
 

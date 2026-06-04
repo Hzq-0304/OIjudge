@@ -42,6 +42,7 @@ type TreeNode = {
   sampleId?: number;
   sampleStatus?: SampleStatus | 'Not Run';
   hasCheckerOutput?: boolean;
+  answerPending?: boolean;
   problemJudgeMode?: JudgeMode;
   problemCheckerType?: CheckerType;
 };
@@ -112,7 +113,13 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       case 'actions':
         return createProblemActionNodes(problem);
       case 'sampleActions':
-        return createSampleActionNodes(element.problemId, element.sampleId, element.sampleStatus, element.hasCheckerOutput);
+        return createSampleActionNodes(
+          element.problemId,
+          element.sampleId,
+          element.sampleStatus,
+          element.hasCheckerOutput,
+          element.answerPending
+        );
       default:
         return [];
     }
@@ -362,13 +369,16 @@ async function createSampleNodes(
       entry.id === sample.id || entry.index === sample.index || entry.name === sample.name
     );
     const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
-    const missing = fileStatus.inputMissing || fileStatus.answerMissing;
+    const answerPending = isSetterModeEnabled() && !fileStatus.inputMissing && fileStatus.answerMissing;
+    const missing = fileStatus.inputMissing || (fileStatus.answerMissing && !answerPending);
     const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
     const elapsed = sampleReport && !missing ? formatElapsed(sampleReport) : '';
-    const description = formatSampleDescription(status, sampleReport, elapsed);
+    const description = answerPending ? t('setter.sample.answerMissing') : formatSampleDescription(status, sampleReport, elapsed);
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
-      ? `\n${t(sourceType === 'external' ? 'externalSampleMissing' : 'sampleMissing')}:\n${fileStatus.missingPaths.join('\n')}`
+      ? answerPending
+        ? `\n${t('setter.sample.generateAnswerHint')}: ${fileStatus.answerPath}`
+        : `\n${t(sourceType === 'external' ? 'externalSampleMissing' : 'sampleMissing')}:\n${fileStatus.missingPaths.join('\n')}`
       : '';
     return {
       kind: 'sample',
@@ -378,7 +388,7 @@ async function createSampleNodes(
         `${t('sampleName')}: ${sample.name}`,
         `${t('internalId')}: ${sample.id}`,
         `${t('sampleInput')}: ${fileStatus.inputPath}`,
-        `${t('expectedOutput')}: ${fileStatus.answerPath}`,
+        `${t('expectedOutput')}: ${answerPending ? t('setter.sample.answerMissing') : fileStatus.answerPath}`,
         `${t('source')}: ${t(sourceType === 'external' ? 'externalSample' : 'managedSample')}${missingDetail}`,
         ...(sampleReport?.status === 'Scored' ? [
           `${t('status')}: ${t('statusScored')}`,
@@ -390,7 +400,9 @@ async function createSampleNodes(
         ...(sampleReport?.checker?.output ? [`${t('checkerOutput')}: ${sampleReport.checker.output}`] : []),
         ...createRuntimeTooltipLines(sampleReport)
       ].join('\n'),
-      icon: status === 'Missing'
+      icon: answerPending
+        ? new vscode.ThemeIcon('warning')
+        : status === 'Missing'
         ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
         : new vscode.ThemeIcon(statusIcon(status)),
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -398,7 +410,8 @@ async function createSampleNodes(
       problemId: problem.id,
       sampleId: sample.index,
       sampleStatus: status,
-      hasCheckerOutput: Boolean(sampleReport?.checker?.output || sampleReport?.checker?.stdout || sampleReport?.checker?.stderr)
+      hasCheckerOutput: Boolean(sampleReport?.checker?.output || sampleReport?.checker?.stdout || sampleReport?.checker?.stderr),
+      answerPending
     };
   }));
 }
@@ -465,18 +478,22 @@ function createSampleActionNodes(
   problemId: string,
   sampleId: number | undefined,
   status: SampleStatus | 'Not Run' | undefined,
-  hasCheckerOutput = false
+  hasCheckerOutput = false,
+  answerPending = false
 ): TreeNode[] {
   if (sampleId === undefined) {
     return [];
   }
 
   const nodes = [
-    sampleActionNode(t('openSampleInput'), 'oijudger.openSampleInput', 'go-to-file', problemId, sampleId),
-    sampleActionNode(t('openExpectedOutput'), 'oijudger.openSampleAnswer', 'go-to-file', problemId, sampleId)
+    sampleActionNode(t('openSampleInput'), 'oijudger.openSampleInput', 'go-to-file', problemId, sampleId)
   ];
 
-  if (status !== 'Missing') {
+  if (!answerPending) {
+    nodes.push(sampleActionNode(t('openExpectedOutput'), 'oijudger.openSampleAnswer', 'go-to-file', problemId, sampleId));
+  }
+
+  if (status !== 'Missing' && !answerPending) {
     nodes.push(sampleActionNode(t('openUserOutput'), 'oijudger.openSampleUserOutput', 'output', problemId, sampleId));
   }
 
@@ -523,6 +540,7 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
 function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
   return [
     createGeneratorInfoNode(workspaceFolder, problem),
+    actionNode(t('setter.sample.addInput'), 'oijudger.addSetterInputSample', 'file-add', problem.id),
     actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id),
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),
     actionNode(t('openStd'), 'oijudger.openStdProgram', 'go-to-file', problem.id),
@@ -851,6 +869,9 @@ function getContextValue(element: TreeNode): string {
     return element.contextValue;
   }
   if (element.kind === 'sample') {
+    if (element.answerPending) {
+      return 'sampleAnswerPending';
+    }
     if (element.hasCheckerOutput && element.sampleStatus !== 'Missing') {
       return element.sampleStatus === 'WA' ? 'sampleWaChecker' : 'sampleChecker';
     }

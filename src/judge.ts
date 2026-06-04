@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import { compileChecker, CheckerCompileResult, getCheckerTimeLimitMs } from './checkerCompiler';
 import { runPlainChecker, runTestlibChecker } from './checkerRunner';
 import { compileSource } from './compiler';
+import { withCompilerPathEnv } from './compilerRuntime';
 import { isOutputAccepted } from './comparator';
 import { exists, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
@@ -21,6 +22,7 @@ import {
   inferSampleSourceType,
   resolveSamplePath
 } from './sampleFiles';
+import { isSetterModeEnabled } from './setterMode';
 import { CheckerSampleReport, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
@@ -126,6 +128,7 @@ export async function runAllSamples(
         output,
         problemId,
         compile.stack,
+        compile.compilerCommand,
         checkerContext
       ));
     }
@@ -302,13 +305,18 @@ async function judgeSample(
   output: vscode.OutputChannel,
   problemId?: string,
   compileStack?: CompileStackReport,
+  compilerCommand?: string,
   checkerContext?: CheckerContext
 ): Promise<SampleReport> {
   const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
   const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
 
   if (fileStatus.inputMissing || fileStatus.answerMissing) {
+    const message = !fileStatus.inputMissing && fileStatus.answerMissing && isSetterModeEnabled()
+      ? t('setter.sample.noAnswerForJudge', { sampleName: sample.name })
+      : 'Sample input or expected output file is missing.';
     output.appendLine(`[Missing] ${sample.name}`);
+    output.appendLine(`  ${message}`);
     output.appendLine(`  missing sample file: ${fileStatus.missingPaths.join(', ')}`);
     return createSampleReport(
       workspaceFolder,
@@ -327,7 +335,7 @@ async function judgeSample(
         ioMode,
         fileIo: ioMode === 'fileio' ? createFileIoDiagnostics(outputPaths, fileIo, false).fileIo : undefined
       },
-      'Sample input or expected output file is missing.'
+      message
     );
   }
 
@@ -365,7 +373,14 @@ async function judgeSample(
 
   let result: ProcessResult;
   try {
-    result = await runProcess(path.resolve(executablePath), [], ioContext.stdin, ioContext.cwd, timeLimitMs);
+    result = await runProcess(
+      path.resolve(executablePath),
+      [],
+      ioContext.stdin,
+      ioContext.cwd,
+      timeLimitMs,
+      withCompilerPathEnv(compilerCommand)
+    );
   } catch (error) {
     const runnerError = formatUnknownError(error);
     await saveTextOutput(outputPaths.outputPath, '');
