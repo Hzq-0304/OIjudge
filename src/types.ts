@@ -32,6 +32,22 @@ export type SampleConfig = {
   sourceType?: SampleSourceType;
 };
 
+export type SubtaskResultStatus = 'passed' | 'failed' | 'notRun';
+
+export type SubtaskRunResult = {
+  status: SubtaskResultStatus;
+  passed: number;
+  total: number;
+  updatedAt: string;
+};
+
+export type SubtaskConfig = {
+  id: string;
+  name: string;
+  sampleIds: string[];
+  lastResult?: SubtaskRunResult;
+};
+
 export type CheckerConfig = {
   enabled: boolean;
   type: CheckerType;
@@ -126,6 +142,7 @@ export type ProblemConfig = OITestConfig & {
   defaultSource?: string;
   statement?: ProblemStatement;
   sources?: ProblemSource[];
+  subtasks?: SubtaskConfig[];
   standard: string;
 };
 

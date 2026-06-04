@@ -108,4 +108,47 @@ describe('package tree sample add menu', () => {
       expect(packageJson.contributes.menus.commandPalette).toContainEqual({ command, when: 'false' });
     }
   });
+
+  it('contributes subtask menus only to samples, sample, and subtask nodes', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+
+    expect(commands).toEqual(expect.arrayContaining([
+      'oijudger.createSubtask',
+      'oijudger.renameSubtask',
+      'oijudger.deleteSubtask',
+      'oijudger.runSubtask',
+      'oijudger.moveSampleToSubtask'
+    ]));
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
+      'onCommand:oijudger.createSubtask',
+      'onCommand:oijudger.renameSubtask',
+      'onCommand:oijudger.deleteSubtask',
+      'onCommand:oijudger.runSubtask',
+      'onCommand:oijudger.moveSampleToSubtask'
+    ]));
+
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.createSubtask')).toMatchObject({
+      when: 'view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)',
+      group: 'inline@2'
+    });
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.runSubtask' && entry.group === 'inline@1')?.when)
+      .toContain('viewItem == subtask');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.renameSubtask')?.when)
+      .toContain('viewItem == subtask');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.deleteSubtask')?.when)
+      .toContain('viewItem == subtask');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.moveSampleToSubtask')?.when)
+      .toContain('viewItem == sample');
+
+    for (const command of [
+      'oijudger.createSubtask',
+      'oijudger.renameSubtask',
+      'oijudger.deleteSubtask',
+      'oijudger.runSubtask',
+      'oijudger.moveSampleToSubtask'
+    ]) {
+      expect(packageJson.contributes.menus.commandPalette).toContainEqual({ command, when: 'false' });
+    }
+  });
 });

@@ -47,23 +47,29 @@ import {
   bindProblemStatement,
   clearProblemGeneratorProgram,
   clearProblemStdProgram,
+  createProblemSubtask,
   createProblem,
+  deleteProblemSubtask,
   deleteGeneratedAnswerForSample,
   deleteProblemSample,
   ensureProblemsConfig,
   getDefaultProblemSource,
+  getSubtaskSamples,
   getSampleGeneratedAnswerStatus,
   getProblem,
   getProblemGeneratorProgram,
   getProblemReportPath,
   getProblemSourcePath,
   importLegacyProblem,
+  moveProblemSampleToSubtask,
+  renameProblemSubtask,
   resolveProblemReferencePath,
   renameProblemSample,
   saveProblemReport,
   setProblemDefaultSource,
   setProblemGeneratorProgram,
   setProblemStdProgram,
+  setProblemSubtaskResult,
   writeGeneratedAnswerForSample,
   unbindProblemStatement,
   updateProblemChecker,
@@ -106,7 +112,10 @@ export function activate(context: vscode.ExtensionContext): void {
   void updateStatusBar();
   void updateSetterModeContext();
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('oijudger.samplesView', sampleTreeProvider),
+    vscode.window.createTreeView('oijudger.samplesView', {
+      treeDataProvider: sampleTreeProvider,
+      dragAndDropController: sampleTreeProvider
+    }),
     statusBar,
     vscode.commands.registerCommand('oijudger.initProblem', async () => {
       const workspaceFolder = getWorkspaceFolder();
@@ -344,6 +353,21 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.addSampleFromSamplesGroup', async (problemArg?: unknown) => {
       await addSampleFromSamplesGroupCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.createSubtask', async (problemArg?: unknown) => {
+      await createSubtaskCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.renameSubtask', async (problemArg?: unknown) => {
+      await renameSubtaskCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.deleteSubtask', async (problemArg?: unknown) => {
+      await deleteSubtaskCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.moveSampleToSubtask', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await moveSampleToSubtaskCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.runSubtask', async (problemArg?: unknown) => {
+      await runSubtaskCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.addProblemSample', async (problemArg?: unknown) => {
       await addProblemSampleCommand(readProblemId(problemArg), false, sampleTreeProvider);
@@ -1000,6 +1024,207 @@ async function runProblemSamplesCommand(
   activeProblemId = problem.id;
   sampleTreeProvider.refresh();
   await updateStatusBar(problem.id);
+}
+
+async function createSubtaskCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const defaultName = t('subtask.defaultName', { index: (context.problem.subtasks?.length ?? 0) + 1 });
+  const name = await vscode.window.showInputBox({
+    title: t('subtask.create'),
+    prompt: t('subtask.namePrompt'),
+    value: defaultName
+  });
+  if (name === undefined || !name.trim()) {
+    return;
+  }
+
+  const subtask = await createProblemSubtask(context.workspaceFolder, context.problem.id, name);
+  if (!subtask) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('subtask.created', { name: subtask.name }));
+}
+
+async function renameSubtaskCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+
+  const name = await vscode.window.showInputBox({
+    title: t('subtask.rename'),
+    prompt: t('subtask.namePrompt'),
+    value: context.subtask.name
+  });
+  if (name === undefined || !name.trim()) {
+    return;
+  }
+
+  const subtask = await renameProblemSubtask(context.workspaceFolder, context.problem.id, context.subtask.id, name);
+  if (!subtask) {
+    vscode.window.showWarningMessage(t('subtask.notFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('subtask.renamed', { name: subtask.name }));
+}
+
+async function deleteSubtaskCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    t('subtask.deleteConfirm'),
+    { modal: true },
+    t('delete'),
+    t('cancel')
+  );
+  if (confirmed !== t('delete')) {
+    return;
+  }
+
+  const deleted = await deleteProblemSubtask(context.workspaceFolder, context.problem.id, context.subtask.id);
+  if (!deleted) {
+    vscode.window.showWarningMessage(t('subtask.notFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('subtask.deleted'));
+}
+
+async function moveSampleToSubtaskCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const choices = [
+    {
+      label: t('subtask.moveToUnassigned'),
+      description: t('subtask.unassigned'),
+      subtaskId: undefined as string | undefined
+    },
+    ...(context.problem.subtasks ?? []).map((subtask) => ({
+      label: subtask.name,
+      description: subtask.id,
+      subtaskId: subtask.id
+    }))
+  ];
+  const picked = await vscode.window.showQuickPick(choices, {
+    title: t('subtask.moveSample'),
+    placeHolder: t('subtask.moveTo')
+  });
+  if (!picked) {
+    return;
+  }
+
+  const moved = await moveProblemSampleToSubtask(
+    context.workspaceFolder,
+    context.problem.id,
+    context.sample.id,
+    picked.subtaskId
+  );
+  if (!moved) {
+    vscode.window.showWarningMessage(t('sampleNotFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(
+    picked.subtaskId
+      ? t('subtask.sampleMoved', { sample: context.sample.name, subtask: picked.label })
+      : t('subtask.sampleMovedToUnassigned', { sample: context.sample.name })
+  );
+}
+
+async function runSubtaskCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+
+  let problem = await ensureProblemCompiler(context.workspaceFolder, context.problem);
+  if (!problem) {
+    await setProblemSubtaskResult(context.workspaceFolder, context.problem.id, context.subtask.id, {
+      status: 'failed',
+      passed: 0,
+      total: context.subtask.sampleIds.length
+    });
+    sampleTreeProvider.refresh();
+    return;
+  }
+
+  const samples = getSubtaskSamples(problem, context.subtask.id);
+  if (samples.length === 0) {
+    vscode.window.showWarningMessage(t('subtask.noSamples'));
+    return;
+  }
+
+  const sourcePath = await resolveSourceForRun(context.workspaceFolder, problem);
+  if (!sourcePath) {
+    return;
+  }
+
+  if (!(await exists(sourcePath))) {
+    vscode.window.showErrorMessage(t('programMissing'));
+    return;
+  }
+
+  const document = vscode.workspace.textDocuments.find((entry) => entry.uri.fsPath === sourcePath);
+  await document?.save();
+
+  output.appendLine('');
+  output.appendLine(`Subtask: ${context.subtask.name}`);
+  const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples }, output);
+  const passed = report?.summary.accepted ?? 0;
+  const total = report?.summary.total ?? samples.length;
+  await setProblemSubtaskResult(context.workspaceFolder, problem.id, context.subtask.id, {
+    status: total > 0 && passed === total ? 'passed' : 'failed',
+    passed,
+    total
+  });
+  if (report) {
+    await saveProblemReport(context.workspaceFolder, problem.id, report);
+  }
+
+  activeProblemId = problem.id;
+  sampleTreeProvider.refresh();
+  await updateStatusBar(problem.id);
+  vscode.window.showInformationMessage(
+    passed === total
+      ? t('subtask.resultSummary', { passed, total })
+      : t('subtask.resultFailedSummary', { passed, total })
+  );
 }
 
 async function resolveSourceForRun(
@@ -2882,6 +3107,44 @@ async function getSampleContext(
   return { ...context, sample };
 }
 
+async function getSubtaskContext(
+  problemId: string | undefined,
+  subtaskId: string | undefined
+): Promise<{
+  workspaceFolder: vscode.WorkspaceFolder;
+  problem: ProblemConfig;
+  subtask: NonNullable<ProblemConfig['subtasks']>[number];
+} | undefined> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return undefined;
+  }
+
+  let resolvedSubtaskId = subtaskId;
+  if (!resolvedSubtaskId) {
+    const picked = await vscode.window.showQuickPick(
+      (context.problem.subtasks ?? []).map((subtask) => ({
+        label: subtask.name,
+        description: subtask.id,
+        subtask
+      })),
+      {
+        title: t('subtask.run'),
+        placeHolder: t('subtask.moveTo')
+      }
+    );
+    resolvedSubtaskId = picked?.subtask.id;
+  }
+
+  const subtask = context.problem.subtasks?.find((entry) => entry.id === resolvedSubtaskId);
+  if (!subtask) {
+    vscode.window.showWarningMessage(t('subtask.notFound'));
+    return undefined;
+  }
+
+  return { ...context, subtask };
+}
+
 function readProblemId(value: unknown): string | undefined {
   if (typeof value === 'string') {
     return value;
@@ -2889,6 +3152,14 @@ function readProblemId(value: unknown): string | undefined {
   if (typeof value === 'object' && value !== null && 'problemId' in value) {
     const problemId = (value as { problemId?: unknown }).problemId;
     return typeof problemId === 'string' ? problemId : undefined;
+  }
+  return undefined;
+}
+
+function readSubtaskId(value: unknown): string | undefined {
+  if (typeof value === 'object' && value !== null && 'subtaskId' in value) {
+    const subtaskId = (value as { subtaskId?: unknown }).subtaskId;
+    return typeof subtaskId === 'string' ? subtaskId : undefined;
   }
   return undefined;
 }

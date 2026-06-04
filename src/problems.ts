@@ -41,7 +41,9 @@ import {
   ProblemsConfig,
   ProblemSource,
   ProblemStatementType,
-  SampleConfig
+  SampleConfig,
+  SubtaskConfig,
+  SubtaskRunResult
 } from './types';
 
 export function getProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
@@ -182,7 +184,8 @@ export async function createProblem(
     id: createProblemId(name, problems),
     name: createProblemName(name, problems),
     standard: 'c++17',
-    sources: []
+    sources: [],
+    subtasks: []
   };
 
   await ensureProblemFolders(workspaceFolder, problem.id);
@@ -205,7 +208,8 @@ export async function addProblemFromSource(
     source: relativeSource,
     defaultSource: relativeSource,
     sources: [createProblemSource(workspaceFolder, sourcePath)],
-    standard: 'c++17'
+    standard: 'c++17',
+    subtasks: []
   };
 
   await ensureProblemFolders(workspaceFolder, problem.id);
@@ -265,6 +269,7 @@ export async function addProblemSample(
     formatSampleText(answer, options.decodeEscapes ?? true)
   );
   problem.samples.push(sample);
+  clearAllSubtaskResults(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return sample;
 }
@@ -281,6 +286,7 @@ export async function addEmptyProblemSample(
 
   const sample = await addProblemSampleFiles(workspaceFolder, problem, '', '');
   problem.samples.push(sample);
+  clearAllSubtaskResults(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return sample;
 }
@@ -298,6 +304,7 @@ export async function addProblemInputSample(
   const sample = await addProblemInputSampleFile(workspaceFolder, problem);
   problem.samples.push(sample);
   problem.setter = upsertSetterDataCaseForSample(problem.setter, sample);
+  clearAllSubtaskResults(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return sample;
 }
@@ -329,6 +336,7 @@ export async function addExternalProblemSample(
   };
 
   problem.samples.push(sample);
+  clearAllSubtaskResults(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return sample;
 }
@@ -369,6 +377,7 @@ export async function batchAddExternalProblemSamples(
       sourceType: 'external'
     };
     problem.samples.push(sample);
+    clearAllSubtaskResults(problem);
     added.push(sample);
   }
 
@@ -594,6 +603,139 @@ export async function clearProblemGeneratorProgram(
       }
     };
   });
+}
+
+export async function createProblemSubtask(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  name: string
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return undefined;
+  }
+
+  const subtasks = normalizeSubtasks(problem);
+  const subtask: SubtaskConfig = {
+    id: createSubtaskId(subtasks),
+    name: uniqueSubtaskName(subtasks, name.trim() || `Subtask ${subtasks.length + 1}`),
+    sampleIds: []
+  };
+  problem.subtasks = [...subtasks, subtask];
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
+export async function renameProblemSubtask(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string,
+  name: string
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  subtask.name = uniqueSubtaskName(problem.subtasks?.filter((entry) => entry.id !== subtaskId) ?? [], name.trim() || subtask.name);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
+export async function deleteProblemSubtask(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string
+): Promise<boolean> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return false;
+  }
+
+  const before = problem.subtasks?.length ?? 0;
+  problem.subtasks = (problem.subtasks ?? []).filter((entry) => entry.id !== subtaskId);
+  if (problem.subtasks.length === before) {
+    return false;
+  }
+
+  await writeProblemsConfig(workspaceFolder, problems);
+  return true;
+}
+
+export async function moveProblemSampleToSubtask(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: string,
+  targetSubtaskId?: string
+): Promise<boolean> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem || !problem.samples.some((sample) => sample.id === sampleId)) {
+    return false;
+  }
+  if (targetSubtaskId && !problem.subtasks?.some((subtask) => subtask.id === targetSubtaskId)) {
+    return false;
+  }
+
+  const affected = new Set<string>();
+  for (const subtask of problem.subtasks ?? []) {
+    if (subtask.sampleIds.includes(sampleId)) {
+      affected.add(subtask.id);
+    }
+    subtask.sampleIds = subtask.sampleIds.filter((entry) => entry !== sampleId);
+  }
+
+  if (targetSubtaskId) {
+    const target = problem.subtasks?.find((subtask) => subtask.id === targetSubtaskId);
+    if (!target) {
+      return false;
+    }
+    target.sampleIds = [...target.sampleIds, sampleId];
+    affected.add(target.id);
+  }
+
+  clearSubtaskResults(problem, affected);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return true;
+}
+
+export async function setProblemSubtaskResult(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string,
+  result: Omit<SubtaskRunResult, 'updatedAt'> & { updatedAt?: string }
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  subtask.lastResult = {
+    ...result,
+    updatedAt: result.updatedAt ?? new Date().toISOString()
+  };
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
+export function getSubtaskSamples(problem: ProblemConfig, subtaskId: string): SampleConfig[] {
+  const subtask = problem.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!subtask) {
+    return [];
+  }
+  const ids = new Set(subtask.sampleIds);
+  return problem.samples.filter((sample) => ids.has(sample.id));
+}
+
+export function getUnassignedProblemSamples(problem: ProblemConfig): SampleConfig[] {
+  const assigned = new Set((problem.subtasks ?? []).flatMap((subtask) => subtask.sampleIds));
+  return problem.samples.filter((sample) => !assigned.has(sample.id));
 }
 
 export type GeneratedAnswerStatus = {
@@ -870,6 +1012,7 @@ export async function deleteProblemSample(
   const [sample] = problem.samples.splice(sampleIndex, 1);
   const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
   problem.setter = removeSetterDataCaseForSample(problem.setter, sample);
+  removeSampleFromSubtasks(problem, sample.id);
   await writeProblemsConfig(workspaceFolder, problems);
 
   const cleanupErrors: string[] = [];
@@ -1067,11 +1210,111 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
     checker: normalizeCheckerConfig(problem.checker),
     setter: normalizeSetterConfig(problem.setter),
     samples: (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1)),
+    subtasks: normalizeProblemSubtasks(problem),
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),
     source: problem.source,
     defaultSource,
     sources
   };
+}
+
+function normalizeProblemSubtasks(problem: ProblemConfig): SubtaskConfig[] {
+  const sampleIds = new Set((problem.samples ?? []).map((sample, index) => sample.id ?? createSampleInternalId(index + 1)));
+  const usedSampleIds = new Set<string>();
+  const usedSubtaskIds = new Set<string>();
+  return (problem.subtasks ?? []).map((subtask, index) => {
+    const id = normalizeSubtaskId(subtask.id, index + 1, usedSubtaskIds);
+    const cleanSampleIds: string[] = [];
+    for (const sampleId of subtask.sampleIds ?? []) {
+      if (!sampleIds.has(sampleId) || usedSampleIds.has(sampleId)) {
+        continue;
+      }
+      usedSampleIds.add(sampleId);
+      cleanSampleIds.push(sampleId);
+    }
+    return {
+      id,
+      name: subtask.name?.trim() || `Subtask ${index + 1}`,
+      sampleIds: cleanSampleIds,
+      lastResult: normalizeSubtaskResult(subtask.lastResult)
+    };
+  });
+}
+
+function normalizeSubtaskResult(result: SubtaskRunResult | undefined): SubtaskRunResult | undefined {
+  if (!result || !['passed', 'failed', 'notRun'].includes(result.status)) {
+    return undefined;
+  }
+  return {
+    status: result.status,
+    passed: Math.max(0, Number(result.passed) || 0),
+    total: Math.max(0, Number(result.total) || 0),
+    updatedAt: result.updatedAt || new Date(0).toISOString()
+  };
+}
+
+function normalizeSubtaskId(id: string | undefined, fallbackIndex: number, used: Set<string>): string {
+  const base = id?.trim() || `subtask-${fallbackIndex}`;
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function normalizeSubtasks(problem: ProblemConfig): SubtaskConfig[] {
+  problem.subtasks = normalizeProblemSubtasks(problem);
+  return problem.subtasks;
+}
+
+function createSubtaskId(subtasks: SubtaskConfig[]): string {
+  const used = new Set(subtasks.map((subtask) => subtask.id));
+  let index = subtasks.length + 1;
+  let candidate = `subtask-${index}`;
+  while (used.has(candidate)) {
+    index += 1;
+    candidate = `subtask-${index}`;
+  }
+  return candidate;
+}
+
+function uniqueSubtaskName(subtasks: SubtaskConfig[], name: string): string {
+  const baseName = name.trim() || 'Subtask';
+  let candidate = baseName;
+  let suffix = 2;
+  while (subtasks.some((subtask) => subtask.name === candidate)) {
+    candidate = `${baseName} ${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function clearSubtaskResults(problem: ProblemConfig, subtaskIds: Set<string>): void {
+  for (const subtask of problem.subtasks ?? []) {
+    if (subtaskIds.has(subtask.id)) {
+      delete subtask.lastResult;
+    }
+  }
+}
+
+function clearAllSubtaskResults(problem: ProblemConfig): void {
+  for (const subtask of problem.subtasks ?? []) {
+    delete subtask.lastResult;
+  }
+}
+
+function removeSampleFromSubtasks(problem: ProblemConfig, sampleId: string): void {
+  const affected = new Set<string>();
+  for (const subtask of problem.subtasks ?? []) {
+    if (subtask.sampleIds.includes(sampleId)) {
+      affected.add(subtask.id);
+    }
+    subtask.sampleIds = subtask.sampleIds.filter((entry) => entry !== sampleId);
+  }
+  clearSubtaskResults(problem, affected);
 }
 
 function normalizeProblemSources(

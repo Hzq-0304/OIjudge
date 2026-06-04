@@ -11,14 +11,17 @@ import {
   getProblemGeneratorProgram,
   getProblemReportPath,
   getSampleGeneratedAnswerStatus,
+  getSubtaskSamples,
+  getUnassignedProblemSamples,
   hasProblemGeneratedAnswers,
+  moveProblemSampleToSubtask,
   resolveProblemReferencePath
 } from './problems';
 import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
 import { isSetterModeEnabled } from './setterMode';
 import { CheckerType, JudgeMode, JudgeReport, ProblemConfig, SampleReport, SampleStatus } from './types';
 
-type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'action';
+type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'subtask' | 'action';
 type NodeGroup =
   | 'problems'
   | 'workspaceActions'
@@ -26,6 +29,8 @@ type NodeGroup =
   | 'programs'
   | 'limits'
   | 'samples'
+  | 'unassignedSamples'
+  | 'subtask'
   | 'setter'
   | 'actions'
   | 'sampleActions';
@@ -40,6 +45,7 @@ type TreeNode = {
   collapsibleState?: vscode.TreeItemCollapsibleState;
   group?: NodeGroup;
   problemId?: string;
+  subtaskId?: string;
   contextValue?: string;
   sampleId?: number;
   sampleStatus?: SampleStatus | 'Not Run';
@@ -50,10 +56,14 @@ type TreeNode = {
   problemCheckerType?: CheckerType;
 };
 
-export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
+const SAMPLE_TREE_MIME = 'application/vnd.code.tree.oijudger.samplesView';
+
+export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined | null | void>();
 
   readonly onDidChangeTreeData = this.emitter.event;
+  readonly dragMimeTypes = [SAMPLE_TREE_MIME];
+  readonly dropMimeTypes = [SAMPLE_TREE_MIME];
 
   refresh(): void {
     this.emitter.fire();
@@ -110,7 +120,11 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       case 'limits':
         return createLimitNodes(problem);
       case 'samples':
-        return createSampleNodes(workspaceFolder, problem);
+        return createSampleContainerNodes(problem);
+      case 'unassignedSamples':
+        return createSampleNodes(workspaceFolder, problem, getUnassignedProblemSamples(problem));
+      case 'subtask':
+        return createSampleNodes(workspaceFolder, problem, getSubtaskSamples(problem, element.subtaskId ?? ''));
       case 'setter':
         return createSetterNodes(workspaceFolder, problem);
       case 'actions':
@@ -127,6 +141,59 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       default:
         return [];
     }
+  }
+
+  handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {
+    const samples = source
+      .filter((node) => node.kind === 'sample' && node.problemId && node.sampleId !== undefined)
+      .map((node) => ({
+        problemId: node.problemId,
+        sampleId: node.sampleId
+      }));
+    if (samples.length === 0) {
+      return;
+    }
+    dataTransfer.set(SAMPLE_TREE_MIME, new vscode.DataTransferItem(JSON.stringify(samples)));
+  }
+
+  async handleDrop(
+    target: TreeNode | undefined,
+    dataTransfer: vscode.DataTransfer
+  ): Promise<void> {
+    if (!target || (target.group !== 'subtask' && target.group !== 'unassignedSamples')) {
+      return;
+    }
+
+    const item = dataTransfer.get(SAMPLE_TREE_MIME);
+    if (!item) {
+      return;
+    }
+
+    const raw = typeof item.value === 'string' ? item.value : await item.asString();
+    const samples = JSON.parse(raw) as Array<{ problemId?: string; sampleId?: number }>;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return;
+    }
+
+    for (const sample of samples) {
+      if (!sample.problemId || sample.sampleId === undefined || sample.problemId !== target.problemId) {
+        continue;
+      }
+      const config = await ensureProblemsConfig(workspaceFolder);
+      const problem = config.problems.find((entry) => entry.id === sample.problemId);
+      const targetSample = problem?.samples.find((entry) => entry.index === sample.sampleId);
+      if (!targetSample) {
+        continue;
+      }
+      await moveProblemSampleToSubtask(
+        workspaceFolder,
+        sample.problemId,
+        targetSample.id,
+        target.group === 'subtask' ? target.subtaskId : undefined
+      );
+    }
+    this.refresh();
   }
 }
 
@@ -357,22 +424,69 @@ async function createProgramNodes(
   }));
 }
 
+function createSampleContainerNodes(problem: ProblemConfig): TreeNode[] {
+  return [
+    {
+      kind: 'group',
+      label: t('subtask.unassigned'),
+      icon: new vscode.ThemeIcon('list-unordered'),
+      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+      group: 'unassignedSamples',
+      problemId: problem.id,
+      contextValue: 'unassignedSamplesGroup'
+    },
+    ...(problem.subtasks ?? []).map((subtask) => createSubtaskNode(problem, subtask))
+  ];
+}
+
+function createSubtaskNode(problem: ProblemConfig, subtask: NonNullable<ProblemConfig['subtasks']>[number]): TreeNode {
+  const result = subtask.lastResult;
+  const description = result?.status === 'passed'
+    ? '✓'
+    : result?.status === 'failed'
+      ? `✗ ${result.passed}/${result.total}`
+      : undefined;
+  const contextValue = result?.status === 'passed'
+    ? 'subtaskPassed'
+    : result?.status === 'failed'
+      ? 'subtaskFailed'
+      : 'subtask';
+  return {
+    kind: 'subtask',
+    label: subtask.name,
+    description,
+    tooltip: result
+      ? t(result.status === 'passed' ? 'subtask.resultSummary' : 'subtask.resultFailedSummary', {
+        passed: result.passed,
+        total: result.total
+      })
+      : t('subtask.notRun'),
+    icon: new vscode.ThemeIcon(result?.status === 'passed' ? 'pass-filled' : result?.status === 'failed' ? 'error' : 'symbol-namespace'),
+    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+    group: 'subtask',
+    problemId: problem.id,
+    subtaskId: subtask.id,
+    contextValue
+  };
+}
+
 async function createSampleNodes(
   workspaceFolder: vscode.WorkspaceFolder,
-  problem: ProblemConfig
+  problem: ProblemConfig,
+  samples: ProblemConfig['samples']
 ): Promise<TreeNode[]> {
-  if (problem.samples.length === 0) {
+  if (samples.length === 0) {
     return [
       {
         kind: 'info',
-        label: t('noSamplesTree'),
+        label: t('subtask.empty'),
         icon: new vscode.ThemeIcon('beaker-stop')
       }
     ];
   }
 
   const report = await readReport(workspaceFolder, problem.id);
-  return Promise.all(problem.samples.map(async (sample) => {
+  return Promise.all(samples.map(async (sample) => {
     const sampleReport = report?.samples.find((entry) =>
       entry.id === sample.id || entry.index === sample.index || entry.name === sample.name
     );

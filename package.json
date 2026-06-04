@@ -38,6 +38,11 @@
     "onCommand:oijudger.addProblemFromFile",
     "onCommand:oijudger.importLegacyProblem",
     "onCommand:oijudger.addSampleFromSamplesGroup",
+    "onCommand:oijudger.createSubtask",
+    "onCommand:oijudger.renameSubtask",
+    "onCommand:oijudger.deleteSubtask",
+    "onCommand:oijudger.runSubtask",
+    "onCommand:oijudger.moveSampleToSubtask",
     "onCommand:oijudger.addProblemSample",
     "onCommand:oijudger.addProblemSampleFromFiles",
     "onCommand:oijudger.batchAddSamples",
@@ -181,6 +186,31 @@
         "command": "oijudger.addSampleFromSamplesGroup",
         "title": "OI Judge: Add Sample",
         "icon": "$(add)"
+      },
+      {
+        "command": "oijudger.createSubtask",
+        "title": "OI Judge: 新建 Subtask/Create Subtask",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "oijudger.renameSubtask",
+        "title": "OI Judge: 重命名 Subtask/Rename Subtask",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "oijudger.deleteSubtask",
+        "title": "OI Judge: 删除 Subtask/Delete Subtask",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "oijudger.runSubtask",
+        "title": "OI Judge: 评测 Subtask/Run Subtask",
+        "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.moveSampleToSubtask",
+        "title": "OI Judge: 移动到 Subtask/Move to Subtask",
+        "icon": "$(move)"
       },
       {
         "command": "oijudger.addProblemSample",
@@ -535,9 +565,34 @@
           "group": "inline@1"
         },
         {
+          "command": "oijudger.createSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "inline@2"
+        },
+        {
           "command": "oijudger.applyAllGeneratedSampleAnswers",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == samplesGroupWithGeneratedOutputs",
-          "group": "inline@2"
+          "group": "inline@3"
+        },
+        {
+          "command": "oijudger.runSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.runSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "3_run"
+        },
+        {
+          "command": "oijudger.renameSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "8_subtask"
+        },
+        {
+          "command": "oijudger.deleteSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "9_delete"
         },
         {
           "command": "oijudger.runSamplesWithProgram",
@@ -573,6 +628,11 @@
           "command": "oijudger.deleteSample",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "inline@9"
+        },
+        {
+          "command": "oijudger.moveSampleToSubtask",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "8_subtask@1"
         },
         {
           "command": "oijudger.deleteSample",
@@ -696,6 +756,26 @@
         },
         {
           "command": "oijudger.addProblemSample",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.createSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.renameSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.deleteSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.runSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.moveSampleToSubtask",
           "when": "false"
         },
         {
