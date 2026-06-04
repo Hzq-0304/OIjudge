@@ -730,7 +730,7 @@ function normalizeSuffix(value: string): string {
   return suffix.startsWith('.') ? suffix : `.${suffix}`;
 }
 
-async function scanSamplePairs(
+export async function scanSamplePairs(
   folder: string,
   inputSuffix: string,
   answerSuffix: string
@@ -749,7 +749,7 @@ async function scanSamplePairs(
       continue;
     }
     const baseName = fileName.slice(0, -inputSuffix.length);
-    const answerFileName = `${baseName}${answerSuffix}`;
+    const answerFileName = resolveAnswerFileName(fileSet, baseName, answerSuffix);
     const inputPath = path.resolve(folder, fileName);
     const answerPath = path.resolve(folder, answerFileName);
     if (fileSet.has(answerFileName)) {
@@ -764,6 +764,16 @@ async function scanSamplePairs(
     path.basename(a.inputPath).localeCompare(path.basename(b.inputPath), undefined, { numeric: true, sensitivity: 'base' })
   );
   return { matched, missingAnswers };
+}
+
+function resolveAnswerFileName(fileSet: Set<string>, baseName: string, answerSuffix: string): string {
+  const preferred = `${baseName}${answerSuffix}`;
+  if (fileSet.has(preferred) || answerSuffix.toLowerCase() !== '.out') {
+    return preferred;
+  }
+
+  const compatibleAns = `${baseName}.ans`;
+  return fileSet.has(compatibleAns) ? compatibleAns : preferred;
 }
 
 function writeBatchAddDiagnostics(
@@ -1926,9 +1936,16 @@ async function generateSampleAnswerWithStdCommand(
   }
 
   sampleTreeProvider.refresh();
-  vscode.window.showInformationMessage(t('setter.generatedOutput.generated', {
-    sample: context.sample.name,
-    file: path.basename(result.generatedPath)
+  if (result.mode === 'direct') {
+    vscode.window.showInformationMessage(
+      result.answerCreated
+        ? t('setter.generatedOutput.createdAndWritten', { answerFile: path.basename(result.answerPath) })
+        : t('setter.generatedOutput.writtenDirectly', { sampleName: context.sample.name })
+    );
+    return;
+  }
+  vscode.window.showInformationMessage(t('setter.generatedOutput.generatedPendingBecauseCurrentNotEmpty', {
+    sampleName: context.sample.name
   }));
 }
 
@@ -1946,24 +1963,36 @@ async function generateAllSampleAnswersWithStdCommand(
     return;
   }
 
-  let generated = 0;
+  let direct = 0;
+  let pending = 0;
   let failed = 0;
   for (const sample of context.problem.samples) {
     const result = await generateAnswerForSample(context.workspaceFolder, context.problem, sample, std);
-    if (result.ok) {
-      generated += 1;
-    } else {
+    if (!result.ok) {
       failed += 1;
+    } else if (result.mode === 'direct') {
+      direct += 1;
+    } else {
+      pending += 1;
     }
   }
 
   sampleTreeProvider.refresh();
   if (failed > 0) {
     output.show();
-    vscode.window.showWarningMessage(t('stdAllAnswersGeneratedWithFailures', { count: generated, failed }));
+    vscode.window.showWarningMessage(t('setter.generatedOutput.processedSummaryWithFailures', {
+      total: direct + pending,
+      failed,
+      direct,
+      pending
+    }));
     return;
   }
-  vscode.window.showInformationMessage(t('setter.generatedOutput.generatedAll', { count: generated }));
+  vscode.window.showInformationMessage(t('setter.generatedOutput.processedSummary', {
+    total: direct + pending,
+    direct,
+    pending
+  }));
 }
 
 async function viewCurrentSampleAnswerCommand(
@@ -2250,7 +2279,11 @@ async function generateAnswerForSample(
   problem: ProblemConfig,
   sample: SampleConfig,
   std: StdAnswerGenerationContext
-): Promise<{ ok: true; generatedPath: string } | { ok: false; reason: string }> {
+): Promise<
+  | { ok: true; mode: 'direct'; answerPath: string; answerCreated: boolean }
+  | { ok: true; mode: 'pending'; generatedPath: string }
+  | { ok: false; reason: string }
+> {
   const inputPath = resolveSamplePath(workspaceFolder, sample.input);
   if (!(await exists(inputPath))) {
     const reason = `Sample input missing: ${inputPath}`;
@@ -2306,14 +2339,23 @@ async function generateAnswerForSample(
     answer = await fs.readFile(execution.outputPath, 'utf8');
   }
 
-  const generated = await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample.index, answer);
-  if (!generated.generatedPath) {
-    const reason = 'Sample not found while saving generated output.';
+  const written = await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample.index, answer);
+  if (!written.ok) {
+    const reason = written.error;
     output.appendLine(`[ERR] ${sample.name}: ${reason}`);
     return { ok: false, reason };
   }
-  output.appendLine(`[OK] ${sample.name}: wrote generated output ${generated.generatedPath}`);
-  return { ok: true, generatedPath: generated.generatedPath };
+  if (written.mode === 'direct') {
+    output.appendLine(`[OK] ${sample.name}: wrote STD output directly to ${written.answerPath}`);
+    return {
+      ok: true,
+      mode: 'direct',
+      answerPath: written.answerPath,
+      answerCreated: written.answerCreated
+    };
+  }
+  output.appendLine(`[OK] ${sample.name}: wrote generated output ${written.generatedPath}`);
+  return { ok: true, mode: 'pending', generatedPath: written.generatedPath };
 }
 
 async function prepareStdSampleExecution(

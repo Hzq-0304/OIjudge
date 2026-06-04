@@ -122,7 +122,7 @@ export async function addSample(
     index,
     name: `Sample ${index}`,
     input: toPosixPath(path.join('.oitest', 'samples', `${index}.in`)),
-    answer: toPosixPath(path.join('.oitest', 'samples', `${index}.ans`)),
+    answer: toPosixPath(path.join('.oitest', 'samples', `${index}.out`)),
     actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${index}.out`)),
     sourceType: 'managed'
   };
@@ -256,7 +256,7 @@ export function toPosixPath(value: string): string {
 
 function normalizeSample(sample: SampleConfig, fallbackIndex: number): SampleConfig {
   const index = resolveSampleIndex(sample, fallbackIndex);
-  const answer = sample.answer ?? sample.expectedOutput ?? toPosixPath(path.join('.oitest', 'samples', `${index}.ans`));
+  const answer = sample.answer ?? sample.expectedOutput ?? toPosixPath(path.join('.oitest', 'samples', `${index}.out`));
   return {
     ...sample,
     id: normalizeSampleInternalId(sample.id, index),
@@ -264,7 +264,7 @@ function normalizeSample(sample: SampleConfig, fallbackIndex: number): SampleCon
     name: sample.name ?? `Sample ${index}`,
     answer,
     actualOutput: sample.actualOutput ?? toPosixPath(path.join('.oitest', 'outputs', `${index}.out`)),
-    sourceType: sample.sourceType ?? inferConfigSampleSourceType(sample)
+    sourceType: sample.sourceType ?? inferConfigSampleSourceType({ ...sample, answer })
   };
 }
 

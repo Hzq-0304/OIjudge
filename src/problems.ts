@@ -524,6 +524,44 @@ export type ApplyGeneratedAnswerResult = {
   error?: string;
 };
 
+export type WriteGeneratedAnswerResult =
+  | {
+    ok: true;
+    mode: 'direct';
+    problem: ProblemConfig;
+    sample: SampleConfig;
+    answerPath: string;
+    answerCreated: boolean;
+  }
+  | {
+    ok: true;
+    mode: 'pending';
+    problem: ProblemConfig;
+    sample: SampleConfig;
+    answerPath: string;
+    generatedPath: string;
+  }
+  | {
+    ok: false;
+    error: string;
+  };
+
+export async function isAnswerFileEmpty(answerPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(answerPath);
+    if (stat.size === 0) {
+      return true;
+    }
+    const content = await fs.readFile(answerPath, 'utf8');
+    return content.trim().length === 0;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return true;
+    }
+    throw error;
+  }
+}
+
 export async function getSampleGeneratedAnswerStatus(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig,
@@ -559,29 +597,67 @@ export async function writeGeneratedAnswerForSample(
   problemId: string,
   sampleId: number,
   content: string
-): Promise<{ problem?: ProblemConfig; sample?: SampleConfig; generatedPath?: string }> {
+): Promise<WriteGeneratedAnswerResult> {
   const problems = await ensureProblemsConfig(workspaceFolder);
   const problem = findProblem(problems, problemId);
   const sample = problem?.samples.find((entry) => entry.index === sampleId);
   if (!problem || !sample) {
-    return {};
+    return { ok: false, error: 'Sample not found.' };
+  }
+
+  const answerPathAssigned = !sample.answer?.trim();
+  if (answerPathAssigned) {
+    sample.answer = getDefaultAnswerPathForSample(sample);
+  }
+  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
+  const answerCreated = !(await exists(answerPath));
+
+  let answerEmpty: boolean;
+  try {
+    answerEmpty = await isAnswerFileEmpty(answerPath);
+  } catch (error) {
+    return { ok: false, error: `Failed to inspect current answer file: ${String(error)}` };
+  }
+
+  if (answerEmpty) {
+    try {
+      await fs.mkdir(path.dirname(answerPath), { recursive: true });
+      await fs.writeFile(answerPath, content, 'utf8');
+      await removeGeneratedAnswerFile(workspaceFolder, problem, sample);
+      clearGeneratedAnswerMapping(problem, sample);
+      await writeProblemsConfig(workspaceFolder, problems);
+      return {
+        ok: true,
+        mode: 'direct',
+        problem,
+        sample,
+        answerPath,
+        answerCreated
+      };
+    } catch (error) {
+      return { ok: false, error: `Failed to write current answer file: ${String(error)}` };
+    }
   }
 
   const generatedRel = getGeneratedAnswerRelPath(problem.id, sample);
   const generatedPath = resolveWorkspacePath(workspaceFolder, generatedRel);
-  await fs.mkdir(path.dirname(generatedPath), { recursive: true });
-  await fs.writeFile(generatedPath, content, 'utf8');
+  try {
+    await fs.mkdir(path.dirname(generatedPath), { recursive: true });
+    await fs.writeFile(generatedPath, content, 'utf8');
 
-  const setter = normalizeSetterConfig(problem.setter);
-  problem.setter = {
-    ...setter,
-    generatedAnswers: {
-      ...(setter.generatedAnswers ?? {}),
-      [sample.id]: generatedRel
-    }
-  };
-  await writeProblemsConfig(workspaceFolder, problems);
-  return { problem, sample, generatedPath };
+    const setter = normalizeSetterConfig(problem.setter);
+    problem.setter = {
+      ...setter,
+      generatedAnswers: {
+        ...(setter.generatedAnswers ?? {}),
+        [sample.id]: generatedRel
+      }
+    };
+    await writeProblemsConfig(workspaceFolder, problems);
+    return { ok: true, mode: 'pending', problem, sample, answerPath, generatedPath };
+  } catch (error) {
+    return { ok: false, error: `Failed to write generated output: ${String(error)}` };
+  }
 }
 
 export async function applyGeneratedAnswerForSample(
@@ -817,7 +893,7 @@ async function addProblemInputSampleFile(
 function getProblemSampleFilePaths(problemId: string, index: number): { inputRel: string; answerRel: string } {
   return {
     inputRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.in`)),
-    answerRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`))
+    answerRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.out`))
   };
 }
 
@@ -836,12 +912,23 @@ function clearGeneratedAnswerMapping(problem: ProblemConfig, sample: Pick<Sample
   };
 }
 
+async function removeGeneratedAnswerFile(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  sample: Pick<SampleConfig, 'id'>
+): Promise<void> {
+  const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
+  if (generatedRel) {
+    await fs.rm(resolveProblemReferencePath(workspaceFolder, generatedRel), { force: true });
+  }
+}
+
 function getDefaultAnswerPathForSample(sample: Pick<SampleConfig, 'input'>): string {
   const parsed = path.parse(sample.input);
   if (parsed.ext.toLowerCase() === '.in') {
-    return toPosixPath(path.join(parsed.dir, `${parsed.name}.ans`));
+    return toPosixPath(path.join(parsed.dir, `${parsed.name}.out`));
   }
-  return toPosixPath(path.join(parsed.dir, `${parsed.base}.ans`));
+  return toPosixPath(path.join(parsed.dir, `${parsed.base}.out`));
 }
 
 async function getNextAvailableProblemSampleIndex(
@@ -861,10 +948,12 @@ async function problemSampleArtifactsExist(
   index: number
 ): Promise<boolean> {
   const { inputRel, answerRel } = getProblemSampleFilePaths(problemId, index);
+  const legacyAnswerRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`));
   const outputDir = path.dirname(getProblemSampleOutputPaths(workspaceFolder, problemId, index).outputPath);
   return (
     (await exists(resolveWorkspacePath(workspaceFolder, inputRel))) ||
     (await exists(resolveWorkspacePath(workspaceFolder, answerRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, legacyAnswerRel))) ||
     (await exists(outputDir))
   );
 }
@@ -924,14 +1013,19 @@ function normalizeProblemSample(
 ): SampleConfig {
   const index = resolveSampleIndex(sample, fallbackId);
   const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${index}`, 'useroutput.txt'));
+  const answer = sample.answer?.trim()
+    ? sample.answer
+    : sample.expectedOutput?.trim()
+      ? sample.expectedOutput
+      : getDefaultAnswerPathForSample(sample);
   return {
     ...sample,
     id: normalizeSampleInternalId(sample.id, index),
     index,
     name: sample.name ?? `Sample ${index}`,
-    answer: sample.answer ?? sample.expectedOutput ?? toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `${index}.ans`)),
+    answer,
     actualOutput: sample.actualOutput?.endsWith(`${index}.out`) ? outputRel : (sample.actualOutput ?? outputRel),
-    sourceType: sample.sourceType ?? inferSampleSourceType(workspaceFolder, sample)
+    sourceType: sample.sourceType ?? inferSampleSourceType(workspaceFolder, { ...sample, answer })
   };
 }
 

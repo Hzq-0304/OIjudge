@@ -133,6 +133,7 @@ describe('sample tree add entry', () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
+    await fs.writeFile(path.join(workspaceFolder.uri.fsPath, sample?.answer ?? ''), 'old answer\n', 'utf8');
     await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample?.index ?? 0, 'new answer\n');
     const provider = new SampleTreeProvider();
 
@@ -155,6 +156,29 @@ describe('sample tree add entry', () => {
       'oijudger.deleteGeneratedSampleAnswer',
       'oijudger.generateSampleAnswerWithStd'
     ]));
+  });
+
+  it('does not show generated output actions after direct answer writes', async () => {
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
+    await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample?.index ?? 0, 'answer\n');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const treeItem = provider.getTreeItem(sampleNode);
+    const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
+
+    expect(provider.getTreeItem(samplesGroup).contextValue).toBe('samplesGroup');
+    expect(sampleNode.description).not.toBe('Generated output pending');
+    expect(treeItem.contextValue).not.toBe('sampleWithGeneratedOutput');
+    expect(sampleCommands).not.toContain('oijudger.applyGeneratedSampleAnswer');
+    expect(sampleCommands).not.toContain('oijudger.deleteGeneratedSampleAnswer');
   });
 });
 

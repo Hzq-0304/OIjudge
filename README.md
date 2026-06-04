@@ -55,6 +55,7 @@ Tree view:
 Sample storage:
 
 - Paste manually: OI Judge stores the input and expected output inside `.oitest`. This is best for small samples.
+- New managed samples use `.in` for input and `.out` for expected output by default. Existing `.ans` sample answers remain supported and are not renamed.
 - Select input/output files: OI Judge stores the original absolute file paths and does not copy the files. This is best for large data files or existing local test data.
 - External samples depend on the original files. If an external input or answer file is moved or deleted, the sample is shown as `Missing` and skipped during judging.
 - Deleting a managed sample removes the OI Judge-owned `.oitest` sample files and generated outputs.
@@ -66,7 +67,7 @@ Batch add samples:
 - Enter the input file suffix. The default is `.in`; `in` is normalized to `.in`.
 - Enter the answer file suffix. The default is `.out`; `ans` is normalized to `.ans`.
 - Select a samples folder.
-- OI Judge scans only the first level of that folder and matches files by `basename + inputSuffix` and `basename + answerSuffix`.
+- OI Judge scans only the first level of that folder and matches files by `basename + inputSuffix` and `basename + answerSuffix`. With the default `.out` answer suffix, OI Judge falls back to `.ans` when a same-name `.out` file is missing.
 - For example, `1.in` with `1.out` and `2.in` with `2.out` are added as two samples.
 - Batch-added samples are external samples: OI Judge stores absolute paths only and does not copy or modify the files.
 - Inputs without matching answer files and duplicate sample pairs are skipped and summarized.
