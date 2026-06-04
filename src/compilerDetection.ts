@@ -203,7 +203,7 @@ function readOIJudgerConfigCandidates(config: OITestConfig): CompilerCandidate[]
   );
   return commands.map((command) => ({
     command,
-    source: '.oitest/config.json'
+    source: '.vscode/.OIJudge/config.json'
   }));
 }
 

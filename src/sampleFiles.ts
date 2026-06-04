@@ -1,6 +1,13 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { exists, resolveWorkspacePath, toPosixPath } from './config';
+import {
+  exists,
+  getLegacyOITestDir,
+  getOiJudgeDataRelPath,
+  getOITestDir,
+  resolveWorkspacePath,
+  toPosixPath
+} from './config';
 import { SampleConfig, SampleSourceType } from './types';
 
 export type SampleFileStatus = {
@@ -42,10 +49,13 @@ export function inferSampleSourceType(
     return sample.sourceType;
   }
 
-  const oitestRoot = path.join(workspaceFolder.uri.fsPath, '.oitest');
+  const dataRoot = getOITestDir(workspaceFolder);
+  const legacyRoot = getLegacyOITestDir(workspaceFolder);
   const inputPath = resolveSamplePath(workspaceFolder, sample.input);
   const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
-  return isUnderPath(inputPath, oitestRoot) && isUnderPath(answerPath, oitestRoot) ? 'managed' : 'external';
+  const inputManaged = isUnderPath(inputPath, dataRoot) || isUnderPath(inputPath, legacyRoot);
+  const answerManaged = isUnderPath(answerPath, dataRoot) || isUnderPath(answerPath, legacyRoot);
+  return inputManaged && answerManaged ? 'managed' : 'external';
 }
 
 export async function getSampleFileStatus(
@@ -75,11 +85,11 @@ export function getProblemSampleOutputPaths(
   problemId: string,
   sampleId: number
 ): SampleOutputPaths {
-  const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'useroutput.txt'));
-  const stderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'stderr.txt'));
-  const runResultRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'run-result.txt'));
-  const runDirRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'run'));
-  const diffRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleId}`, 'diff.txt'));
+  const outputRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${sampleId}`, 'useroutput.txt');
+  const stderrRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${sampleId}`, 'stderr.txt');
+  const runResultRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${sampleId}`, 'run-result.txt');
+  const runDirRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${sampleId}`, 'run');
+  const diffRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${sampleId}`, 'diff.txt');
   const legacyOutputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.out`));
   const legacyStderrRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.err`));
   const legacyDiffRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `${sampleId}.diff`));
@@ -105,7 +115,7 @@ export function getProblemSampleOutputPaths(
 }
 
 export function getLegacyOutputRel(sample: SampleConfig): string {
-  return sample.actualOutput ?? toPosixPath(path.join('.oitest', 'outputs', `${sample.index}.out`));
+  return sample.actualOutput ?? getOiJudgeDataRelPath('outputs', `${sample.index}.out`);
 }
 
 export async function findExistingUserOutput(

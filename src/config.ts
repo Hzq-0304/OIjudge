@@ -55,15 +55,35 @@ export function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
 }
 
 export function getOITestDir(workspaceFolder: vscode.WorkspaceFolder): string {
+  return getOiJudgeDataDir(workspaceFolder);
+}
+
+export function getOiJudgeDataDir(workspaceFolder: vscode.WorkspaceFolder): string {
+  return path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge');
+}
+
+export function getOiJudgeDataDirRel(): string {
+  return toPosixPath(path.join('.vscode', '.OIJudge'));
+}
+
+export function getOiJudgeDataRelPath(...segments: string[]): string {
+  return toPosixPath(path.join(getOiJudgeDataDirRel(), ...segments));
+}
+
+export function getLegacyOITestDir(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(workspaceFolder.uri.fsPath, '.oitest');
 }
 
 export function getOiJudgeConfigPath(workspaceFolder: vscode.WorkspaceFolder): string {
-  return path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge');
+  return path.join(getOiJudgeDataDir(workspaceFolder), 'config.json');
+}
+
+export function getLegacyConfigPath(workspaceFolder: vscode.WorkspaceFolder): string {
+  return path.join(getLegacyOITestDir(workspaceFolder), 'config.json');
 }
 
 export function getConfigPath(workspaceFolder: vscode.WorkspaceFolder): string {
-  return path.join(getOITestDir(workspaceFolder), 'config.json');
+  return path.join(getOITestDir(workspaceFolder), 'single-config.json');
 }
 
 export function getOutputsDir(workspaceFolder: vscode.WorkspaceFolder): string {
@@ -78,7 +98,48 @@ export function resolveWorkspacePath(workspaceFolder: vscode.WorkspaceFolder, re
   return path.resolve(workspaceFolder.uri.fsPath, relativePath);
 }
 
+export async function ensureOiJudgeDataDir(workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+  const dataDir = getOiJudgeDataDir(workspaceFolder);
+  const vscodeDir = path.dirname(dataDir);
+  const legacyDir = getLegacyOITestDir(workspaceFolder);
+  await fs.mkdir(vscodeDir, { recursive: true });
+
+  let legacyFileConfig: string | undefined;
+  let dataDirStat: import('fs').Stats | undefined;
+  try {
+    dataDirStat = await fs.stat(dataDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  if (dataDirStat?.isFile()) {
+    legacyFileConfig = await fs.readFile(dataDir, 'utf8');
+    const backupPath = await getAvailableBackupPath(path.join(vscodeDir, '.OIJudge.config.backup.json'));
+    await fs.rename(dataDir, backupPath);
+    dataDirStat = undefined;
+  }
+
+  const legacyExists = await exists(legacyDir);
+  if (!dataDirStat) {
+    if (legacyExists) {
+      await fs.cp(legacyDir, dataDir, { recursive: true, force: false, errorOnExist: false });
+    } else {
+      await fs.mkdir(dataDir, { recursive: true });
+    }
+  } else if (dataDirStat.isDirectory() && legacyExists && await isDirectoryEmpty(dataDir)) {
+    await fs.cp(legacyDir, dataDir, { recursive: true, force: false, errorOnExist: false });
+  }
+
+  await fs.mkdir(dataDir, { recursive: true });
+  if (legacyFileConfig !== undefined) {
+    await fs.writeFile(path.join(dataDir, 'config.json'), formatJsonText(legacyFileConfig), 'utf8');
+  }
+}
+
 export async function initProblem(workspaceFolder: vscode.WorkspaceFolder): Promise<OITestConfig> {
+  await ensureOiJudgeDataDir(workspaceFolder);
   await fs.mkdir(path.join(getOITestDir(workspaceFolder), 'samples'), { recursive: true });
   await fs.mkdir(getOutputsDir(workspaceFolder), { recursive: true });
   await fs.mkdir(path.join(getOITestDir(workspaceFolder), 'build'), { recursive: true });
@@ -87,6 +148,11 @@ export async function initProblem(workspaceFolder: vscode.WorkspaceFolder): Prom
   if (await exists(configPath)) {
     return readConfig(workspaceFolder);
   }
+  if (await exists(getLegacyConfigPath(workspaceFolder))) {
+    const config = await readConfigFromPath(workspaceFolder, getLegacyConfigPath(workspaceFolder));
+    await writeConfig(workspaceFolder, config);
+    return config;
+  }
 
   const config = createDefaultConfig();
   await writeConfig(workspaceFolder, config);
@@ -94,6 +160,7 @@ export async function initProblem(workspaceFolder: vscode.WorkspaceFolder): Prom
 }
 
 export async function ensureConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<OITestConfig> {
+  await ensureOiJudgeDataDir(workspaceFolder);
   if (!(await exists(getConfigPath(workspaceFolder)))) {
     return initProblem(workspaceFolder);
   }
@@ -101,7 +168,19 @@ export async function ensureConfig(workspaceFolder: vscode.WorkspaceFolder): Pro
 }
 
 export async function readConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<OITestConfig> {
-  const raw = await fs.readFile(getConfigPath(workspaceFolder), 'utf8');
+  await ensureOiJudgeDataDir(workspaceFolder);
+  return readConfigFromPath(workspaceFolder, getConfigPath(workspaceFolder));
+}
+
+export async function readLegacyConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<OITestConfig> {
+  return readConfigFromPath(workspaceFolder, getLegacyConfigPath(workspaceFolder));
+}
+
+export async function readConfigFromPath(
+  _workspaceFolder: vscode.WorkspaceFolder,
+  configPath: string
+): Promise<OITestConfig> {
+  const raw = await fs.readFile(configPath, 'utf8');
   const config = normalizeConfig(JSON.parse(raw) as OITestConfig);
 
   config.samples = config.samples.map((sample, index) => normalizeSample(sample, index + 1));
@@ -109,6 +188,7 @@ export async function readConfig(workspaceFolder: vscode.WorkspaceFolder): Promi
 }
 
 export async function writeConfig(workspaceFolder: vscode.WorkspaceFolder, config: OITestConfig): Promise<void> {
+  await ensureOiJudgeDataDir(workspaceFolder);
   await fs.mkdir(path.dirname(getConfigPath(workspaceFolder)), { recursive: true });
   await fs.writeFile(getConfigPath(workspaceFolder), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
@@ -125,9 +205,9 @@ export async function addSample(
     id: createSampleInternalId(index),
     index,
     name: `Sample ${index}`,
-    input: toPosixPath(path.join('.oitest', 'samples', `${index}.in`)),
-    answer: toPosixPath(path.join('.oitest', 'samples', `${index}.out`)),
-    actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${index}.out`)),
+    input: getOiJudgeDataRelPath('samples', `${index}.in`),
+    answer: getOiJudgeDataRelPath('samples', `${index}.out`),
+    actualOutput: getOiJudgeDataRelPath('outputs', `${index}.out`),
     sourceType: 'managed'
   };
 
@@ -165,7 +245,7 @@ export async function addExternalSample(
     name: uniqueSampleName(config.samples, baseName),
     input: path.resolve(inputPath),
     answer: path.resolve(answerPath),
-    actualOutput: toPosixPath(path.join('.oitest', 'outputs', `${index}.out`)),
+    actualOutput: getOiJudgeDataRelPath('outputs', `${index}.out`),
     sourceType: 'external'
   };
 
@@ -187,6 +267,7 @@ export async function setStackConfig(workspaceFolder: vscode.WorkspaceFolder, st
 }
 
 export async function clearOutputs(workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+  await ensureOiJudgeDataDir(workspaceFolder);
   const outputsDir = getOutputsDir(workspaceFolder);
   await fs.rm(outputsDir, { recursive: true, force: true });
   await fs.mkdir(outputsDir, { recursive: true });
@@ -260,14 +341,14 @@ export function toPosixPath(value: string): string {
 
 function normalizeSample(sample: SampleConfig, fallbackIndex: number): SampleConfig {
   const index = resolveSampleIndex(sample, fallbackIndex);
-  const answer = sample.answer ?? sample.expectedOutput ?? toPosixPath(path.join('.oitest', 'samples', `${index}.out`));
+  const answer = sample.answer ?? sample.expectedOutput ?? getOiJudgeDataRelPath('samples', `${index}.out`);
   return {
     ...sample,
     id: normalizeSampleInternalId(sample.id, index),
     index,
     name: sample.name ?? `Sample ${index}`,
     answer,
-    actualOutput: sample.actualOutput ?? toPosixPath(path.join('.oitest', 'outputs', `${index}.out`)),
+    actualOutput: sample.actualOutput ?? getOiJudgeDataRelPath('outputs', `${index}.out`),
     sourceType: sample.sourceType ?? inferConfigSampleSourceType({ ...sample, answer })
   };
 }
@@ -311,4 +392,32 @@ function decodeEscapes(value: string): string {
 
 function formatSampleText(value: string, shouldDecodeEscapes: boolean): string {
   return shouldDecodeEscapes ? decodeEscapes(value) : value;
+}
+
+async function isDirectoryEmpty(dirPath: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(dirPath);
+    return entries.length === 0;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return true;
+    }
+    throw error;
+  }
+}
+
+async function getAvailableBackupPath(preferredPath: string): Promise<string> {
+  if (!(await exists(preferredPath))) {
+    return preferredPath;
+  }
+  const parsed = path.parse(preferredPath);
+  return path.join(parsed.dir, `${parsed.name}.${Date.now()}${parsed.ext}`);
+}
+
+function formatJsonText(raw: string): string {
+  try {
+    return `${JSON.stringify(JSON.parse(raw), null, 2)}\n`;
+  } catch {
+    return raw.endsWith('\n') ? raw : `${raw}\n`;
+  }
 }

@@ -1,4 +1,5 @@
 .vscode/**
+.vscode/.OIJudge/**
 .vscode-test/**
 src/**
 tests/**

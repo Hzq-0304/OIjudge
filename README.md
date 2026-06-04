@@ -14,11 +14,11 @@ For compatibility with earlier versions, internal command IDs and settings may s
 
 First-version features:
 
-- Initialize workspace problem config at `.vscode/.OIJudge`
+- Initialize workspace problem config at `.vscode/.OIJudge/config.json`
 - Create a problem without immediately binding a source file
 - Bind a local statement file (`.md`, `.pdf`, or `.txt`) to a problem
 - Add one or more C++ programs to a problem and choose a default program
-- Add multiple samples under `.oitest/samples` or `.oitest/problems/<problemId>/samples`
+- Add multiple samples under `.vscode/.OIJudge/samples` or `.vscode/.OIJudge/problems/<problemId>/samples`
 - Add samples by pasting text or selecting input/output files
 - Batch add samples from a folder by matching input and answer suffixes
 - Delete samples from the OI Judge sidebar
@@ -28,18 +28,18 @@ First-version features:
 - Compile the active C++ file with `g++`
 - Run all configured samples
 - Compare standard output
-- Save user output and `.oitest/outputs/report.json`
+- Save user output and `.vscode/.OIJudge/outputs/report.json`
 - Show an `OI Judge` sidebar with current file, limits, sample status, and quick actions
 - Open report and sample detail pages from the sidebar
 - Switch UI text with `oijudger.language` (`auto`, `en`, `zh`)
-- Manage multiple problems in one workspace with `.vscode/.OIJudge`
+- Manage multiple problems in one workspace with `.vscode/.OIJudge/config.json`
 - Keep legacy `.oitest/problems.json` and single-problem `.oitest/config.json` data intact and import or migrate it when needed
 
 Problem workflow:
 
-- `OI Judge: Create Problem` creates a problem entry and its `.oitest/problems/<problemId>/` folders without requiring a source file.
+- `OI Judge: Create Problem` creates a problem entry and its `.vscode/.OIJudge/problems/<problemId>/` folders without requiring a source file.
 - `OI Judge: Bind Statement` links a statement file. OI Judge stores the original file path only; it does not copy, modify, or delete the statement file.
-- `OI Judge: Add Program To Problem` links a C++ program. Programs are path references only; source files are not copied into `.oitest`.
+- `OI Judge: Add Program To Problem` links a C++ program. Programs are path references only; source files are not copied into OI Judge's internal data directory.
 - `OI Judge: Set Default Program` chooses the program used by `Run All Samples`.
 - `OI Judge: Run Samples With Program` lets you temporarily choose any linked or newly selected `.cpp` file for one run.
 - `OI Judge: Add Problem From Current File` and `OI Judge: Add Problem From File` still work as shortcuts: they create a problem and set the selected file as the default program.
@@ -54,11 +54,11 @@ Tree view:
 
 Sample storage:
 
-- Paste manually: OI Judge stores the input and expected output inside `.oitest`. This is best for small samples.
+- Paste manually: OI Judge stores the input and expected output inside `.vscode/.OIJudge`. This is best for small samples.
 - New managed samples use `.in` for input and `.out` for expected output by default. Existing `.ans` sample answers remain supported and are not renamed.
 - Select input/output files: OI Judge stores the original absolute file paths and does not copy the files. This is best for large data files or existing local test data.
 - External samples depend on the original files. If an external input or answer file is moved or deleted, the sample is shown as `Missing` and skipped during judging.
-- Deleting a managed sample removes the OI Judge-owned `.oitest` sample files and generated outputs.
+- Deleting a managed sample removes the OI Judge-owned `.vscode/.OIJudge` sample files and generated outputs.
 - Deleting an external sample removes only the OI Judge sample record and generated outputs. The original input and answer files are never deleted.
 
 Batch add samples:
@@ -85,8 +85,8 @@ Sample viewing:
 
 - Sample input, expected output, and run results open in the native VSCode text editor.
 - Output differences open with the native VSCode Diff Editor.
-- New per-problem runs keep pure stdout in `.oitest/problems/<problemId>/outputs/sample-x/useroutput.txt` for judging and diff.
-- `Run Result` opens `.oitest/problems/<problemId>/outputs/sample-x/run-result.txt`, which contains program stdout, program stderr, and runtime diagnostics such as status, exit code, signal, and Runtime Error details.
+- New per-problem runs keep pure stdout in `.vscode/.OIJudge/problems/<problemId>/outputs/sample-x/useroutput.txt` for judging and diff.
+- `Run Result` opens `.vscode/.OIJudge/problems/<problemId>/outputs/sample-x/run-result.txt`, which contains program stdout, program stderr, and runtime diagnostics such as status, exit code, signal, and Runtime Error details.
 - The standalone `Open Stderr` sample action has been removed; stderr is shown through `Run Result`.
 - Checker output is separate: checker stdout and stderr are merged into `checker-output.txt` and opened with `Checker Output`.
 - `Diff` and judging still use pure `useroutput.txt`; stderr is never appended to it.
@@ -147,7 +147,7 @@ I/O Mode:
 - `Standard IO` is the default: OI Judge feeds the sample input through stdin and captures stdout as `useroutput.txt`.
 - `File IO` is for programs that use files such as `problem.in` and `problem.out`.
 - In File IO mode, OI Judge creates an isolated temporary run directory for every sample:
-  - `.oitest/problems/<problemId>/outputs/sample-<index>/run/`
+  - `.vscode/.OIJudge/problems/<problemId>/outputs/sample-<index>/run/`
   - writes the sample input to the configured input file name
   - runs the executable with `cwd` set to that run directory
   - reads the configured output file after the process exits
@@ -202,7 +202,7 @@ checker.exe input.txt useroutput.txt answer.txt
 - `testlib.h` is resolved in this order:
   - the same folder as `checker.cpp`
   - the workspace root
-  - `.oitest/tools/testlib/testlib.h`
+  - `.vscode/.OIJudge/tools/testlib/testlib.h`
   - a custom path recorded in the checker config
 - OI Judge can install the bundled `testlib.h` shipped with the extension, or import a local copy selected by the user.
 - User-provided copies still have higher priority than the bundled copy once installed into the workspace.
@@ -211,7 +211,7 @@ checker.exe input.txt useroutput.txt answer.txt
   - `Install bundled testlib.h`
   - `Import testlib.h from local file`
 - Bundled source and license details are preserved in `resources/testlib/README.md` and `resources/testlib/LICENSE`.
-- Checker executables are built under `.oitest/problems/<problemId>/checker/`.
+- Checker executables are built under `.vscode/.OIJudge/problems/<problemId>/checker/`.
 - Checker stdout and stderr are merged into one file beside each sample output as `checker-output.txt`.
 - testlib checkers often print verdict details to stderr; users can still view all checker information through the single `Checker Output` action.
 - Plain Checker verdict parsing still uses only the configured verdict line from the original stdout. Merged stderr content is saved for viewing, but it is not parsed as the verdict.

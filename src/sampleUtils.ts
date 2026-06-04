@@ -36,7 +36,7 @@ export function normalizeSampleInternalId(id: SampleConfig['id'] | number | unde
 }
 
 export function getSampleOutputDirRel(problemId: string, sampleIndex: number): string {
-  return toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleIndex}`));
+  return toPosixPath(path.join('.vscode', '.OIJudge', 'problems', problemId, 'outputs', `sample-${sampleIndex}`));
 }
 
 function sampleNumberCandidates(sample: SampleConfig): number[] {

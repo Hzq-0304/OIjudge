@@ -3,11 +3,14 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import {
   createDefaultConfig,
+  ensureOiJudgeDataDir,
   exists,
-  getConfigPath,
+  getLegacyConfigPath,
+  getLegacyOITestDir,
+  getOiJudgeDataRelPath,
   getOiJudgeConfigPath,
   getOITestDir,
-  readConfig,
+  readConfigFromPath,
   createSampleInternalId,
   getNextSampleIndex,
   getSampleDisplayNameFromInput,
@@ -51,6 +54,10 @@ export function getProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string
 }
 
 export function getLegacyProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
+  return path.join(getLegacyOITestDir(workspaceFolder), 'problems.json');
+}
+
+function getCopiedLegacyProblemsPath(workspaceFolder: vscode.WorkspaceFolder): string {
   return path.join(getOITestDir(workspaceFolder), 'problems.json');
 }
 
@@ -67,11 +74,17 @@ export function getProblemConfigPath(workspaceFolder: vscode.WorkspaceFolder, pr
 }
 
 export async function ensureProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig> {
-  if (await exists(getProblemsPath(workspaceFolder))) {
-    return readProblemsConfig(workspaceFolder);
+  await ensureOiJudgeDataDir(workspaceFolder);
+
+  const current = await readCurrentProblemsConfig(workspaceFolder);
+  if (current) {
+    return current;
   }
 
   const migrated =
+    await readCopiedLegacyProblemsConfig(workspaceFolder) ??
+    await readCopiedLegacyProblemFolderConfigs(workspaceFolder) ??
+    await readCopiedLegacySingleProblemConfig(workspaceFolder) ??
     await readLegacyProblemsConfig(workspaceFolder) ??
     await readLegacyProblemFolderConfigs(workspaceFolder) ??
     await readLegacySingleProblemConfig(workspaceFolder);
@@ -85,6 +98,36 @@ export async function ensureProblemsConfig(workspaceFolder: vscode.WorkspaceFold
   return config;
 }
 
+async function readCurrentProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  if (!(await exists(getProblemsPath(workspaceFolder)))) {
+    return undefined;
+  }
+  const parsed = JSON.parse(await fs.readFile(getProblemsPath(workspaceFolder), 'utf8')) as ProblemsConfig | OITestConfig;
+  if (isProblemsConfig(parsed)) {
+    return normalizeProblemsConfig(workspaceFolder, parsed);
+  }
+  return undefined;
+}
+
+function isProblemsConfig(config: ProblemsConfig | OITestConfig): config is ProblemsConfig {
+  return Array.isArray((config as ProblemsConfig).problems);
+}
+
+function normalizeProblemsConfig(workspaceFolder: vscode.WorkspaceFolder, config: ProblemsConfig): ProblemsConfig {
+  return {
+    version: 1,
+    problems: (config.problems ?? []).map((problem) => normalizeProblem(workspaceFolder, problem))
+  };
+}
+
+async function readCopiedLegacyProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  const copiedPath = getCopiedLegacyProblemsPath(workspaceFolder);
+  if (!(await exists(copiedPath))) {
+    return undefined;
+  }
+  return readProblemsConfigFromPath(workspaceFolder, copiedPath);
+}
+
 async function readLegacyProblemsConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
   const legacyPath = getLegacyProblemsPath(workspaceFolder);
   if (!(await exists(legacyPath))) {
@@ -93,8 +136,18 @@ async function readLegacyProblemsConfig(workspaceFolder: vscode.WorkspaceFolder)
   return readProblemsConfigFromPath(workspaceFolder, legacyPath);
 }
 
+async function readCopiedLegacyProblemFolderConfigs(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  return readLegacyProblemFolderConfigsFromRoot(workspaceFolder, path.join(getOITestDir(workspaceFolder), 'problems'));
+}
+
 async function readLegacyProblemFolderConfigs(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
-  const legacyProblemsDir = path.join(getOITestDir(workspaceFolder), 'problems');
+  return readLegacyProblemFolderConfigsFromRoot(workspaceFolder, path.join(getLegacyOITestDir(workspaceFolder), 'problems'));
+}
+
+async function readLegacyProblemFolderConfigsFromRoot(
+  workspaceFolder: vscode.WorkspaceFolder,
+  legacyProblemsDir: string
+): Promise<ProblemsConfig | undefined> {
   let entries: import('fs').Dirent[];
   try {
     entries = await fs.readdir(legacyProblemsDir, { withFileTypes: true });
@@ -127,12 +180,30 @@ async function readLegacyProblemFolderConfigs(workspaceFolder: vscode.WorkspaceF
   return config.problems.length > 0 ? config : undefined;
 }
 
+async function readCopiedLegacySingleProblemConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
+  if (!(await exists(getProblemsPath(workspaceFolder)))) {
+    return undefined;
+  }
+  const parsed = JSON.parse(await fs.readFile(getProblemsPath(workspaceFolder), 'utf8')) as ProblemsConfig | OITestConfig;
+  if (isProblemsConfig(parsed)) {
+    return undefined;
+  }
+  return createProblemsConfigFromLegacySingle(workspaceFolder, parsed);
+}
+
 async function readLegacySingleProblemConfig(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemsConfig | undefined> {
-  if (!(await exists(getConfigPath(workspaceFolder)))) {
+  if (!(await exists(getLegacyConfigPath(workspaceFolder)))) {
     return undefined;
   }
 
-  const legacy = await readConfig(workspaceFolder);
+  const legacy = await readConfigFromPath(workspaceFolder, getLegacyConfigPath(workspaceFolder));
+  return createProblemsConfigFromLegacySingle(workspaceFolder, legacy);
+}
+
+function createProblemsConfigFromLegacySingle(
+  workspaceFolder: vscode.WorkspaceFolder,
+  legacy: OITestConfig
+): ProblemsConfig {
   const source = guessLegacySource(workspaceFolder);
   const baseName = source ? path.basename(source, path.extname(source)) : 'legacy';
   const config: ProblemsConfig = { version: 1, problems: [] };
@@ -160,16 +231,14 @@ async function readProblemsConfigFromPath(
 ): Promise<ProblemsConfig> {
   const raw = await fs.readFile(configPath, 'utf8');
   const parsed = JSON.parse(raw) as ProblemsConfig;
-  return {
-    version: 1,
-    problems: (parsed.problems ?? []).map((problem) => normalizeProblem(workspaceFolder, problem))
-  };
+  return normalizeProblemsConfig(workspaceFolder, parsed);
 }
 
 export async function writeProblemsConfig(
   workspaceFolder: vscode.WorkspaceFolder,
   config: ProblemsConfig
 ): Promise<void> {
+  await ensureOiJudgeDataDir(workspaceFolder);
   await fs.mkdir(path.dirname(getProblemsPath(workspaceFolder)), { recursive: true });
   await fs.writeFile(getProblemsPath(workspaceFolder), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
@@ -219,10 +288,10 @@ export async function addProblemFromSource(
 }
 
 export async function importLegacyProblem(workspaceFolder: vscode.WorkspaceFolder): Promise<ProblemConfig | undefined> {
-  if (!(await exists(getConfigPath(workspaceFolder)))) {
+  if (!(await exists(getLegacyConfigPath(workspaceFolder)))) {
     return undefined;
   }
-  const legacy = await readConfig(workspaceFolder);
+  const legacy = await readConfigFromPath(workspaceFolder, getLegacyConfigPath(workspaceFolder));
   const problems = await ensureProblemsConfig(workspaceFolder);
   const source = guessLegacySource(workspaceFolder);
   const baseName = source ? path.basename(source, path.extname(source)) : 'legacy';
@@ -1116,14 +1185,14 @@ async function addProblemInputSampleFile(
 
 function getProblemSampleFilePaths(problemId: string, index: number): { inputRel: string; answerRel: string } {
   return {
-    inputRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.in`)),
-    answerRel: toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.out`))
+    inputRel: getOiJudgeDataRelPath('problems', problemId, 'samples', `sample-${index}.in`),
+    answerRel: getOiJudgeDataRelPath('problems', problemId, 'samples', `sample-${index}.out`)
   };
 }
 
 function getGeneratedAnswerRelPath(problemId: string, sample: Pick<SampleConfig, 'id'>): string {
   const safeId = sample.id.replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'sample';
-  return toPosixPath(path.join('.oitest', 'problems', problemId, 'generated-answers', `${safeId}.generated.ans`));
+  return getOiJudgeDataRelPath('problems', problemId, 'generated-answers', `${safeId}.generated.ans`);
 }
 
 function clearGeneratedAnswerMapping(problem: ProblemConfig, sample: Pick<SampleConfig, 'id'>): void {
@@ -1172,12 +1241,18 @@ async function problemSampleArtifactsExist(
   index: number
 ): Promise<boolean> {
   const { inputRel, answerRel } = getProblemSampleFilePaths(problemId, index);
-  const legacyAnswerRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`));
+  const answerAnsRel = getOiJudgeDataRelPath('problems', problemId, 'samples', `sample-${index}.ans`);
+  const legacyInputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.in`));
+  const legacyAnswerOutRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.out`));
+  const legacyAnswerAnsRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'samples', `sample-${index}.ans`));
   const outputDir = path.dirname(getProblemSampleOutputPaths(workspaceFolder, problemId, index).outputPath);
   return (
     (await exists(resolveWorkspacePath(workspaceFolder, inputRel))) ||
     (await exists(resolveWorkspacePath(workspaceFolder, answerRel))) ||
-    (await exists(resolveWorkspacePath(workspaceFolder, legacyAnswerRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, answerAnsRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, legacyInputRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, legacyAnswerOutRel))) ||
+    (await exists(resolveWorkspacePath(workspaceFolder, legacyAnswerAnsRel))) ||
     (await exists(outputDir))
   );
 }
@@ -1193,6 +1268,13 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
   const id = problem.id ?? 'problem';
   const defaultSource = problem.defaultSource || problem.source || problem.sources?.[0]?.path;
   const sources = normalizeProblemSources(workspaceFolder, problem, defaultSource);
+  const setter = normalizeProblemSetter(problem);
+  const samples = (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1));
+  const normalizedProblem: ProblemConfig = {
+    ...defaults,
+    ...problem,
+    samples
+  };
   return {
     ...defaults,
     ...problem,
@@ -1208,13 +1290,27 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
     ioMode: normalizeIoMode(problem.ioMode),
     fileIo: normalizeFileIoConfig(problem.fileIo),
     checker: normalizeCheckerConfig(problem.checker),
-    setter: normalizeSetterConfig(problem.setter),
-    samples: (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1)),
-    subtasks: normalizeProblemSubtasks(problem),
+    setter,
+    samples,
+    subtasks: normalizeProblemSubtasks(normalizedProblem),
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),
     source: problem.source,
     defaultSource,
     sources
+  };
+}
+
+function normalizeProblemSetter(problem: ProblemConfig): ProblemConfig['setter'] {
+  const setter = normalizeSetterConfig(problem.setter);
+  const generatedAnswers = Object.fromEntries(
+    Object.entries(setter.generatedAnswers ?? {}).map(([sampleId, generatedPath]) => [
+      sampleId,
+      migrateInternalPath(generatedPath)
+    ])
+  );
+  return {
+    ...setter,
+    generatedAnswers
   };
 }
 
@@ -1336,21 +1432,45 @@ function normalizeProblemSample(
   fallbackId: number
 ): SampleConfig {
   const index = resolveSampleIndex(sample, fallbackId);
-  const outputRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${index}`, 'useroutput.txt'));
+  const outputRel = getOiJudgeDataRelPath('problems', problemId, 'outputs', `sample-${index}`, 'useroutput.txt');
+  const input = migrateInternalPath(sample.input);
   const answer = sample.answer?.trim()
-    ? sample.answer
+    ? migrateInternalPath(sample.answer)
     : sample.expectedOutput?.trim()
-      ? sample.expectedOutput
-      : getDefaultAnswerPathForSample(sample);
+      ? migrateInternalPath(sample.expectedOutput)
+      : getDefaultAnswerPathForSample({ input });
   return {
     ...sample,
     id: normalizeSampleInternalId(sample.id, index),
     index,
     name: sample.name ?? `Sample ${index}`,
+    input,
     answer,
-    actualOutput: sample.actualOutput?.endsWith(`${index}.out`) ? outputRel : (sample.actualOutput ?? outputRel),
-    sourceType: sample.sourceType ?? inferSampleSourceType(workspaceFolder, { ...sample, answer })
+    expectedOutput: sample.expectedOutput ? migrateInternalPath(sample.expectedOutput) : sample.expectedOutput,
+    actualOutput: shouldReplaceLegacyFlatOutput(sample.actualOutput, index)
+      ? outputRel
+      : (sample.actualOutput ? migrateInternalPath(sample.actualOutput) : outputRel),
+    sourceType: sample.sourceType ?? inferSampleSourceType(workspaceFolder, { ...sample, input, answer })
   };
+}
+
+function shouldReplaceLegacyFlatOutput(actualOutput: string | undefined, index: number): boolean {
+  return actualOutput?.endsWith(`${index}.out`) ?? false;
+}
+
+function migrateInternalPath(filePath: string): string {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  const normalized = toPosixPath(filePath);
+  if (normalized === '.oitest') {
+    return getOiJudgeDataRelPath();
+  }
+  if (normalized.startsWith('.oitest/')) {
+    const suffix = normalized.slice('.oitest/'.length);
+    return getOiJudgeDataRelPath(...suffix.split('/').filter(Boolean));
+  }
+  return normalized;
 }
 
 function findProblem(config: ProblemsConfig, problemId: string): ProblemConfig | undefined {
@@ -1416,10 +1536,11 @@ async function removeManagedSampleFiles(
   sample: SampleConfig,
   cleanupErrors: string[]
 ): Promise<void> {
-  const oitestRoot = getOITestDir(workspaceFolder);
+  const dataRoot = getOITestDir(workspaceFolder);
+  const legacyRoot = getLegacyOITestDir(workspaceFolder);
   for (const samplePath of [sample.input, sample.answer]) {
     const resolved = resolveSamplePath(workspaceFolder, samplePath);
-    if (!isUnderPath(resolved, oitestRoot)) {
+    if (!isUnderPath(resolved, dataRoot) && !isUnderPath(resolved, legacyRoot)) {
       continue;
     }
     await removePath(resolved, cleanupErrors);

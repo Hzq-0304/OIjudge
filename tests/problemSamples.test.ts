@@ -37,8 +37,8 @@ describe('problem sample files', () => {
     expect(sample).toMatchObject({
       index: 1,
       id: 'sample-1',
-      input: `.oitest/problems/${problem.id}/samples/sample-1.in`,
-      answer: `.oitest/problems/${problem.id}/samples/sample-1.out`,
+      input: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.in`,
+      answer: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.out`,
       sourceType: 'managed'
     });
     await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''), 'utf8')).resolves.toBe('');
@@ -52,8 +52,8 @@ describe('problem sample files', () => {
     const sample = await addProblemSample(workspaceFolder, problem.id, '1 2\n', '3\n', { decodeEscapes: false });
     const saved = await getProblem(workspaceFolder, problem.id);
 
-    expect(sample?.input).toBe(`.oitest/problems/${problem.id}/samples/sample-1.in`);
-    expect(sample?.answer).toBe(`.oitest/problems/${problem.id}/samples/sample-1.out`);
+    expect(sample?.input).toBe(`.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.in`);
+    expect(sample?.answer).toBe(`.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.out`);
     expect(saved?.samples[0].input.endsWith('.in')).toBe(true);
     expect(saved?.samples[0].answer.endsWith('.out')).toBe(true);
   });
@@ -64,8 +64,8 @@ describe('problem sample files', () => {
 
     const sample = await addSample(workspaceFolder, config, '1\n', '2\n', { decodeEscapes: false });
 
-    expect(sample.input).toBe('.oitest/samples/1.in');
-    expect(sample.answer).toBe('.oitest/samples/1.out');
+    expect(sample.input).toBe('.vscode/.OIJudge/samples/1.in');
+    expect(sample.answer).toBe('.vscode/.OIJudge/samples/1.out');
     await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample.answer), 'utf8')).resolves.toBe('2\n');
   });
 
@@ -80,8 +80,8 @@ describe('problem sample files', () => {
       index: 1,
       id: 'sample-1',
       name: 'sample-1',
-      input: `.oitest/problems/${problem.id}/samples/sample-1.in`,
-      answer: `.oitest/problems/${problem.id}/samples/sample-1.out`,
+      input: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.in`,
+      answer: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.out`,
       sourceType: 'managed'
     });
     expect(saved?.setter?.dataCases?.[0]).toMatchObject({
@@ -104,7 +104,7 @@ describe('problem sample files', () => {
     const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
 
     expect(sample?.index).toBe(2);
-    expect(sample?.input).toBe(`.oitest/problems/${problem.id}/samples/sample-2.in`);
+    expect(sample?.input).toBe(`.vscode/.OIJudge/problems/${problem.id}/samples/sample-2.in`);
     await expect(fs.readFile(path.join(samplesDir, 'sample-1.in'), 'utf8')).resolves.toBe('old input');
   });
 
@@ -118,7 +118,7 @@ describe('problem sample files', () => {
     const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
 
     expect(sample?.index).toBe(2);
-    expect(sample?.answer).toBe(`.oitest/problems/${problem.id}/samples/sample-2.out`);
+    expect(sample?.answer).toBe(`.vscode/.OIJudge/problems/${problem.id}/samples/sample-2.out`);
     await expect(fs.readFile(path.join(samplesDir, 'sample-1.ans'), 'utf8')).resolves.toBe('old answer');
   });
 

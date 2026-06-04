@@ -39,8 +39,8 @@ describe('File IO file name validation', () => {
 describe('File IO runtime paths', () => {
   it('generates per-sample run directory and input/output paths', () => {
     const paths = getFileIoRuntimePaths('A', 7, 'problem.in', 'problem.out');
-    expect(paths.runDirRel).toBe('.oitest/problems/A/outputs/sample-7/run');
-    expect(paths.inputRel).toBe('.oitest/problems/A/outputs/sample-7/run/problem.in');
-    expect(paths.outputRel).toBe('.oitest/problems/A/outputs/sample-7/run/problem.out');
+    expect(paths.runDirRel).toBe('.vscode/.OIJudge/problems/A/outputs/sample-7/run');
+    expect(paths.inputRel).toBe('.vscode/.OIJudge/problems/A/outputs/sample-7/run/problem.in');
+    expect(paths.outputRel).toBe('.vscode/.OIJudge/problems/A/outputs/sample-7/run/problem.out');
   });
 });

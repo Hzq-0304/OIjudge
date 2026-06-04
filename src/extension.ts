@@ -7,6 +7,8 @@ import {
   clearOutputs,
   ensureConfig,
   exists,
+  getOiJudgeDataRelPath,
+  getOITestDir,
   getWorkspaceFolder,
   initProblem,
   isCppFile,
@@ -1574,7 +1576,7 @@ async function setCheckerCommand(
     enabled: true,
     type: picked.type,
     source: checkerUri.fsPath,
-    exe: path.join('.oitest', 'problems', context.problem.id, 'checker', process.platform === 'win32' ? 'checker.exe' : 'checker'),
+    exe: getOiJudgeDataRelPath('problems', context.problem.id, 'checker', process.platform === 'win32' ? 'checker.exe' : 'checker'),
     timeLimitMs: 5000,
     testlib: {
       mode: 'auto' as const,
@@ -1837,7 +1839,7 @@ async function installBundledTestlib(
     return false;
   }
 
-  const targetPath = path.join(workspaceFolder.uri.fsPath, '.oitest', 'tools', 'testlib', 'testlib.h');
+  const targetPath = path.join(getOITestDir(workspaceFolder), 'tools', 'testlib', 'testlib.h');
   if (await exists(targetPath)) {
     const confirmed = await vscode.window.showWarningMessage(
       t('overwriteTestlibPrompt'),

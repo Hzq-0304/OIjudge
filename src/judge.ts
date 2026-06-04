@@ -6,7 +6,7 @@ import { runPlainChecker, runTestlibChecker } from './checkerRunner';
 import { compileSource } from './compiler';
 import { withCompilerPathEnv } from './compilerRuntime';
 import { isOutputAccepted } from './comparator';
-import { exists, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
+import { exists, getOiJudgeDataRelPath, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
 import { runProcess } from './runner';
 import {
@@ -174,13 +174,13 @@ export async function runAllSamples(
     samples
   };
 
-  await fs.mkdir(resolveWorkspacePath(workspaceFolder, '.oitest/outputs'), { recursive: true });
+  await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
   await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
   output.appendLine('');
   output.appendLine(`Summary: ${accepted}/${samples.length} accepted`);
   output.appendLine(`Total judge time: ${formatMs(totalTimeMs)} ms`);
-  output.appendLine(`Report: ${problemId ? `.oitest/problems/${problemId}/outputs/report.json` : '.oitest/outputs/report.json'}`);
+  output.appendLine(`Report: ${problemId ? getOiJudgeDataRelPath('problems', problemId, 'outputs', 'report.json') : getOiJudgeDataRelPath('outputs', 'report.json')}`);
   if (samples.some((sample) => sample.status === 'Missing')) {
     vscode.window.showWarningMessage(t('someSamplesMissing'));
   }

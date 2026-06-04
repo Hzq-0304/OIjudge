@@ -64,7 +64,7 @@ describe('sample naming and internal indices', () => {
   });
 
   it('uses sample index rather than display name for output directory', () => {
-    expect(getSampleOutputDirRel('A', 7)).toBe('.oitest/problems/A/outputs/sample-7');
+    expect(getSampleOutputDirRel('A', 7)).toBe('.vscode/.OIJudge/problems/A/outputs/sample-7');
     expect(getSampleOutputDirRel('A', 7)).not.toContain('book3');
   });
 });

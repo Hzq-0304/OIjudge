@@ -32,7 +32,7 @@ export function getFileIoRuntimePaths(
   inputFileName: string,
   outputFileName: string
 ): FileIoRuntimePaths {
-  const runDirRel = toPosixPath(path.join('.oitest', 'problems', problemId, 'outputs', `sample-${sampleIndex}`, 'run'));
+  const runDirRel = toPosixPath(path.join('.vscode', '.OIJudge', 'problems', problemId, 'outputs', `sample-${sampleIndex}`, 'run'));
   return {
     runDirRel,
     inputRel: toPosixPath(path.join(runDirRel, inputFileName)),

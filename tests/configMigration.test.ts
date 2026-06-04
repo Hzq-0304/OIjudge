@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type * as vscode from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDefaultConfig, getConfigPath, getOiJudgeConfigPath, toPosixPath, writeConfig } from '../src/config';
+import { createDefaultConfig, getOiJudgeConfigPath, getOiJudgeDataDir, getLegacyConfigPath, toPosixPath } from '../src/config';
 import {
   normalizeCheckerConfig,
   normalizeFileIoConfig,
@@ -72,7 +72,7 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     });
   });
 
-  it('stores the multi-problem workspace config in .vscode/.OIJudge', async () => {
+  it('stores the multi-problem workspace config in .vscode/.OIJudge/config.json', async () => {
     const workspaceFolder = await createWorkspace();
     const settingsPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'settings.json');
     await fs.mkdir(path.dirname(settingsPath), { recursive: true });
@@ -82,7 +82,9 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     const saved = await readProblemsConfig(workspaceFolder);
 
     expect(getProblemsPath(workspaceFolder)).toBe(getOiJudgeConfigPath(workspaceFolder));
-    expect(getProblemsPath(workspaceFolder)).toBe(path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge'));
+    expect(getProblemsPath(workspaceFolder)).toBe(path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge', 'config.json'));
+    const dataDirStat = await fs.stat(getOiJudgeDataDir(workspaceFolder));
+    expect(dataDirStat.isDirectory()).toBe(true);
     expect(saved.problems[0].id).toBe(problem.id);
     await expect(fs.readFile(settingsPath, 'utf8')).resolves.toBe('{"C_Cpp.default.compilerPath":"local-g++.exe"}\n');
   });
@@ -111,6 +113,34 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     expect(migrated.problems.map((problem) => problem.id)).toEqual(['legacy-a']);
     await expect(fs.access(getProblemsPath(workspaceFolder))).resolves.toBeUndefined();
     await expect(fs.access(legacyPath)).resolves.toBeUndefined();
+  });
+
+  it('turns the previous .vscode/.OIJudge config file into a directory with config.json', async () => {
+    const workspaceFolder = await createWorkspace();
+    const legacyFilePath = getOiJudgeDataDir(workspaceFolder);
+    await fs.mkdir(path.dirname(legacyFilePath), { recursive: true });
+    await fs.writeFile(
+      legacyFilePath,
+      JSON.stringify({
+        version: 1,
+        problems: [{
+          ...createDefaultConfig(),
+          id: 'from-file',
+          name: 'From File',
+          standard: 'c++17',
+          samples: []
+        }]
+      }),
+      'utf8'
+    );
+
+    const migrated = await ensureProblemsConfig(workspaceFolder);
+
+    expect(migrated.problems.map((problem) => problem.id)).toEqual(['from-file']);
+    const dataDirStat = await fs.stat(getOiJudgeDataDir(workspaceFolder));
+    expect(dataDirStat.isDirectory()).toBe(true);
+    await expect(fs.access(getOiJudgeConfigPath(workspaceFolder))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge.config.backup.json'))).resolves.toBeUndefined();
   });
 
   it('uses .vscode/.OIJudge when both new and legacy problem configs exist', async () => {
@@ -168,14 +198,16 @@ describe('judgeMode and ioMode compatibility defaults', () => {
       actualOutput: toPosixPath(path.join('.oitest', 'outputs', '1.out')),
       sourceType: 'managed'
     }];
-    await writeConfig(workspaceFolder, legacy);
+    const legacyPath = getLegacyConfigPath(workspaceFolder);
+    await fs.mkdir(path.dirname(legacyPath), { recursive: true });
+    await fs.writeFile(legacyPath, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
 
     const migrated = await ensureProblemsConfig(workspaceFolder);
 
     expect(migrated.problems).toHaveLength(1);
     expect(migrated.problems[0].id).toBe('legacy');
-    expect(migrated.problems[0].samples[0].input).toBe('.oitest/samples/1.in');
-    await expect(fs.access(getConfigPath(workspaceFolder))).resolves.toBeUndefined();
+    expect(migrated.problems[0].samples[0].input).toBe('.vscode/.OIJudge/samples/1.in');
+    await expect(fs.access(legacyPath)).resolves.toBeUndefined();
     await expect(fs.access(getProblemsPath(workspaceFolder))).resolves.toBeUndefined();
   });
 
