@@ -424,6 +424,7 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       output: 'oijudger.openSampleUserOutput',
       diff: 'oijudger.openSampleDiff',
       checkerOutput: 'oijudger.openCheckerOutput',
+      copyFreopen: 'oijudger.copyTestcaseFreopenInput',
       delete: 'oijudger.deleteSample'
     };
     const command = commandMap[typed.command];
@@ -523,6 +524,7 @@ function renderActionButtons(
     <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
     <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
+    <button data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
     <button data-command="diff" data-sample="${sampleValue}"${diffDisabled}>${escapeHtml(t('openDiff'))}</button>
     ${hasCheckerOutput ? `<button data-command="checkerOutput" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('checkerOutput'))}</button>` : ''}
     <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>

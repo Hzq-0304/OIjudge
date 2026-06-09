@@ -566,6 +566,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.openSampleAnswer', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openSampleFileCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'answer');
     }),
+    vscode.commands.registerCommand('oijudger.copyTestcaseFreopenInput', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await copyTestcaseFreopenInputCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
+    }),
     vscode.commands.registerCommand('oijudger.openSampleOutput', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openSampleFileCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'output');
     }),
@@ -4502,6 +4505,37 @@ async function openSampleFileCommand(
   } catch {
     vscode.window.showErrorMessage(t('failedOpenSampleFile'));
   }
+}
+
+async function copyTestcaseFreopenInputCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    vscode.window.showWarningMessage(t('debug.copyFreopenInput.noSample'));
+    return;
+  }
+
+  const fileStatus = await getSampleFileStatus(context.workspaceFolder, context.sample);
+  if (fileStatus.inputMissing) {
+    vscode.window.showWarningMessage(t('debug.copyFreopenInput.inputMissing'));
+    return;
+  }
+
+  try {
+    const snippet = `freopen("${toCppStringLiteralPath(fileStatus.inputPath)}", "r", stdin);`;
+    await vscode.env.clipboard.writeText(snippet);
+    vscode.window.showInformationMessage(t('debug.copyFreopenInput.done'));
+  } catch {
+    vscode.window.showWarningMessage(t('debug.copyFreopenInput.failed'));
+  }
+}
+
+function toCppStringLiteralPath(filePath: string): string {
+  return filePath
+    .replace(/\\/gu, '/')
+    .replace(/"/gu, '\\"');
 }
 
 async function openSampleDiffCommand(problemId: string | undefined, sampleId: number | undefined): Promise<void> {

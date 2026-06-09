@@ -249,6 +249,25 @@ describe('package tree sample add menu', () => {
     }
   });
 
+  it('contributes copy freopen snippet menus for sample nodes without setter mode', () => {
+    const command = 'oijudger.copyTestcaseFreopenInput';
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const contextMenus = packageJson.contributes.menus['view/item/context'].filter((entry) =>
+      entry.command === command
+    );
+
+    expect(commands).toContain(command);
+    expect(packageJson.activationEvents).toContain(`onCommand:${command}`);
+    expect(contextMenus.length).toBeGreaterThan(0);
+    expect(contextMenus.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
+    expect(contextMenus.every((entry) => entry.when.includes('viewItem == sample'))).toBe(true);
+    expect(contextMenus.some((entry) => entry.group === 'inline@4')).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command,
+      when: 'false'
+    });
+  });
+
   it('contributes generated answer review and apply menus for pending samples', () => {
     const generatedCommands = [
       'oijudger.viewCurrentSampleAnswer',

@@ -119,7 +119,8 @@
     "onCommand:oijudger.addStressCaseToSamples",
     "onCommand:oijudger.rerunStressCase",
     "onCommand:oijudger.revealStressSessionFolder",
-    "onView:oijudger.stressRecordsView"
+    "onView:oijudger.stressRecordsView",
+    "onCommand:oijudger.copyTestcaseFreopenInput"
   ],
   "main": "./out/extension.js",
   "repository": {
@@ -613,6 +614,11 @@
         "command": "oijudger.revealStressSessionFolder",
         "title": "OI Judge: 打开所在文件夹/Reveal Session Folder",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "oijudger.copyTestcaseFreopenInput",
+        "title": "OI Judge: 复制 freopen 输入代码/Copy freopen Input Snippet",
+        "icon": "$(copy)"
       }
     ],
     "viewsContainers": {
@@ -1084,6 +1090,16 @@
           "command": "oijudger.revealStressSessionFolder",
           "when": "view == oijudger.stressRecordsView && (viewItem == stressSession || viewItem == stressFailedCase || viewItem == stressInvalidSession)",
           "group": "2_open@1"
+        },
+        {
+          "command": "oijudger.copyTestcaseFreopenInput",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "inline@4"
+        },
+        {
+          "command": "oijudger.copyTestcaseFreopenInput",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "3_run@4"
         }
       ],
       "commandPalette": [
@@ -1333,6 +1349,10 @@
         },
         {
           "command": "oijudger.revealStressSessionFolder",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.copyTestcaseFreopenInput",
           "when": "false"
         }
       ]
