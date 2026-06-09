@@ -38,6 +38,7 @@
     "onCommand:oijudger.addProblemFromFile",
     "onCommand:oijudger.importLegacyProblem",
     "onCommand:oijudger.addSampleFromSamplesGroup",
+    "onCommand:oijudger.generateSampleInput",
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
@@ -45,6 +46,7 @@
     "onCommand:oijudger.openSubtaskGeneratorInput",
     "onCommand:oijudger.clearSubtaskGeneratorInput",
     "onCommand:oijudger.runSubtask",
+    "onCommand:oijudger.generateSubtaskSampleInput",
     "onCommand:oijudger.moveSampleToSubtask",
     "onCommand:oijudger.addProblemSample",
     "onCommand:oijudger.addProblemSampleFromFiles",
@@ -200,6 +202,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "oijudger.generateSampleInput",
+        "title": "OI Judge: 生成样例输入/Generate Sample Input",
+        "icon": "$(wand)"
+      },
+      {
         "command": "oijudger.createSubtask",
         "title": "OI Judge: 新建 Subtask/Create Subtask",
         "icon": "$(new-folder)"
@@ -233,6 +240,11 @@
         "command": "oijudger.runSubtask",
         "title": "OI Judge: 评测 Subtask/Run Subtask",
         "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.generateSubtaskSampleInput",
+        "title": "OI Judge: 生成 Subtask 样例输入/Generate Subtask Sample Input",
+        "icon": "$(wand)"
       },
       {
         "command": "oijudger.moveSampleToSubtask",
@@ -642,6 +654,16 @@
           "group": "inline@2"
         },
         {
+          "command": "oijudger.generateSampleInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "inline@5"
+        },
+        {
+          "command": "oijudger.generateSampleInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "4_setter@1"
+        },
+        {
           "command": "oijudger.addProblemGeneratorInput",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
           "group": "inline@4"
@@ -697,6 +719,11 @@
           "group": "inline@3"
         },
         {
+          "command": "oijudger.generateSubtaskSampleInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "inline@4"
+        },
+        {
           "command": "oijudger.runSubtask",
           "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
           "group": "3_run"
@@ -740,6 +767,11 @@
           "command": "oijudger.clearSubtaskGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
           "group": "4_setter@6"
+        },
+        {
+          "command": "oijudger.generateSubtaskSampleInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@7"
         },
         {
           "command": "oijudger.runSamplesWithProgram",
@@ -902,6 +934,10 @@
           "when": "false"
         },
         {
+          "command": "oijudger.generateSampleInput",
+          "when": "false"
+        },
+        {
           "command": "oijudger.addProblemSample",
           "when": "false"
         },
@@ -931,6 +967,10 @@
         },
         {
           "command": "oijudger.runSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.generateSubtaskSampleInput",
           "when": "false"
         },
         {

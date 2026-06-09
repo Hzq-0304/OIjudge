@@ -380,6 +380,36 @@ export async function addProblemInputSample(
   return sample;
 }
 
+export async function writeProblemGeneratedInputSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  input: string,
+  subtaskId?: string
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return undefined;
+  }
+
+  const subtask = subtaskId ? problem.subtasks?.find((entry) => entry.id === subtaskId) : undefined;
+  if (subtaskId) {
+    if (!subtask) {
+      return undefined;
+    }
+  }
+
+  const sample = await addProblemInputSampleFile(workspaceFolder, problem, input);
+  problem.samples.push(sample);
+  if (subtask) {
+    subtask.sampleIds = [...subtask.sampleIds.filter((sampleId) => sampleId !== sample.id), sample.id];
+  }
+  problem.setter = upsertSetterDataCaseForSample(problem.setter, sample);
+  clearAllSubtaskResults(problem);
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
 export async function addExternalProblemSample(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -1390,14 +1420,15 @@ async function addProblemSampleFiles(
 
 async function addProblemInputSampleFile(
   workspaceFolder: vscode.WorkspaceFolder,
-  problem: ProblemConfig
+  problem: ProblemConfig,
+  input = ''
 ): Promise<SampleConfig> {
   await ensureProblemFolders(workspaceFolder, problem.id);
   const index = await getNextAvailableProblemSampleIndex(workspaceFolder, problem);
   const { inputRel, answerRel } = getProblemSampleFilePaths(problem.id, index);
   const outputRel = getProblemSampleOutputPaths(workspaceFolder, problem.id, index).outputRel;
 
-  await fs.writeFile(resolveWorkspacePath(workspaceFolder, inputRel), '', 'utf8');
+  await fs.writeFile(resolveWorkspacePath(workspaceFolder, inputRel), input, 'utf8');
 
   return {
     id: createSampleInternalId(index),

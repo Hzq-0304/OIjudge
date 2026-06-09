@@ -13,10 +13,12 @@ import {
   applyAllGeneratedAnswersForProblem,
   applyGeneratedAnswerForSample,
   createProblem,
+  createProblemSubtask,
   deleteGeneratedAnswerForSample,
   getProblem,
   getSampleGeneratedAnswerStatus,
   isAnswerFileEmpty,
+  writeProblemGeneratedInputSample,
   writeProblemsConfig,
   writeGeneratedAnswerForSample
 } from '../src/problems';
@@ -91,6 +93,43 @@ describe('problem sample files', () => {
     });
     await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''), 'utf8')).resolves.toBe('');
     await expect(fs.access(path.join(workspaceFolder.uri.fsPath, sample?.answer ?? ''))).rejects.toThrow();
+  });
+
+  it('writes generator stdout as a new sample input without creating output content or pending output', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+
+    const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, '3 4\n');
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(sample).toMatchObject({
+      index: 1,
+      id: 'sample-1',
+      input: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.in`,
+      answer: `.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.out`,
+      sourceType: 'managed'
+    });
+    await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''), 'utf8')).resolves.toBe('3 4\n');
+    await expect(fs.access(path.join(workspaceFolder.uri.fsPath, sample?.answer ?? ''))).rejects.toThrow();
+    expect(saved?.setter?.dataCases?.[0]).toMatchObject({
+      sampleId: 'sample-1',
+      sampleIndex: 1,
+      name: 'sample-1'
+    });
+    expect(saved?.setter?.generatedAnswers).toEqual({});
+  });
+
+  it('assigns generated input samples to a subtask when requested', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+
+    const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, 'subtask input\n', subtask?.id);
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(sample?.id).toBe('sample-1');
+    expect(saved?.subtasks?.[0].sampleIds).toEqual(['sample-1']);
+    await expect(fs.readFile(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''), 'utf8')).resolves.toBe('subtask input\n');
   });
 
   it('skips existing sample files before choosing the next index', async () => {

@@ -82,6 +82,7 @@ import {
   setProblemStdProgram,
   setProblemSubtaskGeneratorInput,
   setProblemSubtaskResult,
+  writeProblemGeneratedInputSample,
   writeGeneratedAnswerForSample,
   unbindProblemStatement,
   updateProblemChecker,
@@ -118,6 +119,12 @@ type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
 type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
 type GeneratorInputBindMode = 'create' | 'files';
 type GeneratorInputBindModeItem = vscode.QuickPickItem & { mode: GeneratorInputBindMode };
+type GeneratorInputChoice = {
+  label: string;
+  sourceLabel: string;
+  path: string;
+  source: 'global' | 'subtask';
+};
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -368,6 +375,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.addSampleFromSamplesGroup', async (problemArg?: unknown) => {
       await addSampleFromSamplesGroupCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
+    vscode.commands.registerCommand('oijudger.generateSampleInput', async (problemArg?: unknown) => {
+      await generateSampleInputCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.createSubtask', async (problemArg?: unknown) => {
       await createSubtaskCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
@@ -391,6 +401,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.runSubtask', async (problemArg?: unknown) => {
       await runSubtaskCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.generateSubtaskSampleInput', async (problemArg?: unknown) => {
+      await generateSubtaskSampleInputCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.addProblemSample', async (problemArg?: unknown) => {
       await addProblemSampleCommand(readProblemId(problemArg), false, sampleTreeProvider);
@@ -1427,6 +1440,289 @@ async function runSubtaskCommand(
       ? t('subtask.resultSummary', { passed, total })
       : t('subtask.resultFailedSummary', { passed, total })
   );
+}
+
+async function generateSampleInputCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  await generateInputFromGenerator(context.workspaceFolder, context.problem, undefined, sampleTreeProvider);
+}
+
+async function generateSubtaskSampleInputCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  await generateInputFromGenerator(context.workspaceFolder, context.problem, context.subtask, sampleTreeProvider);
+}
+
+async function generateInputFromGenerator(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number] | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const generator = subtask
+    ? await resolveGeneratorForSubtask(problem, subtask)
+    : await pickProblemGenerator(problem, t('generator.selectGenerator'));
+  if (!generator) {
+    const choice = await vscode.window.showWarningMessage(
+      t('generator.noGenerator'),
+      t('generator.add'),
+      t('cancel')
+    );
+    if (choice === t('generator.add')) {
+      await addProblemGeneratorCommand(problem.id, sampleTreeProvider);
+    }
+    return;
+  }
+  if (!generator.source) {
+    vscode.window.showWarningMessage(t('generator.sourceMissing'));
+    return;
+  }
+
+  const generatorPath = resolveProblemReferencePath(workspaceFolder, generator.source.path);
+  if (!(await exists(generatorPath))) {
+    vscode.window.showWarningMessage(`${t('generator.sourceMissing')}: ${generatorPath}`);
+    return;
+  }
+
+  const inputChoice = subtask?.generatorInput
+    ? createSubtaskGeneratorInputChoice(workspaceFolder, subtask)
+    : await pickGeneratorInputForRun(workspaceFolder, problem);
+  if (!inputChoice) {
+    return;
+  }
+  const inputPath = resolveProblemReferencePath(workspaceFolder, inputChoice.path);
+  if (!(await exists(inputPath))) {
+    vscode.window.showWarningMessage(`${t('generator.input.missing')}: ${inputPath}`);
+    return;
+  }
+
+  const generated = await compileAndRunGenerator(workspaceFolder, problem, generatorPath, inputPath, inputChoice);
+  if (generated === undefined) {
+    return;
+  }
+  if (!generated && !(await confirmEmptyGeneratorOutput())) {
+    return;
+  }
+
+  const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, generated, subtask?.id);
+  if (!sample) {
+    vscode.window.showWarningMessage(t('sampleNotFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  const inputFilePath = resolveWorkspacePath(workspaceFolder, sample.input);
+  output.appendLine(`Generated sample input path: ${inputFilePath}`);
+  output.appendLine('');
+  await openFileInEditor(inputFilePath, t('someSamplesMissing'));
+  vscode.window.showInformationMessage(t('generator.input.generated', { name: path.basename(sample.input) }));
+}
+
+async function resolveGeneratorForSubtask(
+  problem: ProblemConfig,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number]
+): Promise<ReturnType<typeof getProblemGenerators>[number] | undefined> {
+  const bound = getProblemGenerator(problem, subtask.generatorId);
+  if (bound) {
+    return bound;
+  }
+  if (subtask.generatorId) {
+    vscode.window.showWarningMessage(t('generator.missingReference'));
+  }
+  return pickProblemGenerator(problem, t('generator.selectGenerator'));
+}
+
+function createSubtaskGeneratorInputChoice(
+  workspaceFolder: vscode.WorkspaceFolder,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number]
+): GeneratorInputChoice | undefined {
+  if (!subtask.generatorInput) {
+    return undefined;
+  }
+  const inputPath = resolveProblemReferencePath(workspaceFolder, subtask.generatorInput);
+  return {
+    label: path.basename(inputPath),
+    sourceLabel: t('generator.input.subtaskSource', { subtask: subtask.name }),
+    path: subtask.generatorInput,
+    source: 'subtask'
+  };
+}
+
+async function pickGeneratorInputForRun(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<GeneratorInputChoice | undefined> {
+  const choices = createGeneratorInputChoices(workspaceFolder, problem);
+  const createChoice = {
+    label: t('generator.input.create'),
+    description: '',
+    detail: t('subtask.generatorInputCreateDescription'),
+    create: true as const
+  };
+  const picked = await vscode.window.showQuickPick(
+    [
+      ...choices.map((choice) => ({
+        label: choice.label,
+        description: choice.sourceLabel,
+        detail: choice.path,
+        choice
+      })),
+      createChoice
+    ],
+    {
+      title: t('generator.input.select'),
+      placeHolder: t('generator.input.select')
+    }
+  );
+  if (!picked) {
+    return undefined;
+  }
+  if ('create' in picked) {
+    await createGlobalGeneratorInputForRun(workspaceFolder, problem);
+    return undefined;
+  }
+  return picked.choice;
+}
+
+function createGeneratorInputChoices(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): GeneratorInputChoice[] {
+  const choices: GeneratorInputChoice[] = getProblemGeneratorInputs(problem)
+    .filter((input) => input.source?.path)
+    .map((input) => ({
+      label: input.name,
+      sourceLabel: t('generator.input.globalSource'),
+      path: input.source?.path ?? '',
+      source: 'global'
+    }));
+  for (const subtask of problem.subtasks ?? []) {
+    const choice = createSubtaskGeneratorInputChoice(workspaceFolder, subtask);
+    if (choice) {
+      choices.push(choice);
+    }
+  }
+  return choices;
+}
+
+async function createGlobalGeneratorInputForRun(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<void> {
+  const fileName = await vscode.window.showInputBox({
+    title: t('generator.input.createName'),
+    prompt: t('generator.input.createName'),
+    value: 'generator-input.txt',
+    validateInput: validateGeneratorInputFileName
+  });
+  if (!fileName) {
+    return;
+  }
+
+  const inputPath = path.join(workspaceFolder.uri.fsPath, '.vscode', '.OIJudge', 'generator-inputs', fileName);
+  await fs.mkdir(path.dirname(inputPath), { recursive: true });
+  if (!(await exists(inputPath))) {
+    await fs.writeFile(inputPath, '', 'utf8');
+  }
+  await addProblemGeneratorInputs(workspaceFolder, problem.id, [inputPath]);
+  await openFileInEditor(inputPath, t('generator.input.missing'));
+  vscode.window.showInformationMessage(t('generator.input.created'));
+}
+
+function validateGeneratorInputFileName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return t('invalidSampleName');
+  }
+  if (path.isAbsolute(trimmed) || trimmed.includes('..') || /[\\/]/u.test(trimmed)) {
+    return t('invalidSampleName');
+  }
+  return undefined;
+}
+
+async function compileAndRunGenerator(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  generatorPath: string,
+  inputPath: string,
+  inputChoice: GeneratorInputChoice
+): Promise<string | undefined> {
+  output.clear();
+  output.show(true);
+  output.appendLine('OI Judge Generator');
+  output.appendLine(`Generator source: ${generatorPath}`);
+  output.appendLine(`Generator input source: ${inputPath}`);
+  output.appendLine(`Generator input label: ${inputChoice.label}`);
+  output.appendLine(`Generator input origin: ${inputChoice.sourceLabel}`);
+
+  const compile = await compileSource(workspaceFolder, generatorPath, problem, output);
+  if (!compile) {
+    vscode.window.showErrorMessage(t('generator.compileFailed'));
+    return undefined;
+  }
+
+  const input = await fs.readFile(inputPath, 'utf8');
+  output.appendLine(`Run command: ${compile.executablePath}`);
+  let result: Awaited<ReturnType<typeof runProcess>>;
+  try {
+    result = await runProcess(
+      compile.executablePath,
+      [],
+      input,
+      path.dirname(generatorPath),
+      Math.max(problem.limits.timeMs, 1_000),
+      withCompilerPathEnv(compile.compilerCommand)
+    );
+  } catch (error) {
+    output.appendLine(`Generator failed to start: ${String(error)}`);
+    vscode.window.showErrorMessage(t('generator.runFailed'));
+    return undefined;
+  }
+
+  output.appendLine(`Exit code: ${result.code ?? 'null'}`);
+  output.appendLine(`Timed out: ${result.timedOut ? 'yes' : 'no'}`);
+  output.appendLine(`Run time: ${Math.round(result.timeMs)} ms`);
+  if (result.stderr.trim()) {
+    output.appendLine('stderr:');
+    output.appendLine(result.stderr.trimEnd());
+  }
+  if (result.timedOut || result.code !== 0) {
+    vscode.window.showErrorMessage(t(result.timedOut ? 'generator.runTimedOut' : 'generator.runFailed'));
+    return undefined;
+  }
+  return result.stdout;
+}
+
+async function confirmEmptyGeneratorOutput(): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    t('generator.input.emptyConfirm'),
+    { modal: true },
+    t('continueAction'),
+    t('cancel')
+  );
+  return choice === t('continueAction');
 }
 
 async function resolveSourceForRun(
