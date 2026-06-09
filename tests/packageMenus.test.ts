@@ -6,6 +6,7 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'packa
   activationEvents?: string[];
   contributes: {
     commands: Array<{ command: string; icon?: string }>;
+    views: Record<string, Array<{ id: string; name: string }>>;
     menus: {
       'view/title': Array<{ command: string; when: string; group: string }>;
       'view/item/context': Array<{ command: string; when: string; group: string }>;
@@ -210,6 +211,42 @@ describe('package tree sample add menu', () => {
       command: 'oijudger.runStressTest',
       when: 'false'
     });
+  });
+
+  it('contributes stress records view and management commands', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const stressView = packageJson.contributes.views.oijudger.find((entry) =>
+      entry.id === 'oijudger.stressRecordsView'
+    );
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const managementCommands = [
+      'oijudger.refreshStressRecords',
+      'oijudger.openStressFile',
+      'oijudger.addStressCaseToSamples',
+      'oijudger.rerunStressCase',
+      'oijudger.revealStressSessionFolder'
+    ];
+
+    expect(stressView?.name).toBe('对拍记录/Stress Records');
+    expect(commands).toEqual(expect.arrayContaining(managementCommands));
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
+      'onView:oijudger.stressRecordsView',
+      ...managementCommands.map((command) => `onCommand:${command}`)
+    ]));
+    expect(packageJson.contributes.menus['view/title']).toContainEqual({
+      command: 'oijudger.refreshStressRecords',
+      when: 'view == oijudger.stressRecordsView',
+      group: 'navigation@1'
+    });
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.addStressCaseToSamples')?.when)
+      .toBe('view == oijudger.stressRecordsView && viewItem == stressFailedCase');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.rerunStressCase')?.when)
+      .toBe('view == oijudger.stressRecordsView && viewItem == stressFailedCase');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.openStressFile')?.when)
+      .toContain('stressInputFile');
+    for (const command of managementCommands) {
+      expect(packageJson.contributes.menus.commandPalette).toContainEqual({ command, when: 'false' });
+    }
   });
 
   it('contributes generated answer review and apply menus for pending samples', () => {

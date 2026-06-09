@@ -113,7 +113,13 @@
     "onCommand:oijudger.setSampleName",
     "onCommand:oijudger.setSampleScore",
     "onCommand:oijudger.clearSampleScore",
-    "onCommand:oijudger.runStressTest"
+    "onCommand:oijudger.runStressTest",
+    "onCommand:oijudger.refreshStressRecords",
+    "onCommand:oijudger.openStressFile",
+    "onCommand:oijudger.addStressCaseToSamples",
+    "onCommand:oijudger.rerunStressCase",
+    "onCommand:oijudger.revealStressSessionFolder",
+    "onView:oijudger.stressRecordsView"
   ],
   "main": "./out/extension.js",
   "repository": {
@@ -582,6 +588,31 @@
         "command": "oijudger.setSampleName",
         "title": "OI Judge: 设置样例名称/Set Sample Name",
         "icon": "$(tag)"
+      },
+      {
+        "command": "oijudger.refreshStressRecords",
+        "title": "OI Judge: 刷新对拍记录/Refresh Stress Records",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "oijudger.openStressFile",
+        "title": "OI Judge: 打开对拍文件/Open Stress File",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.addStressCaseToSamples",
+        "title": "OI Judge: 加入样例/Add to Samples",
+        "icon": "$(add)"
+      },
+      {
+        "command": "oijudger.rerunStressCase",
+        "title": "OI Judge: 重新运行该用例/Rerun This Case",
+        "icon": "$(debug-rerun)"
+      },
+      {
+        "command": "oijudger.revealStressSessionFolder",
+        "title": "OI Judge: 打开所在文件夹/Reveal Session Folder",
+        "icon": "$(folder-opened)"
       }
     ],
     "viewsContainers": {
@@ -598,6 +629,10 @@
         {
           "id": "oijudger.samplesView",
           "name": "OI Judge"
+        },
+        {
+          "id": "oijudger.stressRecordsView",
+          "name": "对拍记录/Stress Records"
         }
       ]
     },
@@ -657,6 +692,11 @@
           "command": "oijudger.runStressTest",
           "when": "view == oijudger.samplesView",
           "group": "navigation@4"
+        },
+        {
+          "command": "oijudger.refreshStressRecords",
+          "when": "view == oijudger.stressRecordsView",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -1014,6 +1054,36 @@
           "command": "oijudger.runStressTest",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "3_run@3"
+        },
+        {
+          "command": "oijudger.openStressFile",
+          "when": "view == oijudger.stressRecordsView && (viewItem == stressInputFile || viewItem == stressStdOutputFile || viewItem == stressTestOutputFile || viewItem == stressSummaryFile || viewItem == stressGeneratorErrFile || viewItem == stressStdErrFile || viewItem == stressTestErrFile || viewItem == stressStandaloneStdout || viewItem == stressStandaloneStderr)",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.addStressCaseToSamples",
+          "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.rerunStressCase",
+          "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
+          "group": "inline@2"
+        },
+        {
+          "command": "oijudger.addStressCaseToSamples",
+          "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "oijudger.rerunStressCase",
+          "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "oijudger.revealStressSessionFolder",
+          "when": "view == oijudger.stressRecordsView && (viewItem == stressSession || viewItem == stressFailedCase || viewItem == stressInvalidSession)",
+          "group": "2_open@1"
         }
       ],
       "commandPalette": [
@@ -1243,6 +1313,26 @@
         },
         {
           "command": "oijudger.runStressTest",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.refreshStressRecords",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openStressFile",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addStressCaseToSamples",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.rerunStressCase",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.revealStressSessionFolder",
           "when": "false"
         }
       ]

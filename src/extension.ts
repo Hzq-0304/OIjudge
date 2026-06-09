@@ -42,6 +42,7 @@ import {
   batchAddExternalProblemSamples,
   addEmptyProblemSample,
   addExternalProblemSample,
+  addProblemSample,
   addProblemInputSample,
   addProblemFromSource,
   addProblemGenerator,
@@ -125,6 +126,15 @@ import {
   runStandaloneStressTest,
   StressTestMode
 } from './stressTest';
+import {
+  StressTreeNode,
+  StressRecordsTreeProvider
+} from './stressRecordsTreeProvider';
+import {
+  rerunStressFailedCase,
+  resolveStressFile,
+  stressFileExists
+} from './stressRecords';
 import { runProcess } from './runner';
 import { withCompilerPathEnv } from './compilerRuntime';
 import { CompileResult, FileIoConfig, IoMode, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
@@ -152,6 +162,7 @@ type AutoStdOutputContext =
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
+  const stressRecordsTreeProvider = new StressRecordsTreeProvider();
   statusBar.command = 'oijudger.refreshView';
   statusBar.show();
   void updateStatusBar();
@@ -160,6 +171,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.createTreeView('oijudger.samplesView', {
       treeDataProvider: sampleTreeProvider,
       dragAndDropController: sampleTreeProvider
+    }),
+    vscode.window.createTreeView('oijudger.stressRecordsView', {
+      treeDataProvider: stressRecordsTreeProvider
     }),
     statusBar,
     vscode.commands.registerCommand('oijudger.initProblem', async () => {
@@ -409,7 +423,22 @@ export function activate(context: vscode.ExtensionContext): void {
       await exportTestcasesCommand(readProblemId(problemArg));
     }),
     vscode.commands.registerCommand('oijudger.runStressTest', async (problemArg?: unknown) => {
-      await runStressTestCommand(readProblemId(problemArg));
+      await runStressTestCommand(readProblemId(problemArg), stressRecordsTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.refreshStressRecords', () => {
+      stressRecordsTreeProvider.refresh();
+    }),
+    vscode.commands.registerCommand('oijudger.openStressFile', async (node?: StressTreeNode) => {
+      await openStressFileCommand(node);
+    }),
+    vscode.commands.registerCommand('oijudger.addStressCaseToSamples', async (node?: StressTreeNode) => {
+      await addStressCaseToSamplesCommand(node, sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.rerunStressCase', async (node?: StressTreeNode) => {
+      await rerunStressCaseCommand(node);
+    }),
+    vscode.commands.registerCommand('oijudger.revealStressSessionFolder', async (node?: StressTreeNode) => {
+      await revealStressSessionFolderCommand(node);
     }),
     vscode.commands.registerCommand('oijudger.createSubtask', async (problemArg?: unknown) => {
       await createSubtaskCommand(readProblemId(problemArg), sampleTreeProvider);
@@ -1365,7 +1394,10 @@ function getTestcaseExportGeneratedMessage(format: TestcaseExportFormat | undefi
   return t('export.testcases.luoguGenerated');
 }
 
-async function runStressTestCommand(problemId: string | undefined): Promise<void> {
+async function runStressTestCommand(
+  problemId: string | undefined,
+  stressRecordsTreeProvider?: StressRecordsTreeProvider
+): Promise<void> {
   const context = await getProblemContext(problemId, true);
   if (!context) {
     return;
@@ -1390,6 +1422,7 @@ async function runStressTestCommand(problemId: string | undefined): Promise<void
       vscode.window.showWarningMessage(t('stress.compileFailed'));
       return;
     }
+    stressRecordsTreeProvider?.refresh();
     vscode.window.showInformationMessage(t('stress.standaloneFinished'));
     return;
   }
@@ -1424,6 +1457,7 @@ async function runStressTestCommand(problemId: string | undefined): Promise<void
     vscode.window.showWarningMessage(t('stress.compileFailed'));
     return;
   }
+  stressRecordsTreeProvider?.refresh();
   if (result.failedAt !== undefined) {
     vscode.window.showWarningMessage(t('stress.failed', { round: result.failedAt }));
     return;
@@ -1504,6 +1538,140 @@ async function pickCppFile(title: string): Promise<vscode.Uri | undefined> {
     }
   });
   return uris?.[0];
+}
+
+async function openStressFileCommand(node: StressTreeNode | undefined): Promise<void> {
+  if (!node?.filePath || !(await stressFileExists(node.filePath))) {
+    vscode.window.showWarningMessage(t('stress.fileMissing', { path: node?.filePath ?? '-' }));
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(node.filePath));
+  await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function revealStressSessionFolderCommand(node: StressTreeNode | undefined): Promise<void> {
+  const dir = node?.session?.dir;
+  if (!dir || !(await exists(dir))) {
+    vscode.window.showWarningMessage(t('stress.fileMissing', { path: dir ?? '-' }));
+    return;
+  }
+  await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(dir));
+}
+
+async function addStressCaseToSamplesCommand(
+  node: StressTreeNode | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  if (!node?.session?.failedCase) {
+    return;
+  }
+  const context = await getProblemContext(undefined, true);
+  if (!context) {
+    return;
+  }
+  const inputPath = resolveStressFile(node.session, node.session.failedCase.input);
+  const stdOutputPath = resolveStressFile(node.session, node.session.failedCase.stdOutput);
+  if (!inputPath || !(await stressFileExists(inputPath))) {
+    vscode.window.showWarningMessage(t('stress.fileMissing', { path: inputPath ?? '-' }));
+    return;
+  }
+  if (!stdOutputPath || !(await stressFileExists(stdOutputPath))) {
+    vscode.window.showWarningMessage(t('stress.addCase.missingStdOutput'));
+    return;
+  }
+
+  const target = await pickStressAddTarget(context.problem);
+  if (!target) {
+    return;
+  }
+  const sample = await addProblemSample(
+    context.workspaceFolder,
+    context.problem.id,
+    await fs.readFile(inputPath, 'utf8'),
+    await fs.readFile(stdOutputPath, 'utf8'),
+    { decodeEscapes: false }
+  );
+  if (!sample) {
+    vscode.window.showWarningMessage(t('sampleNotFound'));
+    return;
+  }
+  if (target.subtaskId) {
+    await moveProblemSampleToSubtask(context.workspaceFolder, context.problem.id, sample.id, target.subtaskId);
+  }
+  sampleTreeProvider.refresh();
+  const subtaskName = target.subtaskName;
+  vscode.window.showInformationMessage(
+    subtaskName
+      ? t('stress.addCase.doneSubtask', { subtask: subtaskName })
+      : t('stress.addCase.done')
+  );
+}
+
+async function rerunStressCaseCommand(node: StressTreeNode | undefined): Promise<void> {
+  if (!node?.session?.failedCase) {
+    return;
+  }
+  const context = await getProblemContext(undefined, true);
+  if (!context) {
+    return;
+  }
+  const inputPath = resolveStressFile(node.session, node.session.failedCase.input);
+  const stdOutputPath = resolveStressFile(node.session, node.session.failedCase.stdOutput);
+  if (!inputPath || !(await stressFileExists(inputPath))) {
+    vscode.window.showWarningMessage(t('stress.fileMissing', { path: inputPath ?? '-' }));
+    return;
+  }
+  if (!stdOutputPath || !(await stressFileExists(stdOutputPath))) {
+    vscode.window.showWarningMessage(t('stress.addCase.missingStdOutput'));
+    return;
+  }
+  const solution = await pickStressSolutionFile();
+  if (!solution) {
+    return;
+  }
+  const result = await rerunStressFailedCase({
+    workspaceFolder: context.workspaceFolder,
+    config: context.problem,
+    session: node.session,
+    failedCase: node.session.failedCase,
+    solutionPath: solution.fsPath,
+    output
+  });
+  if (!result) {
+    vscode.window.showWarningMessage(t('stress.compileFailed'));
+    return;
+  }
+  vscode.window.showInformationMessage(
+    result.status === 'Accepted'
+      ? t('stress.rerun.doneAccepted')
+      : t('stress.rerun.doneFailed', { status: result.status })
+  );
+}
+
+async function pickStressAddTarget(problem: ProblemConfig): Promise<{
+  subtaskId?: string;
+  subtaskName?: string;
+} | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    [
+      {
+        label: t('stress.addCase.target.root')
+      },
+      ...(problem.subtasks ?? []).map((subtask) => ({
+        label: subtask.name,
+        description: subtask.id,
+        subtaskId: subtask.id,
+        subtaskName: subtask.name
+      }))
+    ],
+    {
+      title: t('stress.addCase.target.select'),
+      placeHolder: t('stress.addCase.target.select')
+    }
+  );
+  return picked
+    ? { subtaskId: 'subtaskId' in picked ? picked.subtaskId : undefined, subtaskName: 'subtaskName' in picked ? picked.subtaskName : undefined }
+    : undefined;
 }
 
 function formatExportWarning(warning: string): string {
