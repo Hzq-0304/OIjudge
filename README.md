@@ -1,5 +1,11 @@
 # OI Judge
 
+<p align="center">
+  <a href="https://github.com/Hzq-0304/OIjudge/blob/main/README.zh-CN.md">
+    <img src="https://img.shields.io/badge/中文介绍-点击查看-blue?style=for-the-badge" alt="中文介绍">
+  </a>
+</p>
+
 OI Judge is a VSCode extension for local OI-style sample judging.
 
 Marketplace extension ID: `Hzq.oijudge`

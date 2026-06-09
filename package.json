@@ -2,7 +2,7 @@
   "name": "oijudge",
   "displayName": "OI Judge",
   "description": "Local OI sample judge for VS Code with custom checkers, File IO, and runtime diagnostics.",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "publisher": "Hzq",
   "icon": "resources/icons/icon.png",
   "engines": {
