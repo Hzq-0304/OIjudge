@@ -45,6 +45,7 @@ export type SubtaskConfig = {
   id: string;
   name: string;
   sampleIds: string[];
+  generatorId?: string;
   generatorInput?: string;
   lastResult?: SubtaskRunResult;
 };
@@ -103,7 +104,7 @@ export interface SetterGeneratorConfig {
 export interface SetterGeneratorItem {
   id: string;
   name: string;
-  source?: string;
+  source?: ProblemSource;
   command?: string;
   args?: string[];
 }

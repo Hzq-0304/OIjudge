@@ -94,9 +94,9 @@ describe('sample tree add entry', () => {
 
     expect(setterCommands).toContain('oijudger.addSetterInputSample');
     expect(setterCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
-    expect(setterCommands).toContain('oijudger.selectGeneratorProgram');
-    expect(setterCommands).toContain('oijudger.openGeneratorProgram');
-    expect(setterCommands).toContain('oijudger.clearGeneratorProgram');
+    expect(setterCommands).toContain('oijudger.addProblemGenerator');
+    expect(setterCommands).toContain('oijudger.openProblemGenerator');
+    expect(setterCommands).toContain('oijudger.removeProblemGenerator');
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).toContain('oijudger.setSampleName');
   });

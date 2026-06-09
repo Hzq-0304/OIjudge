@@ -8,7 +8,8 @@ import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErr
 import {
   ensureProblemsConfig,
   getDefaultProblemSource,
-  getProblemGeneratorProgram,
+  getProblemGenerator,
+  getProblemGenerators,
   getProblemReportPath,
   getSampleGeneratedAnswerStatus,
   getSubtaskSamples,
@@ -445,12 +446,21 @@ async function createSubtaskNode(
 ): Promise<TreeNode> {
   const result = subtask.lastResult;
   const generatorInput = await getSubtaskGeneratorInputStatus(workspaceFolder, subtask);
+  const generator = getProblemGenerator(problem, subtask.generatorId);
+  const missingGenerator = Boolean(subtask.generatorId && !generator);
   const resultDescription = result?.status === 'passed'
     ? '✓'
     : result?.status === 'failed'
       ? `✗ ${result.passed}/${result.total}`
       : undefined;
-  const description = generatorInput?.description ?? resultDescription;
+  const generatorDescription = isSetterModeEnabled()
+    ? missingGenerator
+      ? t('generator.missing')
+      : generator
+        ? t('subtask.generator.boundShort', { name: generator.name })
+        : t('generator.none')
+    : undefined;
+  const description = generatorDescription ?? generatorInput?.description ?? resultDescription;
   const contextValue = result?.status === 'passed'
     ? 'subtaskPassed'
     : result?.status === 'failed'
@@ -466,10 +476,12 @@ async function createSubtaskNode(
     kind: 'subtask',
     label: subtask.name,
     description,
-    tooltip: generatorInput?.tooltip
-      ? `${generatorInput.tooltip}\n${resultTooltip}`
-      : resultTooltip,
-    icon: generatorInput?.missing
+    tooltip: missingGenerator
+      ? `${t('generator.missing')}: ${subtask.generatorId}\n${t('generator.missingReference')}\n${resultTooltip}`
+      : generatorInput?.tooltip
+        ? `${generatorInput.tooltip}\n${resultTooltip}`
+        : resultTooltip,
+    icon: missingGenerator || generatorInput?.missing
       ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
       : new vscode.ThemeIcon(result?.status === 'passed' ? 'pass-filled' : result?.status === 'failed' ? 'error' : 'symbol-namespace'),
     collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
@@ -717,35 +729,41 @@ function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: Pro
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),
     actionNode(t('openStd'), 'oijudger.openStdProgram', 'go-to-file', problem.id),
     actionNode(t('clearStd'), 'oijudger.clearStdProgram', 'clear-all', problem.id),
-    actionNode(t('selectGenerator'), 'oijudger.selectGeneratorProgram', 'file-code', problem.id),
-    actionNode(t('openGenerator'), 'oijudger.openGeneratorProgram', 'go-to-file', problem.id),
-    actionNode(t('clearGenerator'), 'oijudger.clearGeneratorProgram', 'clear-all', problem.id),
+    actionNode(t('generator.add'), 'oijudger.addProblemGenerator', 'file-code', problem.id),
+    actionNode(t('generator.open'), 'oijudger.openProblemGenerator', 'go-to-file', problem.id),
+    actionNode(t('generator.remove'), 'oijudger.removeProblemGenerator', 'clear-all', problem.id),
     infoNode(t('generatorGenerationNotImplemented'), 'info'),
     actionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problem.id)
   ];
 }
 
 function createGeneratorInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode {
-  const generator = getProblemGeneratorProgram(problem);
-  const generatorPath = generator ? resolveProblemReferencePath(workspaceFolder, generator) : undefined;
-  const missing = Boolean(generatorPath && !existsSync(generatorPath));
-  const label = generatorPath
-    ? `${t('generatorLabel')}: ${path.basename(generatorPath)}`
-    : `${t('generatorLabel')}: ${t('generatorNotSet')}`;
+  const generators = getProblemGenerators(problem);
+  const missing = generators.some((generator) => (
+    !generator.source || !existsSync(resolveProblemReferencePath(workspaceFolder, generator.source.path))
+  ));
+  const label = generators.length > 0
+    ? `${t('generatorLabel')}: ${generators.map((generator) => generator.name).join(', ')}`
+    : `${t('generatorLabel')}: ${t('generator.none')}`;
   return {
     kind: 'info',
     label,
     description: missing ? t('statusMissing') : undefined,
-    tooltip: generatorPath
-      ? `${generatorPath}\n${t('generatorGenerationNotImplemented')}`
+    tooltip: generators.length > 0
+      ? `${generators.map((generator) => {
+        const generatorPath = generator.source
+          ? resolveProblemReferencePath(workspaceFolder, generator.source.path)
+          : t('generator.missing');
+        return `${generator.name}: ${generatorPath}`;
+      }).join('\n')}\n${t('generatorGenerationNotImplemented')}`
       : t('generatorGenerationNotImplemented'),
     icon: missing
       ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
       : new vscode.ThemeIcon('file-code'),
     problemId: problem.id,
     command: {
-      command: generatorPath ? 'oijudger.openGeneratorProgram' : 'oijudger.selectGeneratorProgram',
-      title: generatorPath ? t('openGenerator') : t('selectGenerator'),
+      command: generators.length > 0 ? 'oijudger.openProblemGenerator' : 'oijudger.addProblemGenerator',
+      title: generators.length > 0 ? t('generator.open') : t('generator.add'),
       arguments: [problem.id]
     }
   };

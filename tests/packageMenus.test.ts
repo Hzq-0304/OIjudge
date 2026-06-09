@@ -43,9 +43,9 @@ describe('package tree sample add menu', () => {
         'oijudger.generateSampleAnswerWithStd',
         'oijudger.generateAllSampleAnswersWithStd',
         'oijudger.applyAllGeneratedSampleAnswers',
-        'oijudger.selectGeneratorProgram',
-        'oijudger.openGeneratorProgram',
-        'oijudger.clearGeneratorProgram',
+        'oijudger.addProblemGenerator',
+        'oijudger.openProblemGenerator',
+        'oijudger.removeProblemGenerator',
         'oijudger.addSetterInputSample'
       ].includes(entry.command)
     );
@@ -59,9 +59,9 @@ describe('package tree sample add menu', () => {
       'oijudger.applyGeneratedSampleAnswer',
       'oijudger.deleteGeneratedSampleAnswer',
       'oijudger.applyAllGeneratedSampleAnswers',
-      'oijudger.selectGeneratorProgram',
-      'oijudger.openGeneratorProgram',
-      'oijudger.clearGeneratorProgram',
+      'oijudger.addProblemGenerator',
+      'oijudger.openProblemGenerator',
+      'oijudger.removeProblemGenerator',
       'oijudger.addSetterInputSample'
     ]));
     expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
@@ -73,16 +73,16 @@ describe('package tree sample add menu', () => {
       'onCommand:oijudger.applyGeneratedSampleAnswer',
       'onCommand:oijudger.deleteGeneratedSampleAnswer',
       'onCommand:oijudger.applyAllGeneratedSampleAnswers',
-      'onCommand:oijudger.selectGeneratorProgram',
-      'onCommand:oijudger.openGeneratorProgram',
-      'onCommand:oijudger.clearGeneratorProgram',
+      'onCommand:oijudger.addProblemGenerator',
+      'onCommand:oijudger.openProblemGenerator',
+      'onCommand:oijudger.removeProblemGenerator',
       'onCommand:oijudger.addSetterInputSample'
     ]));
     expect(menuCommands).toHaveLength(6);
     expect(menuCommands.every((entry) => entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
     expect(menuCommands.find((entry) => entry.command === 'oijudger.generateSampleAnswerWithStd')?.when).toContain('viewItem == sample');
     expect(menuCommands.find((entry) => entry.command === 'oijudger.applyAllGeneratedSampleAnswers')?.when).toContain('samplesGroupWithGeneratedOutputs');
-    expect(menuCommands.find((entry) => entry.command === 'oijudger.selectGeneratorProgram')?.when).toContain('viewItem == oijudgerProblemNormal');
+    expect(menuCommands.find((entry) => entry.command === 'oijudger.addProblemGenerator')?.when).toContain('viewItem == oijudgerProblemNormal');
     expect(packageJson.contributes.menus.commandPalette).toContainEqual({
       command: 'oijudger.addSetterInputSample',
       when: 'false'
@@ -120,6 +120,9 @@ describe('package tree sample add menu', () => {
       'oijudger.bindSubtaskGeneratorInput',
       'oijudger.openSubtaskGeneratorInput',
       'oijudger.clearSubtaskGeneratorInput',
+      'oijudger.bindSubtaskGenerator',
+      'oijudger.openSubtaskGenerator',
+      'oijudger.clearSubtaskGenerator',
       'oijudger.runSubtask',
       'oijudger.moveSampleToSubtask'
     ]));
@@ -130,6 +133,9 @@ describe('package tree sample add menu', () => {
       'onCommand:oijudger.bindSubtaskGeneratorInput',
       'onCommand:oijudger.openSubtaskGeneratorInput',
       'onCommand:oijudger.clearSubtaskGeneratorInput',
+      'onCommand:oijudger.bindSubtaskGenerator',
+      'onCommand:oijudger.openSubtaskGenerator',
+      'onCommand:oijudger.clearSubtaskGenerator',
       'onCommand:oijudger.runSubtask',
       'onCommand:oijudger.moveSampleToSubtask'
     ]));
@@ -147,7 +153,10 @@ describe('package tree sample add menu', () => {
     for (const command of [
       'oijudger.bindSubtaskGeneratorInput',
       'oijudger.openSubtaskGeneratorInput',
-      'oijudger.clearSubtaskGeneratorInput'
+      'oijudger.clearSubtaskGeneratorInput',
+      'oijudger.bindSubtaskGenerator',
+      'oijudger.openSubtaskGenerator',
+      'oijudger.clearSubtaskGenerator'
     ]) {
       const menu = contextMenus.find((entry) => entry.command === command);
       expect(menu?.when).toContain('view == oijudger.samplesView');
@@ -166,6 +175,9 @@ describe('package tree sample add menu', () => {
       'oijudger.bindSubtaskGeneratorInput',
       'oijudger.openSubtaskGeneratorInput',
       'oijudger.clearSubtaskGeneratorInput',
+      'oijudger.bindSubtaskGenerator',
+      'oijudger.openSubtaskGenerator',
+      'oijudger.clearSubtaskGenerator',
       'oijudger.runSubtask',
       'oijudger.moveSampleToSubtask'
     ]) {

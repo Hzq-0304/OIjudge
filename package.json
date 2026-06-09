@@ -91,9 +91,15 @@
     "onCommand:oijudger.applyGeneratedSampleAnswer",
     "onCommand:oijudger.deleteGeneratedSampleAnswer",
     "onCommand:oijudger.applyAllGeneratedSampleAnswers",
+    "onCommand:oijudger.addProblemGenerator",
+    "onCommand:oijudger.openProblemGenerator",
+    "onCommand:oijudger.removeProblemGenerator",
     "onCommand:oijudger.selectGeneratorProgram",
     "onCommand:oijudger.openGeneratorProgram",
     "onCommand:oijudger.clearGeneratorProgram",
+    "onCommand:oijudger.bindSubtaskGenerator",
+    "onCommand:oijudger.openSubtaskGenerator",
+    "onCommand:oijudger.clearSubtaskGenerator",
     "onCommand:oijudger.addSetterInputSample",
     "onCommand:oijudger.setSampleName"
   ],
@@ -451,6 +457,36 @@
         "icon": "$(check-all)"
       },
       {
+        "command": "oijudger.addProblemGenerator",
+        "title": "OI Judge: Add Generator",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "oijudger.openProblemGenerator",
+        "title": "OI Judge: Open Generator",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.removeProblemGenerator",
+        "title": "OI Judge: Remove Generator",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "oijudger.bindSubtaskGenerator",
+        "title": "OI Judge: Bind Generator",
+        "icon": "$(link)"
+      },
+      {
+        "command": "oijudger.openSubtaskGenerator",
+        "title": "OI Judge: Open Bound Generator",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.clearSubtaskGenerator",
+        "title": "OI Judge: Clear Generator Binding",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "oijudger.selectGeneratorProgram",
         "title": "OI Judge: 选择数据生成器/Select Generator",
         "icon": "$(file-code)"
@@ -628,6 +664,21 @@
           "group": "4_setter@3"
         },
         {
+          "command": "oijudger.bindSubtaskGenerator",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@4"
+        },
+        {
+          "command": "oijudger.openSubtaskGenerator",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@5"
+        },
+        {
+          "command": "oijudger.clearSubtaskGenerator",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@6"
+        },
+        {
           "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "3_run"
@@ -763,17 +814,17 @@
           "group": "4_setter@4"
         },
         {
-          "command": "oijudger.selectGeneratorProgram",
+          "command": "oijudger.addProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@5"
         },
         {
-          "command": "oijudger.openGeneratorProgram",
+          "command": "oijudger.openProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@6"
         },
         {
-          "command": "oijudger.clearGeneratorProgram",
+          "command": "oijudger.removeProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@7"
         }
@@ -920,6 +971,18 @@
           "when": "false"
         },
         {
+          "command": "oijudger.addProblemGenerator",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openProblemGenerator",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.removeProblemGenerator",
+          "when": "false"
+        },
+        {
           "command": "oijudger.selectGeneratorProgram",
           "when": "false"
         },
@@ -929,6 +992,18 @@
         },
         {
           "command": "oijudger.clearGeneratorProgram",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.bindSubtaskGenerator",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSubtaskGenerator",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.clearSubtaskGenerator",
           "when": "false"
         },
         {
