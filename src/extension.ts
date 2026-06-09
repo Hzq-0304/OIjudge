@@ -78,11 +78,15 @@ import {
   resolveProblemReferencePath,
   renameProblemSample,
   saveProblemReport,
+  clearProblemSampleScore,
   setProblemDefaultSource,
+  setProblemSampleScore,
+  setProblemSubtaskScoringMode,
   setProblemSubtaskGenerator,
   setProblemStdProgram,
   setProblemSubtaskGeneratorInput,
   setProblemSubtaskResult,
+  setProblemTotalScore,
   toggleProblemAutoGenerateOutputFromStd,
   writeProblemGeneratedInputSample,
   writeGeneratedAnswerForSample,
@@ -106,6 +110,7 @@ import {
   resolveSamplePath
 } from './sampleFiles';
 import { SampleTreeProvider } from './sampleTreeProvider';
+import { calculateEffectiveSampleScores, getProblemTotalScore } from './scoring';
 import { isSetterModeEnabled, validateSetterSampleName } from './setterMode';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
 import { runProcess } from './runner';
@@ -385,6 +390,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.generateSampleInput', async (problemArg?: unknown) => {
       await generateSampleInputCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
+    vscode.commands.registerCommand('oijudger.setProblemTotalScore', async (problemArg?: unknown) => {
+      await setProblemTotalScoreCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.createSubtask', async (problemArg?: unknown) => {
       await createSubtaskCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
@@ -411,6 +419,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.generateSubtaskSampleInput', async (problemArg?: unknown) => {
       await generateSubtaskSampleInputCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.setSubtaskScoringMode', async (problemArg?: unknown) => {
+      await setSubtaskScoringModeCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.addProblemSample', async (problemArg?: unknown) => {
       await addProblemSampleCommand(readProblemId(problemArg), false, sampleTreeProvider);
@@ -603,6 +614,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.setSampleName', async (problemArg?: unknown, sampleArg?: unknown) => {
       await setSampleNameCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.setSampleScore', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await setSampleScoreCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.clearSampleScore', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await clearSampleScoreCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.deleteSample', async (problemArg?: unknown, sampleArg?: unknown) => {
       await deleteSampleCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
@@ -1165,6 +1182,29 @@ async function createSubtaskCommand(
   vscode.window.showInformationMessage(t('subtask.created', { name: subtask.name }));
 }
 
+async function setProblemTotalScoreCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const value = await vscode.window.showInputBox({
+    title: t('score.setTotal'),
+    prompt: t('score.setTotal.prompt'),
+    value: String(getProblemTotalScore(context.problem)),
+    validateInput: validatePositiveScoreInput
+  });
+  if (value === undefined) {
+    return;
+  }
+
+  await setProblemTotalScore(context.workspaceFolder, context.problem.id, Number(value.trim()));
+  sampleTreeProvider.refresh();
+}
+
 async function renameSubtaskCommand(
   problemId: string | undefined,
   subtaskId: string | undefined,
@@ -1222,6 +1262,42 @@ async function deleteSubtaskCommand(
 
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(t('subtask.deleted'));
+}
+
+async function setSubtaskScoringModeCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    [
+      {
+        label: t('score.scoringMode.sum'),
+        description: t('score.scoringMode.sumDescription'),
+        scoringMode: 'sum' as const
+      },
+      {
+        label: t('score.scoringMode.bundle'),
+        description: t('score.scoringMode.bundleDescription'),
+        scoringMode: 'bundle' as const
+      }
+    ],
+    {
+      title: t('score.subtask.setScoringMode'),
+      placeHolder: t('score.scoringMode')
+    }
+  );
+  if (!picked) {
+    return;
+  }
+
+  await setProblemSubtaskScoringMode(context.workspaceFolder, context.problem.id, context.subtask.id, picked.scoringMode);
+  sampleTreeProvider.refresh();
 }
 
 async function bindSubtaskGeneratorInputCommand(
@@ -3756,6 +3832,65 @@ async function setSampleNameCommand(
       ? t('sampleRenamed', { name: result.sample.name })
       : t('sampleNameUpdated', { name: result.sample.name })
   );
+}
+
+async function setSampleScoreCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  const effective = calculateEffectiveSampleScores(context.problem);
+  const current = context.sample.score ?? effective.sampleScores.get(context.sample.id)?.score ?? 0;
+  const value = await vscode.window.showInputBox({
+    title: t('score.setSample'),
+    prompt: t('score.sample.prompt'),
+    value: String(current),
+    validateInput: validateNonNegativeScoreInput
+  });
+  if (value === undefined) {
+    return;
+  }
+
+  await setProblemSampleScore(context.workspaceFolder, context.problem.id, context.sample.id, Number(value.trim()));
+  const updated = await getProblem(context.workspaceFolder, context.problem.id);
+  const errors = updated ? calculateEffectiveSampleScores(updated).errors : [];
+  sampleTreeProvider.refresh();
+  if (errors.includes('score.manualTotalExceeded')) {
+    vscode.window.showWarningMessage(t('score.manualTotalExceeded'));
+  }
+}
+
+async function clearSampleScoreCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
+  }
+
+  await clearProblemSampleScore(context.workspaceFolder, context.problem.id, context.sample.id);
+  sampleTreeProvider.refresh();
+}
+
+function validatePositiveScoreInput(value: string): string | undefined {
+  const score = Number(value.trim());
+  return Number.isInteger(score) && score > 0
+    ? undefined
+    : t('score.invalidPositiveInteger');
+}
+
+function validateNonNegativeScoreInput(value: string): string | undefined {
+  const score = Number(value.trim());
+  return Number.isInteger(score) && score >= 0
+    ? undefined
+    : t('score.invalidNonNegativeInteger');
 }
 
 async function pickStatementFile(): Promise<vscode.Uri | undefined> {

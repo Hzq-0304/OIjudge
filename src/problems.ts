@@ -577,6 +577,72 @@ export async function updateProblemFileIo(
   });
 }
 
+export async function setProblemTotalScore(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  total: number
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    problem.score = {
+      ...(problem.score ?? {}),
+      total
+    };
+  });
+}
+
+export async function setProblemSampleScore(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: string,
+  score: number
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sample = problem?.samples.find((entry) => entry.id === sampleId);
+  if (!problem || !sample) {
+    return undefined;
+  }
+
+  sample.score = score;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
+export async function clearProblemSampleScore(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleId: string
+): Promise<SampleConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const sample = problem?.samples.find((entry) => entry.id === sampleId);
+  if (!problem || !sample) {
+    return undefined;
+  }
+
+  delete sample.score;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return sample;
+}
+
+export async function setProblemSubtaskScoringMode(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string,
+  scoringMode: SubtaskConfig['scoringMode']
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  subtask.scoringMode = scoringMode;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
 export async function getProblem(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string
@@ -1633,6 +1699,7 @@ function normalizeProblemSubtasks(problem: ProblemConfig): SubtaskConfig[] {
       generatorInput: typeof subtask.generatorInput === 'string' && subtask.generatorInput.trim()
         ? subtask.generatorInput.trim()
         : undefined,
+      scoringMode: subtask.scoringMode === 'bundle' ? 'bundle' : subtask.scoringMode === 'sum' ? 'sum' : undefined,
       lastResult: normalizeSubtaskResult(subtask.lastResult)
     };
   });

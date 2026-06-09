@@ -147,6 +147,28 @@ describe('package tree sample add menu', () => {
     }
   });
 
+  it('contributes custom scoring menus without requiring setter mode', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const scoringCommands = [
+      'oijudger.setProblemTotalScore',
+      'oijudger.setSampleScore',
+      'oijudger.clearSampleScore',
+      'oijudger.setSubtaskScoringMode'
+    ];
+
+    expect(commands).toEqual(expect.arrayContaining(scoringCommands));
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining(
+      scoringCommands.map((command) => `onCommand:${command}`)
+    ));
+    for (const command of scoringCommands) {
+      const entries = contextMenus.filter((entry) => entry.command === command);
+      expect(entries.length).toBeGreaterThan(0);
+      expect(entries.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
+      expect(packageJson.contributes.menus.commandPalette).toContainEqual({ command, when: 'false' });
+    }
+  });
+
   it('contributes generated answer review and apply menus for pending samples', () => {
     const generatedCommands = [
       'oijudger.viewCurrentSampleAnswer',

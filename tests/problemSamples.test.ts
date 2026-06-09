@@ -12,12 +12,16 @@ import {
   addProblemSample,
   applyAllGeneratedAnswersForProblem,
   applyGeneratedAnswerForSample,
+  clearProblemSampleScore,
   createProblem,
   createProblemSubtask,
   deleteGeneratedAnswerForSample,
   getProblem,
   getSampleGeneratedAnswerStatus,
   isAnswerFileEmpty,
+  setProblemSampleScore,
+  setProblemSubtaskScoringMode,
+  setProblemTotalScore,
   writeProblemGeneratedInputSample,
   writeProblemsConfig,
   writeGeneratedAnswerForSample
@@ -58,6 +62,25 @@ describe('problem sample files', () => {
     expect(sample?.answer).toBe(`.vscode/.OIJudge/problems/${problem.id}/samples/sample-1.out`);
     expect(saved?.samples[0].input.endsWith('.in')).toBe(true);
     expect(saved?.samples[0].answer.endsWith('.out')).toBe(true);
+  });
+
+  it('stores custom total, sample, and subtask scoring settings', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+
+    await setProblemTotalScore(workspaceFolder, problem.id, 150);
+    await setProblemSampleScore(workspaceFolder, problem.id, sample?.id ?? '', 30);
+    await setProblemSubtaskScoringMode(workspaceFolder, problem.id, subtask?.id ?? '', 'bundle');
+    const scored = await getProblem(workspaceFolder, problem.id);
+    await clearProblemSampleScore(workspaceFolder, problem.id, sample?.id ?? '');
+    const cleared = await getProblem(workspaceFolder, problem.id);
+
+    expect(scored?.score?.total).toBe(150);
+    expect(scored?.samples[0].score).toBe(30);
+    expect(scored?.subtasks?.find((entry) => entry.id === subtask?.id)?.scoringMode).toBe('bundle');
+    expect(cleared?.samples[0].score).toBeUndefined();
   });
 
   it('uses .out for legacy single-problem managed samples too', async () => {

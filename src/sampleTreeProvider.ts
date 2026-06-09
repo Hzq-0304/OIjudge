@@ -21,8 +21,9 @@ import {
   resolveProblemReferencePath
 } from './problems';
 import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
+import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { isSetterModeEnabled } from './setterMode';
-import { CheckerType, JudgeMode, JudgeReport, ProblemConfig, SampleReport, SampleStatus } from './types';
+import { CheckerType, JudgeMode, JudgeReport, ProblemConfig, SampleReport, SampleStatus, SubtaskConfig } from './types';
 
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'subtask' | 'action';
 type NodeGroup =
@@ -505,6 +506,8 @@ async function createSubtaskNode(
   subtask: NonNullable<ProblemConfig['subtasks']>[number]
 ): Promise<TreeNode> {
   const result = subtask.lastResult;
+  const report = await readReport(workspaceFolder, problem.id);
+  const subtaskScore = report ? calculateJudgeScore(problem, report.samples).subtaskScores.get(subtask.id) : undefined;
   const generatorInput = await getSubtaskGeneratorInputStatus(workspaceFolder, subtask);
   const generator = getProblemGenerator(problem, subtask.generatorId);
   const missingGenerator = Boolean(subtask.generatorId && !generator);
@@ -520,7 +523,10 @@ async function createSubtaskNode(
         ? t('subtask.generator.boundShort', { name: generator.name })
         : t('generator.none')
     : undefined;
-  const description = generatorDescription ?? generatorInput?.description ?? resultDescription;
+  const scoreDescription = subtaskScore
+    ? `${t('score.sampleDisplay', { earned: subtaskScore.earned, total: subtaskScore.total })}${subtask.scoringMode === 'bundle' ? ` ${t('score.scoringMode.bundleShort')}` : ''}`
+    : undefined;
+  const description = generatorDescription ?? generatorInput?.description ?? scoreDescription ?? resultDescription;
   const contextValue = result?.status === 'passed'
     ? 'subtaskPassed'
     : result?.status === 'failed'
@@ -536,11 +542,7 @@ async function createSubtaskNode(
     kind: 'subtask',
     label: subtask.name,
     description,
-    tooltip: missingGenerator
-      ? `${t('generator.missing')}: ${subtask.generatorId}\n${t('generator.missingReference')}\n${resultTooltip}`
-      : generatorInput?.tooltip
-        ? `${generatorInput.tooltip}\n${resultTooltip}`
-        : resultTooltip,
+    tooltip: createSubtaskTooltip(subtask, resultTooltip, subtaskScore, missingGenerator, generatorInput),
     icon: missingGenerator || generatorInput?.missing
       ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
       : new vscode.ThemeIcon(result?.status === 'passed' ? 'pass-filled' : result?.status === 'failed' ? 'error' : 'symbol-namespace'),
@@ -550,6 +552,26 @@ async function createSubtaskNode(
     subtaskId: subtask.id,
     contextValue
   };
+}
+
+function createSubtaskTooltip(
+  subtask: SubtaskConfig,
+  resultTooltip: string,
+  subtaskScore: { earned: number; total: number } | undefined,
+  missingGenerator: boolean,
+  generatorInput: { tooltip: string } | undefined
+): string {
+  const lines = [
+    `${t('score.scoringMode')}: ${t(subtask.scoringMode === 'bundle' ? 'score.scoringMode.bundle' : 'score.scoringMode.sum')}`,
+    ...(subtaskScore ? [t('score.display', { earned: subtaskScore.earned, total: subtaskScore.total })] : []),
+    resultTooltip
+  ];
+  if (missingGenerator) {
+    lines.unshift(`${t('generator.missing')}: ${subtask.generatorId}`, t('generator.missingReference'));
+  } else if (generatorInput?.tooltip) {
+    lines.unshift(generatorInput.tooltip);
+  }
+  return lines.join('\n');
 }
 
 async function getSubtaskGeneratorInputStatus(
@@ -582,6 +604,7 @@ async function createSampleNodes(
   }
 
   const report = await readReport(workspaceFolder, problem.id);
+  const effectiveScores = calculateEffectiveSampleScores(problem);
   return Promise.all(samples.map(async (sample) => {
     const sampleReport = report?.samples.find((entry) =>
       entry.id === sample.id || entry.index === sample.index || entry.name === sample.name
@@ -593,11 +616,21 @@ async function createSampleNodes(
     const missing = fileStatus.inputMissing || (fileStatus.answerMissing && !answerPending);
     const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
     const elapsed = sampleReport && !missing ? formatElapsed(sampleReport) : '';
-    const description = hasGeneratedAnswer
+    const scoreInfo = effectiveScores.sampleScores.get(sample.id);
+    const earnedScore = sampleReport && scoreInfo
+      ? sampleReport.score ?? (sampleReport.status === 'AC' ? scoreInfo.score : 0)
+      : undefined;
+    const scoreText = earnedScore !== undefined && scoreInfo
+      ? t('score.sampleDisplay', { earned: earnedScore, total: scoreInfo.score })
+      : scoreInfo
+        ? `${scoreInfo.score} ${scoreInfo.manual ? t('score.manual') : t('score.auto')}`
+        : undefined;
+    const baseDescription = hasGeneratedAnswer
       ? t('setter.generatedOutput.pending')
       : answerPending
         ? t('setter.sample.answerMissing')
         : formatSampleDescription(status, sampleReport, elapsed);
+    const description = scoreText ? `${baseDescription}  ${scoreText}` : baseDescription;
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
       ? answerPending
@@ -613,6 +646,9 @@ async function createSampleNodes(
         `${t('internalId')}: ${sample.id}`,
         `${t('sampleInput')}: ${fileStatus.inputPath}`,
         `${t('expectedOutput')}: ${answerPending ? t('setter.sample.answerMissing') : fileStatus.answerPath}`,
+        ...(scoreInfo ? [
+          `${t('score.setSample')}: ${scoreInfo.score} (${scoreInfo.manual ? t('score.manual') : t('score.auto')})`
+        ] : []),
         ...(hasGeneratedAnswer && generatedAnswer.path ? [`${t('setter.generatedOutput.status')}: ${generatedAnswer.path}`] : []),
         `${t('source')}: ${t(sourceType === 'external' ? 'externalSample' : 'managedSample')}${missingDetail}`,
         ...(sampleReport?.status === 'Scored' ? [
@@ -751,6 +787,8 @@ function createSampleActionNodes(
     nodes.push(sampleActionNode(t('generateAnswerWithStd'), 'oijudger.generateSampleAnswerWithStd', 'run', problemId, sampleId));
     nodes.push(sampleActionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problemId, sampleId));
   }
+  nodes.push(sampleActionNode(t('score.setSample'), 'oijudger.setSampleScore', 'symbol-number', problemId, sampleId));
+  nodes.push(sampleActionNode(t('score.clearSample'), 'oijudger.clearSampleScore', 'clear-all', problemId, sampleId));
 
   return nodes;
 }

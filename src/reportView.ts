@@ -172,7 +172,7 @@ function renderReportBody(
       ${report.summary.wrongAnswer !== undefined ? `<div><span>${escapeHtml(t('statusWA'))}</span><strong>${report.summary.wrongAnswer}</strong></div>` : ''}
       ${report.summary.scored ? `<div><span>${escapeHtml(t('scoredSamples'))}</span><strong>${report.summary.scored}</strong></div>` : ''}
       ${report.summary.checkerError ? `<div><span>${escapeHtml(t('checkerError'))}</span><strong>${report.summary.checkerError}</strong></div>` : ''}
-      ${report.score ? `<div><span>${escapeHtml(t('score'))}</span><strong>${report.score.earned}/${report.score.total}</strong></div>` : ''}
+      ${report.score ? `<div><span>${escapeHtml(t('score.total'))}</span><strong>${report.score.earned}/${report.score.total}</strong></div>` : ''}
       ${report.summary.scored && report.score ? `<div><span>${escapeHtml(t('checkerTotalScore'))}</span><strong>${report.score.earned}</strong></div>` : ''}
       <div><span>${escapeHtml(t('compile'))}</span><strong>${formatDuration(report.compile?.timeMs)}</strong></div>
       <div><span>${escapeHtml(t('total'))}</span><strong>${formatDuration(report.totalTimeMs)}</strong></div>
@@ -245,6 +245,7 @@ async function showSamplePanel(
       ${report?.ioMode === 'fileio' && report.fileIo ? `<div><span>${escapeHtml(t('inputFile'))}</span><strong>${escapeHtml(report.fileIo.inputFileName)}</strong></div>
       <div><span>${escapeHtml(t('outputFile'))}</span><strong>${escapeHtml(report.fileIo.outputFileName)}</strong></div>` : ''}
       ${report?.status === 'Scored' ? `<div><span>${escapeHtml(t('checkerScore'))}</span><strong>${escapeHtml(report.checker?.scoreText ?? String(report.score ?? ''))}</strong></div>` : ''}
+      ${report?.score !== undefined && report.scoreTotal !== undefined ? `<div><span>${escapeHtml(t('score.total'))}</span><strong>${report.score}/${report.scoreTotal}</strong></div>` : ''}
       <div><span>${escapeHtml(t('input'))}</span><strong>${escapeHtml(sample.input)}</strong></div>
       <div><span>${escapeHtml(t('answer'))}</span><strong>${escapeHtml(sample.answer)}</strong></div>
     </section>
@@ -312,7 +313,7 @@ function renderSampleCard(
       <dt>${escapeHtml(t('compareTime'))}</dt><dd>${formatDuration(sample.compareTimeMs)}</dd>
       <dt>${escapeHtml(t('source'))}</dt><dd>${escapeHtml(t(sourceType === 'external' ? 'externalSample' : 'managedSample'))}</dd>
       ${sample.status === 'Scored' ? `<dt>${escapeHtml(t('checkerScore'))}</dt><dd>${escapeHtml(sample.checker?.scoreText ?? String(sample.score ?? ''))}</dd>` : ''}
-      ${sample.score !== undefined ? `<dt>${escapeHtml(t('score'))}</dt><dd>${sample.score}</dd>` : ''}
+      ${sample.score !== undefined && sample.scoreTotal !== undefined ? `<dt>${escapeHtml(t('score.total'))}</dt><dd>${sample.score}/${sample.scoreTotal}</dd>` : ''}
       ${sample.checker?.message ? `<dt>${escapeHtml(t('checker'))}</dt><dd>${escapeHtml(sample.checker.message)}</dd>` : ''}
       <dt>${escapeHtml(t('ioMode'))}</dt><dd>${escapeHtml(formatSampleIoMode(sample))}</dd>
       ${sample.ioMode === 'fileio' && sample.fileIo ? `<dt>${escapeHtml(t('runDirectory'))}</dt><dd>${escapeHtml(sample.fileIo.runDir ?? '-')}</dd>

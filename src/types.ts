@@ -30,6 +30,7 @@ export type SampleConfig = {
   actualOutput?: string;
   expectedOutput?: string;
   sourceType?: SampleSourceType;
+  score?: number;
 };
 
 export type SubtaskResultStatus = 'passed' | 'failed' | 'notRun';
@@ -45,9 +46,14 @@ export type SubtaskConfig = {
   id: string;
   name: string;
   sampleIds: string[];
+  scoringMode?: 'sum' | 'bundle';
   generatorId?: string;
   generatorInput?: string;
   lastResult?: SubtaskRunResult;
+};
+
+export type ProblemScoreConfig = {
+  total?: number;
 };
 
 export type CheckerConfig = {
@@ -153,6 +159,7 @@ export type ProblemConfig = OITestConfig & {
   sources?: ProblemSource[];
   generatorInputs?: ProblemGeneratorInputConfig[];
   subtasks?: SubtaskConfig[];
+  score?: ProblemScoreConfig;
   standard: string;
 };
 
@@ -264,6 +271,7 @@ export type SampleReport = {
   compareError?: string;
   runtimeError?: RuntimeErrorSummary;
   score?: number;
+  scoreTotal?: number;
   checker?: CheckerSampleReport;
   message?: string;
 };

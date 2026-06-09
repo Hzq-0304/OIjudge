@@ -133,6 +133,23 @@ describe('sample tree add entry', () => {
     expect(problemChildren.find((node) => node.group === 'setter')).toBeUndefined();
   });
 
+  it('shows sample scoring actions when setter mode is disabled', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    await addEmptyProblemSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
+    const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
+
+    expect(sampleCommands).toContain('oijudger.setSampleScore');
+    expect(sampleCommands).toContain('oijudger.clearSampleScore');
+  });
+
   it('shows global generator inputs only in setter mode', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
@@ -196,7 +213,7 @@ describe('sample tree add entry', () => {
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
-    expect(sampleNode.description).toBe('Answer not generated');
+    expect(sampleNode.description).toBe('Answer not generated  100 Auto');
     expect(treeItem.contextValue).toBe('sampleAnswerPending');
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).not.toContain('oijudger.openSampleAnswer');
@@ -221,7 +238,7 @@ describe('sample tree add entry', () => {
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
     expect(provider.getTreeItem(samplesGroup).contextValue).toBe('samplesGroupWithGeneratedOutputs');
-    expect(sampleNode.description).toBe('Generated output pending');
+    expect(sampleNode.description).toBe('Generated output pending  100 Auto');
     expect(treeItem.contextValue).toBe('sampleWithGeneratedOutput');
     expect(sampleCommands).toEqual(expect.arrayContaining([
       'oijudger.viewCurrentSampleAnswer',

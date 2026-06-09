@@ -39,6 +39,7 @@
     "onCommand:oijudger.importLegacyProblem",
     "onCommand:oijudger.addSampleFromSamplesGroup",
     "onCommand:oijudger.generateSampleInput",
+    "onCommand:oijudger.setProblemTotalScore",
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
@@ -47,6 +48,7 @@
     "onCommand:oijudger.clearSubtaskGeneratorInput",
     "onCommand:oijudger.runSubtask",
     "onCommand:oijudger.generateSubtaskSampleInput",
+    "onCommand:oijudger.setSubtaskScoringMode",
     "onCommand:oijudger.moveSampleToSubtask",
     "onCommand:oijudger.addProblemSample",
     "onCommand:oijudger.addProblemSampleFromFiles",
@@ -107,7 +109,9 @@
     "onCommand:oijudger.openSubtaskGenerator",
     "onCommand:oijudger.clearSubtaskGenerator",
     "onCommand:oijudger.addSetterInputSample",
-    "onCommand:oijudger.setSampleName"
+    "onCommand:oijudger.setSampleName",
+    "onCommand:oijudger.setSampleScore",
+    "onCommand:oijudger.clearSampleScore"
   ],
   "main": "./out/extension.js",
   "repository": {
@@ -208,6 +212,11 @@
         "icon": "$(wand)"
       },
       {
+        "command": "oijudger.setProblemTotalScore",
+        "title": "OI Judge: 设置题目总分/Set Total Score",
+        "icon": "$(symbol-number)"
+      },
+      {
         "command": "oijudger.createSubtask",
         "title": "OI Judge: 新建 Subtask/Create Subtask",
         "icon": "$(new-folder)"
@@ -246,6 +255,11 @@
         "command": "oijudger.generateSubtaskSampleInput",
         "title": "OI Judge: 生成 Subtask 样例输入/Generate Subtask Sample Input",
         "icon": "$(wand)"
+      },
+      {
+        "command": "oijudger.setSubtaskScoringMode",
+        "title": "OI Judge: 设置 Subtask 计分模式/Set Subtask Scoring Mode",
+        "icon": "$(symbol-number)"
       },
       {
         "command": "oijudger.moveSampleToSubtask",
@@ -441,6 +455,16 @@
         "command": "oijudger.generateSampleAnswerWithStd",
         "title": "OI Judge: 用 STD 生成答案/Generate Answer with STD",
         "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.setSampleScore",
+        "title": "OI Judge: 设置测试点分值/Set Testcase Score",
+        "icon": "$(symbol-number)"
+      },
+      {
+        "command": "oijudger.clearSampleScore",
+        "title": "OI Judge: 清除测试点分值/Clear Testcase Score",
+        "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.generateAllSampleAnswersWithStd",
@@ -660,6 +684,16 @@
           "group": "inline@2"
         },
         {
+          "command": "oijudger.setProblemTotalScore",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "inline@3"
+        },
+        {
+          "command": "oijudger.setProblemTotalScore",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "2_score@1"
+        },
+        {
           "command": "oijudger.generateSampleInput",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
           "group": "inline@5"
@@ -780,6 +814,11 @@
           "group": "4_setter@7"
         },
         {
+          "command": "oijudger.setSubtaskScoringMode",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "2_score@1"
+        },
+        {
           "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "3_run"
@@ -818,6 +857,16 @@
           "command": "oijudger.moveSampleToSubtask",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "8_subtask@1"
+        },
+        {
+          "command": "oijudger.setSampleScore",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "2_score@1"
+        },
+        {
+          "command": "oijudger.clearSampleScore",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "2_score@2"
         },
         {
           "command": "oijudger.deleteSample",
@@ -949,6 +998,10 @@
           "when": "false"
         },
         {
+          "command": "oijudger.setProblemTotalScore",
+          "when": "false"
+        },
+        {
           "command": "oijudger.addProblemSample",
           "when": "false"
         },
@@ -982,6 +1035,10 @@
         },
         {
           "command": "oijudger.generateSubtaskSampleInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setSubtaskScoringMode",
           "when": "false"
         },
         {
@@ -1054,6 +1111,14 @@
         },
         {
           "command": "oijudger.generateSampleAnswerWithStd",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.setSampleScore",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.clearSampleScore",
           "when": "false"
         },
         {

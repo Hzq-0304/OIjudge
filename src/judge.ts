@@ -9,6 +9,7 @@ import { isOutputAccepted } from './comparator';
 import { exists, getOiJudgeDataRelPath, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
 import { runProcess } from './runner';
+import { calculateJudgeScore, calculateEffectiveSampleScores } from './scoring';
 import {
   explainRuntimeError,
   renderRuntimeErrorExplanation,
@@ -139,7 +140,14 @@ export async function runAllSamples(
   const wrongAnswer = samples.filter((sample) => sample.status === 'WA').length;
   const scored = samples.filter((sample) => sample.status === 'Scored').length;
   const checkerError = samples.filter((sample) => sample.status === 'Checker Error').length;
-  const earnedScore = samples.reduce((sum, sample) => sum + (sample.score ?? (sample.status === 'AC' ? 1 : 0)), 0);
+  const score = calculateJudgeScore(config, samples);
+  const effectiveScores = calculateEffectiveSampleScores(config);
+  for (const sample of samples) {
+    const earned = score.sampleScores.get(sample.id) ?? 0;
+    const total = effectiveScores.sampleScores.get(sample.id)?.score ?? 0;
+    sample.score = earned;
+    sample.scoreTotal = total;
+  }
   const totalTimeMs = elapsedMs(totalStartedAt);
   const report: JudgeReport = {
     version: 1,
@@ -167,8 +175,8 @@ export async function runAllSamples(
       checkerError
     },
     score: {
-      earned: earnedScore,
-      total: samples.length
+      earned: score.earnedScore,
+      total: score.totalScore
     },
     results: samples,
     samples
@@ -179,6 +187,7 @@ export async function runAllSamples(
 
   output.appendLine('');
   output.appendLine(`Summary: ${accepted}/${samples.length} accepted`);
+  output.appendLine(`Score: ${score.earnedScore}/${score.totalScore}`);
   output.appendLine(`Total judge time: ${formatMs(totalTimeMs)} ms`);
   output.appendLine(`Report: ${problemId ? getOiJudgeDataRelPath('problems', problemId, 'outputs', 'report.json') : getOiJudgeDataRelPath('outputs', 'report.json')}`);
   if (samples.some((sample) => sample.status === 'Missing')) {
