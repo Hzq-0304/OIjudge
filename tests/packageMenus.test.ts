@@ -117,6 +117,9 @@ describe('package tree sample add menu', () => {
       'oijudger.createSubtask',
       'oijudger.renameSubtask',
       'oijudger.deleteSubtask',
+      'oijudger.bindSubtaskGeneratorInput',
+      'oijudger.openSubtaskGeneratorInput',
+      'oijudger.clearSubtaskGeneratorInput',
       'oijudger.runSubtask',
       'oijudger.moveSampleToSubtask'
     ]));
@@ -124,6 +127,9 @@ describe('package tree sample add menu', () => {
       'onCommand:oijudger.createSubtask',
       'onCommand:oijudger.renameSubtask',
       'onCommand:oijudger.deleteSubtask',
+      'onCommand:oijudger.bindSubtaskGeneratorInput',
+      'onCommand:oijudger.openSubtaskGeneratorInput',
+      'onCommand:oijudger.clearSubtaskGeneratorInput',
       'onCommand:oijudger.runSubtask',
       'onCommand:oijudger.moveSampleToSubtask'
     ]));
@@ -138,6 +144,18 @@ describe('package tree sample add menu', () => {
       .toContain('viewItem == subtask');
     expect(contextMenus.find((entry) => entry.command === 'oijudger.deleteSubtask')?.when)
       .toContain('viewItem == subtask');
+    for (const command of [
+      'oijudger.bindSubtaskGeneratorInput',
+      'oijudger.openSubtaskGeneratorInput',
+      'oijudger.clearSubtaskGeneratorInput'
+    ]) {
+      const menu = contextMenus.find((entry) => entry.command === command);
+      expect(menu?.when).toContain('view == oijudger.samplesView');
+      expect(menu?.when).toContain('oijudger.setterModeEnabled');
+      expect(menu?.when).toContain('viewItem == subtask');
+      expect(menu?.when).toContain('viewItem == subtaskPassed');
+      expect(menu?.when).toContain('viewItem == subtaskFailed');
+    }
     expect(contextMenus.find((entry) => entry.command === 'oijudger.moveSampleToSubtask')?.when)
       .toContain('viewItem == sample');
 
@@ -145,6 +163,9 @@ describe('package tree sample add menu', () => {
       'oijudger.createSubtask',
       'oijudger.renameSubtask',
       'oijudger.deleteSubtask',
+      'oijudger.bindSubtaskGeneratorInput',
+      'oijudger.openSubtaskGeneratorInput',
+      'oijudger.clearSubtaskGeneratorInput',
       'oijudger.runSubtask',
       'oijudger.moveSampleToSubtask'
     ]) {

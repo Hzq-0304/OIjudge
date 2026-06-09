@@ -735,6 +735,41 @@ export async function deleteProblemSubtask(
   return true;
 }
 
+export async function setProblemSubtaskGeneratorInput(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string,
+  inputPath: string
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  subtask.generatorInput = createProblemSource(workspaceFolder, inputPath).path;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
+export async function clearProblemSubtaskGeneratorInput(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string
+): Promise<SubtaskConfig | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  delete subtask.generatorInput;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return subtask;
+}
+
 export async function moveProblemSampleToSubtask(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -1332,6 +1367,9 @@ function normalizeProblemSubtasks(problem: ProblemConfig): SubtaskConfig[] {
       id,
       name: subtask.name?.trim() || `Subtask ${index + 1}`,
       sampleIds: cleanSampleIds,
+      generatorInput: typeof subtask.generatorInput === 'string' && subtask.generatorInput.trim()
+        ? subtask.generatorInput.trim()
+        : undefined,
       lastResult: normalizeSubtaskResult(subtask.lastResult)
     };
   });

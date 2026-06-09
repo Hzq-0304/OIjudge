@@ -120,7 +120,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
       case 'limits':
         return createLimitNodes(problem);
       case 'samples':
-        return createSampleContainerNodes(problem);
+        return createSampleContainerNodes(workspaceFolder, problem);
       case 'unassignedSamples':
         return createSampleNodes(workspaceFolder, problem, getUnassignedProblemSamples(problem));
       case 'subtask':
@@ -424,7 +424,13 @@ async function createProgramNodes(
   }));
 }
 
-function createSampleContainerNodes(problem: ProblemConfig): TreeNode[] {
+async function createSampleContainerNodes(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<TreeNode[]> {
+  const subtaskNodes = await Promise.all(
+    (problem.subtasks ?? []).map((subtask) => createSubtaskNode(workspaceFolder, problem, subtask))
+  );
   return [
     {
       kind: 'group',
@@ -435,38 +441,68 @@ function createSampleContainerNodes(problem: ProblemConfig): TreeNode[] {
       problemId: problem.id,
       contextValue: 'unassignedSamplesGroup'
     },
-    ...(problem.subtasks ?? []).map((subtask) => createSubtaskNode(problem, subtask))
+    ...subtaskNodes
   ];
 }
 
-function createSubtaskNode(problem: ProblemConfig, subtask: NonNullable<ProblemConfig['subtasks']>[number]): TreeNode {
+async function createSubtaskNode(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number]
+): Promise<TreeNode> {
   const result = subtask.lastResult;
-  const description = result?.status === 'passed'
+  const generatorInput = await getSubtaskGeneratorInputStatus(workspaceFolder, subtask);
+  const resultDescription = result?.status === 'passed'
     ? '✓'
     : result?.status === 'failed'
       ? `✗ ${result.passed}/${result.total}`
       : undefined;
+  const description = generatorInput?.description ?? resultDescription;
   const contextValue = result?.status === 'passed'
     ? 'subtaskPassed'
     : result?.status === 'failed'
       ? 'subtaskFailed'
       : 'subtask';
+  const resultTooltip = result
+    ? t(result.status === 'passed' ? 'subtask.resultSummary' : 'subtask.resultFailedSummary', {
+      passed: result.passed,
+      total: result.total
+    })
+    : t('subtask.notRun');
   return {
     kind: 'subtask',
     label: subtask.name,
     description,
-    tooltip: result
-      ? t(result.status === 'passed' ? 'subtask.resultSummary' : 'subtask.resultFailedSummary', {
-        passed: result.passed,
-        total: result.total
-      })
-      : t('subtask.notRun'),
-    icon: new vscode.ThemeIcon(result?.status === 'passed' ? 'pass-filled' : result?.status === 'failed' ? 'error' : 'symbol-namespace'),
+    tooltip: generatorInput?.tooltip
+      ? `${generatorInput.tooltip}\n${resultTooltip}`
+      : resultTooltip,
+    icon: generatorInput?.missing
+      ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+      : new vscode.ThemeIcon(result?.status === 'passed' ? 'pass-filled' : result?.status === 'failed' ? 'error' : 'symbol-namespace'),
     collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
     group: 'subtask',
     problemId: problem.id,
     subtaskId: subtask.id,
     contextValue
+  };
+}
+
+async function getSubtaskGeneratorInputStatus(
+  workspaceFolder: vscode.WorkspaceFolder,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number]
+): Promise<{ description: string; tooltip: string; missing: boolean } | undefined> {
+  if (!isSetterModeEnabled() || !subtask.generatorInput) {
+    return undefined;
+  }
+
+  const inputPath = resolveProblemReferencePath(workspaceFolder, subtask.generatorInput);
+  const missing = !(await exists(inputPath));
+  return {
+    description: missing
+      ? t('subtask.generatorInputMissingShort')
+      : t('subtask.generatorInputStatus', { name: path.basename(inputPath) }),
+    tooltip: missing ? `${t('subtask.generatorInputMissing')}: ${inputPath}` : inputPath,
+    missing
   };
 }
 

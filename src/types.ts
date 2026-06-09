@@ -45,6 +45,7 @@ export type SubtaskConfig = {
   id: string;
   name: string;
   sampleIds: string[];
+  generatorInput?: string;
   lastResult?: SubtaskRunResult;
 };
 

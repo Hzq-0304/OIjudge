@@ -13,6 +13,8 @@ import {
   getUnassignedProblemSamples,
   moveProblemSampleToSubtask,
   renameProblemSubtask,
+  clearProblemSubtaskGeneratorInput,
+  setProblemSubtaskGeneratorInput,
   setProblemSubtaskResult,
   writeProblemsConfig
 } from '../src/problems';
@@ -106,6 +108,43 @@ describe('problem subtasks', () => {
     expect(saved?.subtasks).toEqual([]);
     expect(getUnassignedProblemSamples(saved!).map((entry) => entry.id)).toEqual([sample?.id]);
     await expect(fs.access(path.join(workspaceFolder.uri.fsPath, sample?.input ?? ''))).resolves.toBeUndefined();
+  });
+
+  it('binds generator input to a subtask using a workspace-relative path', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'data', 'subtask1.txt');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(inputPath, 'n=10\n', 'utf8');
+
+    const updated = await setProblemSubtaskGeneratorInput(
+      workspaceFolder,
+      problem.id,
+      subtask?.id ?? '',
+      inputPath
+    );
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(updated?.generatorInput).toBe('data/subtask1.txt');
+    expect(saved?.subtasks?.[0].generatorInput).toBe('data/subtask1.txt');
+  });
+
+  it('clears subtask generator input binding without deleting the file', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'data', 'subtask1.txt');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(inputPath, 'n=10\n', 'utf8');
+    await setProblemSubtaskGeneratorInput(workspaceFolder, problem.id, subtask?.id ?? '', inputPath);
+
+    const updated = await clearProblemSubtaskGeneratorInput(workspaceFolder, problem.id, subtask?.id ?? '');
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(updated?.generatorInput).toBeUndefined();
+    expect(saved?.subtasks?.[0].generatorInput).toBeUndefined();
+    await expect(fs.access(inputPath)).resolves.toBeUndefined();
   });
 });
 

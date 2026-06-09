@@ -47,6 +47,7 @@ import {
   applyAllGeneratedAnswersForProblem,
   applyGeneratedAnswerForSample,
   bindProblemStatement,
+  clearProblemSubtaskGeneratorInput,
   clearProblemGeneratorProgram,
   clearProblemStdProgram,
   createProblemSubtask,
@@ -71,6 +72,7 @@ import {
   setProblemDefaultSource,
   setProblemGeneratorProgram,
   setProblemStdProgram,
+  setProblemSubtaskGeneratorInput,
   setProblemSubtaskResult,
   writeGeneratedAnswerForSample,
   unbindProblemStatement,
@@ -364,6 +366,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.deleteSubtask', async (problemArg?: unknown) => {
       await deleteSubtaskCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.bindSubtaskGeneratorInput', async (problemArg?: unknown) => {
+      await bindSubtaskGeneratorInputCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.openSubtaskGeneratorInput', async (problemArg?: unknown) => {
+      await openSubtaskGeneratorInputCommand(readProblemId(problemArg), readSubtaskId(problemArg));
+    }),
+    vscode.commands.registerCommand('oijudger.clearSubtaskGeneratorInput', async (problemArg?: unknown) => {
+      await clearSubtaskGeneratorInputCommand(readProblemId(problemArg), readSubtaskId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.moveSampleToSubtask', async (problemArg?: unknown, sampleArg?: unknown) => {
       await moveSampleToSubtaskCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
@@ -1114,6 +1125,96 @@ async function deleteSubtaskCommand(
 
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(t('subtask.deleted'));
+}
+
+async function bindSubtaskGeneratorInputCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const uri = await pickGeneratorInputFile();
+  if (!uri) {
+    return;
+  }
+
+  const subtask = await setProblemSubtaskGeneratorInput(
+    context.workspaceFolder,
+    context.problem.id,
+    context.subtask.id,
+    uri.fsPath
+  );
+  if (!subtask) {
+    vscode.window.showWarningMessage(t('subtask.notFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('subtask.generatorInputBound', { name: path.basename(uri.fsPath) }));
+}
+
+async function openSubtaskGeneratorInputCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const generatorInput = context.subtask.generatorInput;
+  if (!generatorInput) {
+    vscode.window.showWarningMessage(t('subtask.noGeneratorInputBound'));
+    return;
+  }
+
+  const inputPath = resolveProblemReferencePath(context.workspaceFolder, generatorInput);
+  if (!(await exists(inputPath))) {
+    vscode.window.showWarningMessage(t('subtask.generatorInputMissing'));
+    return;
+  }
+
+  await openFileInEditor(inputPath, t('subtask.generatorInputMissing'));
+}
+
+async function clearSubtaskGeneratorInputCommand(
+  problemId: string | undefined,
+  subtaskId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSubtaskContext(problemId, subtaskId);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const subtask = await clearProblemSubtaskGeneratorInput(
+    context.workspaceFolder,
+    context.problem.id,
+    context.subtask.id
+  );
+  if (!subtask) {
+    vscode.window.showWarningMessage(t('subtask.notFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('subtask.generatorInputCleared'));
 }
 
 async function moveSampleToSubtaskCommand(
@@ -2709,6 +2810,21 @@ async function pickStatementFile(): Promise<vscode.Uri | undefined> {
       [t('pdfStatement')]: ['pdf'],
       [t('textStatement')]: ['txt'],
       [t('statementFile')]: ['*']
+    }
+  });
+
+  return uris?.[0];
+}
+
+async function pickGeneratorInputFile(): Promise<vscode.Uri | undefined> {
+  const uris = await vscode.window.showOpenDialog({
+    title: t('subtask.generatorInputFile'),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: t('select'),
+    filters: {
+      [t('subtask.generatorInputFile')]: ['*']
     }
   });
 

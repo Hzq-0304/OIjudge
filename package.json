@@ -41,6 +41,9 @@
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
+    "onCommand:oijudger.bindSubtaskGeneratorInput",
+    "onCommand:oijudger.openSubtaskGeneratorInput",
+    "onCommand:oijudger.clearSubtaskGeneratorInput",
     "onCommand:oijudger.runSubtask",
     "onCommand:oijudger.moveSampleToSubtask",
     "onCommand:oijudger.addProblemSample",
@@ -201,6 +204,21 @@
         "command": "oijudger.deleteSubtask",
         "title": "OI Judge: 删除 Subtask/Delete Subtask",
         "icon": "$(trash)"
+      },
+      {
+        "command": "oijudger.bindSubtaskGeneratorInput",
+        "title": "OI Judge: 绑定生成器输入/Bind Generator Input",
+        "icon": "$(link)"
+      },
+      {
+        "command": "oijudger.openSubtaskGeneratorInput",
+        "title": "OI Judge: 打开生成器输入/Open Generator Input",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.clearSubtaskGeneratorInput",
+        "title": "OI Judge: 清除生成器输入/Clear Generator Input",
+        "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.runSubtask",
@@ -595,6 +613,21 @@
           "group": "9_delete"
         },
         {
+          "command": "oijudger.bindSubtaskGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@1"
+        },
+        {
+          "command": "oijudger.openSubtaskGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@2"
+        },
+        {
+          "command": "oijudger.clearSubtaskGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "4_setter@3"
+        },
+        {
           "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "3_run"
@@ -768,6 +801,18 @@
         },
         {
           "command": "oijudger.deleteSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.bindSubtaskGeneratorInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openSubtaskGeneratorInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.clearSubtaskGeneratorInput",
           "when": "false"
         },
         {
