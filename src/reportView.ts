@@ -11,12 +11,51 @@ import { t } from './i18n';
 import { getDefaultProblemSource, getProblem, getProblemReportPath } from './problems';
 import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import { inferSampleSourceType } from './sampleFiles';
+import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
 
 const openProblemReportPanels = new Map<string, {
   panel: vscode.WebviewPanel;
   workspaceFolder: vscode.WorkspaceFolder;
 }>();
+
+type JudgeReportViewModel = {
+  status: string;
+  statusText: string;
+  earnedScore: number;
+  totalScore: number;
+  acceptedCount: number;
+  totalCount: number;
+  maxTimeMs?: number;
+  maxMemoryKiB?: number;
+  source: string;
+  sourceName: string;
+  judgeMode: string;
+  ioMode: string;
+  generatedAt: string;
+  testcases: JudgeReportTestcaseViewModel[];
+};
+
+type JudgeReportTestcaseViewModel = {
+  id: string;
+  index: number;
+  name: string;
+  status: string;
+  statusText: string;
+  scoreEarned: number;
+  scoreTotal: number;
+  timeMs?: number;
+  memoryKiB?: number;
+  subtaskName?: string;
+  systemMessage: string;
+  stderr?: string;
+  checkerMessage?: string;
+  diff?: string;
+  message?: string;
+  sampleIndex?: number;
+  hasCheckerOutput: boolean;
+  defaultOpen: boolean;
+};
 
 export async function openLastReport(context: vscode.ExtensionContext): Promise<void> {
   const workspaceFolder = getWorkspaceFolder();
@@ -158,38 +197,47 @@ function renderReportBody(
   problemId?: string,
   problem?: ProblemConfig
 ): string {
-  return `<section class="summary">
+  const viewModel = buildJudgeReportViewModel(report, problem);
+  return `<section class="reportHero status-surface ${statusClass(viewModel.status)}">
+      <div>
+        <span class="eyebrow">${escapeHtml(t('report.result'))}</span>
+        <strong>${escapeHtml(viewModel.statusText)}</strong>
+      </div>
+      <div class="summaryGrid">
+        <div><span>${escapeHtml(t('report.score'))}</span><strong>${viewModel.earnedScore}/${viewModel.totalScore}</strong></div>
+        <div><span>${escapeHtml(t('report.accepted'))}</span><strong>${viewModel.acceptedCount}/${viewModel.totalCount}</strong></div>
+        <div><span>${escapeHtml(t('report.maxTime'))}</span><strong>${escapeHtml(formatDuration(viewModel.maxTimeMs))}</strong></div>
+        <div><span>${escapeHtml(t('report.maxMemory'))}</span><strong>${escapeHtml(formatMemoryKiB(viewModel.maxMemoryKiB))}</strong></div>
+      </div>
+    </section>
+    <section class="metaStrip">
       <div><span>${escapeHtml(t('problem'))}</span><strong>${escapeHtml(problem?.name ?? '-')}</strong></div>
-      <div><span>${escapeHtml(t('statement'))}</span><strong>${escapeHtml(problem?.statement ? basename(problem.statement.path) : t('noStatementBound'))}</strong></div>
-      <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''))}</strong></div>
-      <div><span>${escapeHtml(t('judgeMode'))}</span><strong>${escapeHtml(formatJudgeMode(report))}</strong></div>
-      <div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(formatIoMode(report))}</strong></div>
-      ${report.ioMode === 'fileio' && report.fileIo ? `<div><span>${escapeHtml(t('inputFile'))}</span><strong>${escapeHtml(report.fileIo.inputFileName)}</strong></div>
-      <div><span>${escapeHtml(t('outputFile'))}</span><strong>${escapeHtml(report.fileIo.outputFileName)}</strong></div>` : ''}
-      ${isCheckerReport(report) ? `<div><span>${escapeHtml(t('checker'))}</span><strong>${escapeHtml(formatCheckerLine(report))}</strong></div>` : ''}
-      ${getReportCheckerType(report) === 'plain' ? renderPlainCheckerProtocolSummary(report) : ''}
-      <div><span>${escapeHtml(t('accepted'))}</span><strong>${report.summary.accepted}/${report.summary.total}</strong></div>
-      ${report.summary.wrongAnswer !== undefined ? `<div><span>${escapeHtml(t('statusWA'))}</span><strong>${report.summary.wrongAnswer}</strong></div>` : ''}
-      ${report.summary.scored ? `<div><span>${escapeHtml(t('scoredSamples'))}</span><strong>${report.summary.scored}</strong></div>` : ''}
-      ${report.summary.checkerError ? `<div><span>${escapeHtml(t('checkerError'))}</span><strong>${report.summary.checkerError}</strong></div>` : ''}
-      ${report.score ? `<div><span>${escapeHtml(t('score.total'))}</span><strong>${report.score.earned}/${report.score.total}</strong></div>` : ''}
-      ${report.summary.scored && report.score ? `<div><span>${escapeHtml(t('checkerTotalScore'))}</span><strong>${report.score.earned}</strong></div>` : ''}
-      <div><span>${escapeHtml(t('compile'))}</span><strong>${formatDuration(report.compile?.timeMs)}</strong></div>
-      <div><span>${escapeHtml(t('total'))}</span><strong>${formatDuration(report.totalTimeMs)}</strong></div>
+      <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(viewModel.sourceName)}</strong></div>
+      <div><span>${escapeHtml(t('judgeMode'))}</span><strong>${escapeHtml(viewModel.judgeMode)}</strong></div>
+      <div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(viewModel.ioMode)}</strong></div>
       <div><span>${escapeHtml(t('timeLimit'))}</span><strong>${report.timeLimitMs} ms</strong></div>
       <div><span>${escapeHtml(t('memoryLimit'))}</span><strong>${report.memoryLimitMb} MB</strong></div>
-      <div><span>${escapeHtml(t('stack'))}</span><strong>${escapeHtml(formatStack(report))}</strong></div>
-      <div><span>${escapeHtml(t('generated'))}</span><strong>${escapeHtml(new Date(report.generatedAt).toLocaleString())}</strong></div>
+      ${isCheckerReport(report) ? `<div><span>${escapeHtml(t('checker'))}</span><strong>${escapeHtml(formatCheckerLine(report))}</strong></div>` : ''}
+      ${getReportCheckerType(report) === 'plain' ? renderPlainCheckerProtocolSummary(report) : ''}
+      <div><span>${escapeHtml(t('generated'))}</span><strong>${escapeHtml(viewModel.generatedAt)}</strong></div>
     </section>
     ${getReportCheckerType(report) === 'plain' ? `<section><h2>${escapeHtml(t('plainCheckerMode'))}</h2><p>${escapeHtml(formatPlainCheckerProtocol(report))}</p></section>` : ''}
     <section>
       <h2>${escapeHtml(t('source'))}</h2>
-      <p class="path">${escapeHtml(report.source)}</p>
+      <p class="path">${escapeHtml(viewModel.source)}</p>
     </section>
     <section>
-      <h2>${escapeHtml(t('samples'))}</h2>
-      <div class="samples">
-        ${report.samples.map((sample) => renderSampleCard(workspaceFolder, report, sample, problemId)).join('')}
+      <h2>${escapeHtml(t('report.testcase'))}</h2>
+      <div class="testcaseTable" role="table" aria-label="${escapeHtml(t('report.testcase'))}">
+        <div class="testcaseHeader" role="row">
+          <span>${escapeHtml(t('report.testcase'))}</span>
+          <span>${escapeHtml(t('status'))}</span>
+          <span>${escapeHtml(t('report.score'))}</span>
+          <span>${escapeHtml(t('time'))}</span>
+          <span>${escapeHtml(t('memory'))}</span>
+          <span>${escapeHtml(t('subtask.run'))}</span>
+        </div>
+        ${viewModel.testcases.map((testcase) => renderTestcaseRow(testcase, problemId)).join('')}
       </div>
     </section>`;
 }
@@ -219,6 +267,98 @@ function formatSampleIoMode(sample: SampleReport): string {
 
 function basename(filePath: string): string {
   return filePath.replace(/^.*[\\/]/u, '');
+}
+
+function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig): JudgeReportViewModel {
+  const score = problem ? calculateJudgeScore(problem, report.samples) : undefined;
+  const effectiveScores = problem ? calculateEffectiveSampleScores(problem) : undefined;
+  const testcases = report.samples.map((sample) => {
+    const sampleIndex = getReportSampleIndex(sample);
+    const subtask = problem?.subtasks?.find((entry) => entry.sampleIds.includes(sample.id));
+    const scoreEarned = score?.sampleScores.get(sample.id) ?? sample.score ?? 0;
+    const scoreTotal = effectiveScores?.sampleScores.get(sample.id)?.score ?? sample.scoreTotal ?? 0;
+    return {
+      id: sample.id,
+      index: sample.index,
+      name: sample.name || t('report.testcaseNumber', { index: sample.index }),
+      status: sample.status,
+      statusText: statusLabel(sample.status),
+      scoreEarned,
+      scoreTotal,
+      timeMs: sample.timeMs ?? sample.elapsedMs,
+      memoryKiB: getSampleMemoryKiB(sample),
+      subtaskName: subtask?.name,
+      systemMessage: buildSystemMessage(sample),
+      stderr: sample.stderrPreview ?? sample.stderr,
+      checkerMessage: buildCheckerMessage(sample),
+      diff: sample.diff,
+      message: sample.message,
+      sampleIndex,
+      hasCheckerOutput: Boolean(sample.checker?.output || sample.checker?.stdout || sample.checker?.stderr),
+      defaultOpen: false
+    };
+  });
+  const defaultOpen = testcases.find((sample) => sample.status !== 'AC') ?? testcases[0];
+  if (defaultOpen) {
+    defaultOpen.defaultOpen = true;
+  }
+
+  return {
+    status: getOverallStatus(report, score?.earnedScore),
+    statusText: getOverallStatusText(report, score?.earnedScore),
+    earnedScore: score?.earnedScore ?? report.score?.earned ?? 0,
+    totalScore: score?.totalScore ?? report.score?.total ?? 100,
+    acceptedCount: report.summary.accepted,
+    totalCount: report.summary.total,
+    maxTimeMs: getMaxTimeMs(report.samples),
+    maxMemoryKiB: getMaxMemoryKiB(report.samples),
+    source: report.source,
+    sourceName: report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''),
+    judgeMode: formatJudgeMode(report),
+    ioMode: formatIoMode(report),
+    generatedAt: new Date(report.generatedAt).toLocaleString(),
+    testcases
+  };
+}
+
+function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
+  const details = renderTestcaseDetails(testcase, problemId);
+  return `<details class="testcaseRow ${statusClass(testcase.status)}"${testcase.defaultOpen ? ' open' : ''}>
+    <summary>
+      <span class="testcaseName">${escapeHtml(t('report.testcaseNumber', { index: testcase.index }))}</span>
+      <span class="statusPill ${statusClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
+      <span>${testcase.scoreEarned}/${testcase.scoreTotal}</span>
+      <span>${escapeHtml(formatDuration(testcase.timeMs))}</span>
+      <span>${escapeHtml(formatMemoryKiB(testcase.memoryKiB))}</span>
+      <span class="subtaskCell">${escapeHtml(testcase.subtaskName ?? '-')}</span>
+    </summary>
+    ${details}
+  </details>`;
+}
+
+function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
+  const sections = [
+    renderDetailBlock(t('report.systemInfo'), testcase.systemMessage),
+    renderDetailBlock(t('report.stderr'), testcase.stderr),
+    renderDetailBlock(t('report.checkerInfo'), testcase.checkerMessage),
+    renderDetailBlock(t('report.diff'), testcase.diff),
+    renderDetailBlock(t('message'), testcase.message)
+  ].filter(Boolean).join('');
+
+  return `<div class="testcaseDetails">
+    ${sections || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
+    ${renderActionButtons(testcase.sampleIndex, problemId, testcase.status, testcase.hasCheckerOutput)}
+  </div>`;
+}
+
+function renderDetailBlock(title: string, content: string | undefined): string {
+  if (!content || !content.trim()) {
+    return '';
+  }
+  return `<section class="detailBlock">
+    <h3>${escapeHtml(title)}</h3>
+    <pre>${escapeHtml(content.trimEnd())}</pre>
+  </section>`;
 }
 
 async function showSamplePanel(
@@ -476,8 +616,37 @@ function renderPage(title: string, body: string): string {
     }
     h1 { font-size: 22px; margin: 0 0 18px; }
     h2 { font-size: 14px; margin: 0 0 10px; }
+    h3 { font-size: 12px; margin: 0 0 8px; }
     section { margin-bottom: 20px; }
-    .summary {
+    .reportHero,
+    .metaStrip {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 10px;
+      background: var(--vscode-sideBar-background);
+      margin-bottom: 16px;
+      padding: 16px;
+    }
+    .reportHero {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 2fr);
+    }
+    .reportHero strong {
+      display: block;
+      font-size: 26px;
+      line-height: 1.2;
+      margin-top: 4px;
+    }
+    .eyebrow,
+    .metaStrip span,
+    .summaryGrid span {
+      color: var(--vscode-descriptionForeground);
+      display: block;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .summaryGrid,
+    .metaStrip {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 8px;
@@ -497,17 +666,66 @@ function renderPage(title: string, body: string): string {
       margin-bottom: 4px;
     }
     .summary strong { font-size: 16px; }
-    .samples {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 10px;
+    .testcaseTable {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--vscode-sideBar-background);
     }
-    .sampleHead {
+    .testcaseHeader,
+    .testcaseRow summary {
       align-items: center;
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px minmax(110px, 1fr);
+      gap: 12px;
+      padding: 10px 14px;
+    }
+    .testcaseHeader {
+      background: var(--vscode-editorWidget-background);
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .testcaseRow {
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+    .testcaseRow summary {
+      cursor: pointer;
+      list-style: none;
+    }
+    .testcaseRow summary::-webkit-details-marker { display: none; }
+    .testcaseName::before {
+      content: '▸';
+      color: var(--vscode-descriptionForeground);
+      display: inline-block;
+      margin-right: 8px;
+      transition: transform 120ms ease;
+    }
+    .testcaseRow[open] .testcaseName::before { transform: rotate(90deg); }
+    .testcaseRow[open] summary {
+      background: var(--vscode-list-hoverBackground);
+      background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 18%, transparent);
+    }
+    .statusPill {
+      border-radius: 999px;
+      display: inline-flex;
+      font-weight: 700;
+      width: fit-content;
+    }
+    .subtaskCell {
+      color: var(--vscode-descriptionForeground);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .testcaseDetails {
+      border-top: 1px solid var(--vscode-panel-border);
+      padding: 12px 14px 14px 42px;
+    }
+    .detailBlock {
+      margin-bottom: 12px;
     }
     dl {
       display: grid;
@@ -538,9 +756,13 @@ function renderPage(title: string, body: string): string {
     .status-wa,
     .status-tle,
     .status-re,
+    .status-ce,
     .status-err,
     .status-missing,
+    .status-checker-error,
     .status-output-missing { color: var(--vscode-testing-iconFailed); }
+    .status-partial,
+    .status-scored { color: var(--vscode-testing-iconQueued); }
     .status-not-run { color: var(--vscode-descriptionForeground); }
     .path {
       color: var(--vscode-descriptionForeground);
@@ -552,6 +774,14 @@ function renderPage(title: string, body: string): string {
       overflow-x: auto;
       padding: 10px;
       white-space: pre-wrap;
+    }
+    @media (max-width: 780px) {
+      .reportHero { grid-template-columns: 1fr; }
+      .testcaseHeader { display: none; }
+      .testcaseRow summary {
+        grid-template-columns: 1fr 1fr;
+      }
+      .testcaseDetails { padding-left: 14px; }
     }
   </style>
 </head>
@@ -577,6 +807,119 @@ function renderPage(title: string, body: string): string {
 
 function statusClass(status: string): string {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function getOverallStatus(report: JudgeReport, earnedScore: number | undefined): string {
+  if (report.samples.some((sample) => sample.status === 'RE')) {
+    return 'RE';
+  }
+  if (report.samples.some((sample) => sample.status === 'CE')) {
+    return 'CE';
+  }
+  if (report.samples.some((sample) => sample.status === 'TLE')) {
+    return 'TLE';
+  }
+  if (report.samples.some((sample) => sample.status === 'MLE')) {
+    return 'MLE';
+  }
+  if (report.samples.some((sample) => sample.status === 'Checker Error' || sample.status === 'ERR')) {
+    return 'ERR';
+  }
+  const totalScore = report.score?.total ?? 100;
+  const finalEarned = earnedScore ?? report.score?.earned;
+  if (report.summary.accepted === report.summary.total && (finalEarned === undefined || finalEarned >= totalScore)) {
+    return 'AC';
+  }
+  if (finalEarned !== undefined && finalEarned > 0 && finalEarned < totalScore) {
+    return 'PARTIAL';
+  }
+  return 'WA';
+}
+
+function getOverallStatusText(report: JudgeReport, earnedScore: number | undefined): string {
+  const status = getOverallStatus(report, earnedScore);
+  if (status === 'PARTIAL') {
+    return t('report.partialAccepted');
+  }
+  return statusLabel(status);
+}
+
+function getMaxTimeMs(samples: SampleReport[]): number | undefined {
+  const values = samples
+    .map((sample) => sample.timeMs ?? sample.elapsedMs)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return values.length > 0 ? Math.max(...values) : undefined;
+}
+
+function getSampleMemoryKiB(sample: SampleReport): number | undefined {
+  const raw = (sample as { memoryKiB?: unknown; memoryKb?: unknown; memory?: unknown }).memoryKiB
+    ?? (sample as { memoryKb?: unknown }).memoryKb
+    ?? (sample as { memory?: unknown }).memory;
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+}
+
+function getMaxMemoryKiB(samples: SampleReport[]): number | undefined {
+  const values = samples
+    .map(getSampleMemoryKiB)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return values.length > 0 ? Math.max(...values) : undefined;
+}
+
+function formatMemoryKiB(value: number | undefined): string {
+  return value === undefined ? '-' : `${Math.round(value)} KiB`;
+}
+
+function buildSystemMessage(sample: SampleReport): string {
+  const lines: string[] = [];
+  if (sample.status === 'TLE') {
+    lines.push('Time limit exceeded.');
+  } else if (sample.status === 'MLE') {
+    lines.push('Memory limit exceeded.');
+  } else if (sample.exitCode !== undefined && sample.exitCode !== null) {
+    lines.push(t('report.exitCode', { code: sample.exitCode }));
+  } else if (sample.signal) {
+    lines.push(`Terminated by signal ${sample.signal}.`);
+  } else if (sample.status === 'AC' || sample.status === 'WA' || sample.status === 'Scored') {
+    lines.push(t('report.exitCode', { code: 0 }));
+  }
+  if (sample.killedByTimeout) {
+    lines.push('Process was killed by timeout.');
+  }
+  if (sample.stdinError) {
+    lines.push(`stdinError: ${sample.stdinError}`);
+  }
+  if (sample.stdoutError) {
+    lines.push(`stdoutError: ${sample.stdoutError}`);
+  }
+  if (sample.stderrError) {
+    lines.push(`stderrError: ${sample.stderrError}`);
+  }
+  if (sample.spawnError) {
+    lines.push(`spawnError: ${sample.spawnError}`);
+  }
+  if (sample.runnerError) {
+    lines.push(`runnerError: ${sample.runnerError}`);
+  }
+  if (sample.compareError) {
+    lines.push(`compareError: ${sample.compareError}`);
+  }
+  return lines.join('\n') || t('report.noDetails');
+}
+
+function buildCheckerMessage(sample: SampleReport): string | undefined {
+  const checker = sample.checker;
+  if (!checker) {
+    return undefined;
+  }
+  return [
+    checker.message,
+    checker.output,
+    checker.stdout,
+    checker.stderr,
+    checker.finalLine ? `finalLine: ${checker.finalLine}` : undefined,
+    checker.verdictLine ? `verdictLine: ${checker.verdictLine}` : undefined,
+    checker.scoreText ? `score: ${checker.scoreText}` : undefined
+  ].filter((entry): entry is string => Boolean(entry && entry.trim())).join('\n');
 }
 
 function formatMs(value: number | undefined): number | string {
