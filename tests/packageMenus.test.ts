@@ -146,6 +146,16 @@ describe('package tree sample add menu', () => {
     });
     expect(contextMenus.find((entry) => entry.command === 'oijudger.runSubtask' && entry.group === 'inline@1')?.when)
       .toContain('viewItem == subtask');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.bindSubtaskGenerator' && entry.group === 'inline@2'))
+      .toMatchObject({
+        when: 'view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)',
+        group: 'inline@2'
+      });
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.bindSubtaskGeneratorInput' && entry.group === 'inline@3'))
+      .toMatchObject({
+        when: 'view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)',
+        group: 'inline@3'
+      });
     expect(contextMenus.find((entry) => entry.command === 'oijudger.renameSubtask')?.when)
       .toContain('viewItem == subtask');
     expect(contextMenus.find((entry) => entry.command === 'oijudger.deleteSubtask')?.when)

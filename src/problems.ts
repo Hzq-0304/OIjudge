@@ -862,6 +862,31 @@ export async function setProblemSubtaskGeneratorInput(
   return subtask;
 }
 
+export async function createProblemSubtaskGeneratorInputFile(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  subtaskId: string
+): Promise<{ subtask: SubtaskConfig; inputPath: string; inputRel: string; created: boolean } | undefined> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  const subtask = problem?.subtasks?.find((entry) => entry.id === subtaskId);
+  if (!problem || !subtask) {
+    return undefined;
+  }
+
+  const inputRel = getProblemSubtaskGeneratorInputRelPath(problem.id, subtask.id);
+  const inputPath = resolveWorkspacePath(workspaceFolder, inputRel);
+  await fs.mkdir(path.dirname(inputPath), { recursive: true });
+  const created = !(await exists(inputPath));
+  if (created) {
+    await fs.writeFile(inputPath, '', 'utf8');
+  }
+
+  subtask.generatorInput = createProblemSource(workspaceFolder, inputPath).path;
+  await writeProblemsConfig(workspaceFolder, problems);
+  return { subtask, inputPath, inputRel, created };
+}
+
 export async function clearProblemSubtaskGeneratorInput(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -1332,6 +1357,11 @@ function getProblemSampleFilePaths(problemId: string, index: number): { inputRel
     inputRel: getOiJudgeDataRelPath('problems', problemId, 'samples', `sample-${index}.in`),
     answerRel: getOiJudgeDataRelPath('problems', problemId, 'samples', `sample-${index}.out`)
   };
+}
+
+function getProblemSubtaskGeneratorInputRelPath(problemId: string, subtaskId: string): string {
+  const safeSubtaskId = subtaskId.replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'subtask';
+  return getOiJudgeDataRelPath('problems', problemId, 'generator-inputs', `${safeSubtaskId}.txt`);
 }
 
 function getGeneratedAnswerRelPath(problemId: string, sample: Pick<SampleConfig, 'id'>): string {

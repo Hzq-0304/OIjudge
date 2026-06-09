@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createProblemSampleAddModeItems, scanSamplePairs } from '../src/extension';
+import { createGeneratorInputBindModeItems, createProblemSampleAddModeItems, scanSamplePairs } from '../src/extension';
 
 const workspaces: string[] = [];
 
@@ -17,6 +17,14 @@ describe('sample add QuickPick items', () => {
     expect(items.map((item) => item.mode)).toEqual(['manual', 'files', 'batch']);
     expect(items.every((item) => item.label && item.description)).toBe(true);
     expect(items.find((item) => item.mode === 'manual')?.description).toContain('.out');
+  });
+
+  it('keeps generator input creation before file selection', () => {
+    const items = createGeneratorInputBindModeItems();
+
+    expect(items.map((item) => item.mode)).toEqual(['create', 'files']);
+    expect(items.every((item) => item.label && item.description)).toBe(true);
+    expect(items.find((item) => item.mode === 'create')?.description).toContain('.txt');
   });
 
   it('prefers .out over .ans when batch importing with the default answer suffix', async () => {

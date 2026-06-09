@@ -473,8 +473,8 @@
       },
       {
         "command": "oijudger.bindSubtaskGenerator",
-        "title": "OI Judge: Bind Generator",
-        "icon": "$(link)"
+        "title": "OI Judge: 绑定数据生成器/Bind Generator",
+        "icon": "$(symbol-parameter)"
       },
       {
         "command": "oijudger.openSubtaskGenerator",
@@ -632,6 +632,16 @@
           "command": "oijudger.runSubtask",
           "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
           "group": "inline@1"
+        },
+        {
+          "command": "oijudger.bindSubtaskGenerator",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "inline@2"
+        },
+        {
+          "command": "oijudger.bindSubtaskGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "inline@3"
         },
         {
           "command": "oijudger.runSubtask",

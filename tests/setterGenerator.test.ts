@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import {
   addProblemGenerator,
   clearProblemGeneratorProgram,
+  createProblemSubtaskGeneratorInputFile,
   createProblem,
   createProblemSubtask,
   getProblem,
@@ -84,6 +85,36 @@ describe('setter generator binding', () => {
     expect(updated ? getProblemGenerators(updated) : []).toEqual([]);
     expect(updated?.subtasks?.[0].generatorId).toBeUndefined();
     await expect(fs.access(generatorPath)).resolves.toBeUndefined();
+  });
+
+  it('creates and binds an editable subtask generator input file', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+
+    const result = await createProblemSubtaskGeneratorInputFile(workspaceFolder, problem.id, subtask?.id ?? '');
+    const updated = await getProblem(workspaceFolder, problem.id);
+
+    expect(result?.created).toBe(true);
+    expect(result?.inputRel).toBe(`.vscode/.OIJudge/problems/${problem.id}/generator-inputs/${subtask?.id}.txt`);
+    expect(updated?.subtasks?.[0].generatorInput).toBe(result?.inputRel);
+    await expect(fs.readFile(result?.inputPath ?? '', 'utf8')).resolves.toBe('');
+    expect(result?.inputRel.endsWith('.in')).toBe(false);
+    expect(result?.inputRel.endsWith('.out')).toBe(false);
+  });
+
+  it('reuses an existing subtask generator input file without overwriting it', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+    const first = await createProblemSubtaskGeneratorInputFile(workspaceFolder, problem.id, subtask?.id ?? '');
+    await fs.writeFile(first?.inputPath ?? '', 'n = 10\n', 'utf8');
+
+    const second = await createProblemSubtaskGeneratorInputFile(workspaceFolder, problem.id, subtask?.id ?? '');
+
+    expect(second?.created).toBe(false);
+    expect(second?.inputPath).toBe(first?.inputPath);
+    await expect(fs.readFile(second?.inputPath ?? '', 'utf8')).resolves.toBe('n = 10\n');
   });
 
   it('migrates old string generator source entries to problem source objects', async () => {

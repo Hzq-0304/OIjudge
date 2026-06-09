@@ -51,6 +51,7 @@ import {
   clearProblemSubtaskGeneratorInput,
   clearProblemSubtaskGenerator,
   clearProblemStdProgram,
+  createProblemSubtaskGeneratorInputFile,
   createProblemSubtask,
   createProblem,
   deleteProblemSubtask,
@@ -111,6 +112,8 @@ let activeProblemId: string | undefined;
 type AddSampleMode = 'paste' | 'files';
 type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
 type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
+type GeneratorInputBindMode = 'create' | 'files';
+type GeneratorInputBindModeItem = vscode.QuickPickItem & { mode: GeneratorInputBindMode };
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -639,10 +642,33 @@ export function createProblemSampleAddModeItems(): ProblemSampleAddModeItem[] {
   ];
 }
 
+export function createGeneratorInputBindModeItems(): GeneratorInputBindModeItem[] {
+  return [
+    {
+      label: t('subtask.generatorInputCreate'),
+      description: t('subtask.generatorInputCreateDescription'),
+      mode: 'create'
+    },
+    {
+      label: t('subtask.generatorInputSelect'),
+      description: t('subtask.generatorInputSelectDescription'),
+      mode: 'files'
+    }
+  ];
+}
+
 async function pickProblemSampleAddMode(): Promise<ProblemSampleAddMode | undefined> {
   const picked = await vscode.window.showQuickPick(createProblemSampleAddModeItems(), {
     title: t('sampleAddTitle'),
     placeHolder: t('addSamplePlaceHolder')
+  });
+  return picked?.mode;
+}
+
+async function pickGeneratorInputBindMode(): Promise<GeneratorInputBindMode | undefined> {
+  const picked = await vscode.window.showQuickPick(createGeneratorInputBindModeItems(), {
+    title: t('subtask.bindGeneratorInput'),
+    placeHolder: t('subtask.generatorInputBindPlaceHolder')
   });
   return picked?.mode;
 }
@@ -1159,6 +1185,31 @@ async function bindSubtaskGeneratorInputCommand(
   }
   if (!isSetterModeEnabled()) {
     vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const mode = await pickGeneratorInputBindMode();
+  if (!mode) {
+    return;
+  }
+
+  if (mode === 'create') {
+    const result = await createProblemSubtaskGeneratorInputFile(
+      context.workspaceFolder,
+      context.problem.id,
+      context.subtask.id
+    );
+    if (!result) {
+      vscode.window.showWarningMessage(t('subtask.notFound'));
+      return;
+    }
+
+    sampleTreeProvider.refresh();
+    await openFileInEditor(result.inputPath, t('subtask.generatorInputMissing'));
+    vscode.window.showInformationMessage(t(
+      result.created ? 'subtask.generatorInputCreated' : 'subtask.generatorInputOpened',
+      { name: path.basename(result.inputPath) }
+    ));
     return;
   }
 
