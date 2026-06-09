@@ -21,6 +21,7 @@ export function isSetterModeEnabled(): boolean {
 export function normalizeSetterConfig(setter: SetterConfig | undefined): SetterConfig {
   return {
     stdProgram: setter?.stdProgram,
+    autoGenerateOutputFromStd: setter?.autoGenerateOutputFromStd,
     dataCases: getSetterDataCases(setter),
     generator: {
       enabled: setter?.generator?.enabled ?? false,

@@ -14,10 +14,12 @@ import {
   getProblemGeneratorInputs,
   getProblemGenerators,
   getProblemGeneratorProgram,
+  isProblemAutoGenerateOutputFromStdEnabled,
   removeProblemGeneratorInput,
   removeProblemGenerator,
   setProblemSubtaskGenerator,
-  setProblemGeneratorProgram
+  setProblemGeneratorProgram,
+  toggleProblemAutoGenerateOutputFromStd
 } from '../src/problems';
 
 const workspaces: string[] = [];
@@ -128,6 +130,22 @@ describe('setter generator binding', () => {
     await expect(fs.readFile(result?.inputPath ?? '', 'utf8')).resolves.toBe('');
     expect(result?.inputRel.endsWith('.in')).toBe(false);
     expect(result?.inputRel.endsWith('.out')).toBe(false);
+  });
+
+  it('defaults auto STD output generation to on and toggles it per problem', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+
+    const disabled = await toggleProblemAutoGenerateOutputFromStd(workspaceFolder, problem.id);
+    const enabled = await toggleProblemAutoGenerateOutputFromStd(workspaceFolder, problem.id);
+    const updated = await getProblem(workspaceFolder, problem.id);
+
+    expect(isProblemAutoGenerateOutputFromStdEnabled(problem)).toBe(true);
+    expect(disabled?.enabled).toBe(false);
+    expect(disabled?.problem.setter?.autoGenerateOutputFromStd).toBe(false);
+    expect(enabled?.enabled).toBe(true);
+    expect(enabled?.problem.setter?.autoGenerateOutputFromStd).toBe(true);
+    expect(updated?.setter?.autoGenerateOutputFromStd).toBe(true);
   });
 
   it('reuses an existing subtask generator input file without overwriting it', async () => {

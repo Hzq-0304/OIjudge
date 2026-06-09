@@ -662,6 +662,30 @@ export async function clearProblemStdProgram(
   });
 }
 
+export function isProblemAutoGenerateOutputFromStdEnabled(problem: ProblemConfig): boolean {
+  return problem.setter?.autoGenerateOutputFromStd !== false;
+}
+
+export async function toggleProblemAutoGenerateOutputFromStd(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<{ problem: ProblemConfig; enabled: boolean } | undefined> {
+  const problem = await updateProblem(workspaceFolder, problemId, (entry) => {
+    const setter = normalizeSetterConfig(entry.setter);
+    const enabled = setter.autoGenerateOutputFromStd === false;
+    entry.setter = {
+      ...setter,
+      autoGenerateOutputFromStd: enabled
+    };
+  });
+  return problem
+    ? {
+      problem,
+      enabled: isProblemAutoGenerateOutputFromStdEnabled(problem)
+    }
+    : undefined;
+}
+
 export function getProblemGeneratorProgram(problem: ProblemConfig): string | undefined {
   return problem.setter?.generator?.generators?.[0]?.source?.path;
 }

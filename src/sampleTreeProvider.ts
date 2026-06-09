@@ -16,6 +16,7 @@ import {
   getSubtaskSamples,
   getUnassignedProblemSamples,
   hasProblemGeneratedAnswers,
+  isProblemAutoGenerateOutputFromStdEnabled,
   moveProblemSampleToSubtask,
   resolveProblemReferencePath
 } from './problems';
@@ -783,6 +784,14 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
 function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
   return [
     createGeneratorInfoNode(workspaceFolder, problem),
+    actionNode(
+      isProblemAutoGenerateOutputFromStdEnabled(problem)
+        ? t('generator.autoOutput.on')
+        : t('generator.autoOutput.off'),
+      'oijudger.toggleAutoGenerateOutputFromStd',
+      'sync',
+      problem.id
+    ),
     actionNode(t('setter.sample.addInput'), 'oijudger.addSetterInputSample', 'file-add', problem.id),
     actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id),
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),

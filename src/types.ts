@@ -77,6 +77,7 @@ export type FileIoConfig = {
 
 export interface SetterConfig {
   stdProgram?: string;
+  autoGenerateOutputFromStd?: boolean;
   dataCases?: SetterDataCaseConfig[];
   generator?: SetterGeneratorConfig;
   generatedAnswers?: Record<string, string>;

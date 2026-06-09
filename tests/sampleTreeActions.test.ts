@@ -93,6 +93,7 @@ describe('sample tree add entry', () => {
     const setterCommands = (await provider.getChildren(setterGroup)).map((node) => node.command?.command);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
+    expect(setterCommands).toContain('oijudger.toggleAutoGenerateOutputFromStd');
     expect(setterCommands).toContain('oijudger.addSetterInputSample');
     expect(setterCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
     expect(setterCommands).toContain('oijudger.addProblemGenerator');
@@ -100,6 +101,23 @@ describe('sample tree add entry', () => {
     expect(setterCommands).toContain('oijudger.removeProblemGenerator');
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).toContain('oijudger.setSampleName');
+  });
+
+  it('shows the auto STD output state in the setter tool group', async () => {
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const setterGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'setter');
+    const setterNodes = await provider.getChildren(setterGroup);
+    const autoOutputNode = setterNodes.find((node) => node.command?.command === 'oijudger.toggleAutoGenerateOutputFromStd');
+
+    expect(autoOutputNode?.label).toBe('Auto STD Output: On');
+    expect(autoOutputNode?.command?.arguments).toEqual([problem.id]);
   });
 
   it('does not show setter input sample actions when setter mode is disabled', async () => {

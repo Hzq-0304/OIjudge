@@ -69,6 +69,7 @@ import {
   getProblemGenerators,
   getProblemReportPath,
   getProblemSourcePath,
+  isProblemAutoGenerateOutputFromStdEnabled,
   importLegacyProblem,
   moveProblemSampleToSubtask,
   renameProblemSubtask,
@@ -82,6 +83,7 @@ import {
   setProblemStdProgram,
   setProblemSubtaskGeneratorInput,
   setProblemSubtaskResult,
+  toggleProblemAutoGenerateOutputFromStd,
   writeProblemGeneratedInputSample,
   writeGeneratedAnswerForSample,
   unbindProblemStatement,
@@ -127,6 +129,9 @@ type GeneratorInputChoice = {
   source: 'global' | 'subtask';
 };
 const MAX_GENERATED_SAMPLE_INPUT_COUNT = 100;
+type AutoStdOutputContext =
+  | { enabled: false; reason?: string }
+  | { enabled: true; std: StdAnswerGenerationContext };
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -529,6 +534,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.clearStdProgram', async (problemArg?: unknown) => {
       await clearStdProgramCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.toggleAutoGenerateOutputFromStd', async (problemArg?: unknown) => {
+      await toggleAutoGenerateOutputFromStdCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.generateSampleAnswerWithStd', async (problemArg?: unknown, sampleArg?: unknown) => {
       await generateSampleAnswerWithStdCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
@@ -1530,16 +1538,22 @@ async function generateInputFromGenerator(
     return;
   }
 
+  const autoStd = await prepareAutoStdOutputGeneration(workspaceFolder, problem);
+  if (!autoStd) {
+    return;
+  }
+
   let generatedCount = 0;
+  let outputCount = 0;
   let emptyOutputAction: EmptyGeneratorOutputAction | undefined;
   for (let current = 1; current <= count; current += 1) {
     output.appendLine(t('generator.input.generatingProgress', { current, total: count }));
     const generated = await runCompiledGenerator(workspaceFolder, problem, compile, generatorPath, inputPath);
     if (generated === undefined) {
       output.appendLine(`Generator execution failed at ${current}/${count}.`);
-      output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+      output.appendLine(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
       sampleTreeProvider.refresh();
-      vscode.window.showWarningMessage(t('generator.input.generatedPartial', { count: generatedCount }));
+      vscode.window.showWarningMessage(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
       return;
     }
     if (!generated) {
@@ -1547,9 +1561,9 @@ async function generateInputFromGenerator(
         emptyOutputAction = await confirmEmptyGeneratorOutputForBatch();
       }
       if (emptyOutputAction === 'cancel' || !emptyOutputAction) {
-        output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+        output.appendLine(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
         sampleTreeProvider.refresh();
-        vscode.window.showWarningMessage(t('generator.input.generatedPartial', { count: generatedCount }));
+        vscode.window.showWarningMessage(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
         return;
       }
       if (emptyOutputAction === 'skip') {
@@ -1560,23 +1574,34 @@ async function generateInputFromGenerator(
 
     const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, generated, subtask?.id);
     if (!sample) {
-      output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+      output.appendLine(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
       sampleTreeProvider.refresh();
-      vscode.window.showWarningMessage(
-        t('generator.input.generatedPartial', { count: generatedCount })
-      );
+      vscode.window.showWarningMessage(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
       return;
     }
 
     generatedCount += 1;
     const inputFilePath = resolveWorkspacePath(workspaceFolder, sample.input);
-    output.appendLine(`[${current}/${count}] Generated: ${path.basename(sample.input)}`);
+    output.appendLine(`[${current}/${count}] Generated input: ${path.basename(sample.input)}`);
     output.appendLine(`Generated sample input path: ${inputFilePath}`);
+    if (autoStd.enabled) {
+      const generatedOutput = await generateOutputForGeneratedSample(workspaceFolder, problem, sample, autoStd.std);
+      if (!generatedOutput.ok) {
+        output.appendLine(`STD execution failed at ${current}/${count}.`);
+        output.appendLine(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
+        sampleTreeProvider.refresh();
+        vscode.window.showWarningMessage(t('generator.autoOutput.runFailed', { current, total: count }));
+        vscode.window.showWarningMessage(createGeneratedInputPartialMessage(autoStd, generatedCount, outputCount));
+        return;
+      }
+      outputCount += 1;
+      output.appendLine(`[${current}/${count}] Generated output: ${path.basename(generatedOutput.answerPath)}`);
+    }
   }
 
   sampleTreeProvider.refresh();
   output.appendLine('');
-  vscode.window.showInformationMessage(t('generator.input.generatedMany', { count: generatedCount }));
+  vscode.window.showInformationMessage(createGeneratedInputSuccessMessage(autoStd, generatedCount));
 }
 
 async function resolveGeneratorForSubtask(
@@ -1794,6 +1819,133 @@ async function runCompiledGenerator(
     return undefined;
   }
   return result.stdout;
+}
+
+async function prepareAutoStdOutputGeneration(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): Promise<AutoStdOutputContext | undefined> {
+  const enabled = isProblemAutoGenerateOutputFromStdEnabled(problem);
+  output.appendLine(`Auto generate output with STD: ${enabled ? 'On' : 'Off'}`);
+  if (!enabled) {
+    return { enabled: false };
+  }
+  if (!problem.setter?.stdProgram) {
+    output.appendLine('STD: Not bound');
+    output.appendLine('Skip output generation.');
+    vscode.window.showWarningMessage(t('generator.autoOutput.noStd'));
+    return { enabled: false, reason: 'noStd' };
+  }
+
+  const stdPath = resolveProblemReferencePath(workspaceFolder, problem.setter.stdProgram);
+  if (!(await exists(stdPath))) {
+    output.appendLine(`STD: Missing (${stdPath})`);
+    output.appendLine('Skip output generation.');
+    vscode.window.showWarningMessage(t('generator.autoOutput.stdMissing'));
+    return { enabled: false, reason: 'stdMissing' };
+  }
+
+  const saved = await vscode.workspace.saveAll(false);
+  if (!saved) {
+    output.appendLine('[ERR] Failed to save files before auto-generating outputs with STD.');
+    vscode.window.showWarningMessage(t('seeOutputAndStderr'));
+    return undefined;
+  }
+
+  output.appendLine(`STD: ${path.basename(stdPath)}`);
+  output.appendLine(`STD source: ${stdPath}`);
+  output.appendLine('STD compile:');
+  const compile = await compileSource(workspaceFolder, stdPath, problem, output);
+  if (!compile) {
+    vscode.window.showErrorMessage(t('generator.autoOutput.compileFailed'));
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    std: { stdPath, compile }
+  };
+}
+
+async function generateOutputForGeneratedSample(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  sample: SampleConfig,
+  std: StdAnswerGenerationContext
+): Promise<{ ok: true; answerPath: string } | { ok: false; reason: string }> {
+  const inputPath = resolveSamplePath(workspaceFolder, sample.input);
+  if (!(await exists(inputPath))) {
+    const reason = `Sample input missing: ${inputPath}`;
+    output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+    return { ok: false, reason };
+  }
+
+  const input = await fs.readFile(inputPath, 'utf8');
+  const execution = await prepareStdSampleExecution(workspaceFolder, problem, sample, input);
+  let result: Awaited<ReturnType<typeof runProcess>>;
+  try {
+    result = await runProcess(
+      std.compile.executablePath,
+      [],
+      execution.stdin,
+      execution.cwd,
+      problem.limits.timeMs,
+      createStdExecutionEnv(std.compile.executablePath, std.compile.compilerCommand)
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    output.appendLine(`[ERR] ${sample.name}: STD failed to start: ${reason}`);
+    return { ok: false, reason };
+  }
+
+  if (result.timedOut || result.code !== 0 || result.signal) {
+    const reason = result.timedOut
+      ? `STD timed out after ${Math.round(result.timeMs)} ms.`
+      : `STD exited abnormally: code=${result.code ?? 'null'}, signal=${result.signal ?? 'null'}.`;
+    output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+    if (result.stderr.trim()) {
+      output.appendLine(result.stderr.trimEnd());
+    }
+    return { ok: false, reason };
+  }
+
+  if (result.stderr.trim()) {
+    output.appendLine(`[STD stderr] ${sample.name}:`);
+    output.appendLine(result.stderr.trimEnd());
+  }
+
+  let answer = result.stdout;
+  if (execution.outputPath) {
+    if (!(await exists(execution.outputPath))) {
+      const fileIo = getProblemFileIoForRun(problem);
+      const reason = `STD did not create File IO output file: ${fileIo.outputFileName}`;
+      output.appendLine(`[ERR] ${sample.name}: ${reason}`);
+      return { ok: false, reason };
+    }
+    answer = await fs.readFile(execution.outputPath, 'utf8');
+  }
+
+  const answerPath = resolveSamplePath(workspaceFolder, sample.answer);
+  await fs.mkdir(path.dirname(answerPath), { recursive: true });
+  await fs.writeFile(answerPath, answer, 'utf8');
+  output.appendLine(`[OK] ${sample.name}: wrote STD output directly to ${answerPath}`);
+  return { ok: true, answerPath };
+}
+
+function createGeneratedInputSuccessMessage(autoStd: AutoStdOutputContext, count: number): string {
+  return autoStd.enabled
+    ? t('generator.input.generatedWithOutput', { count })
+    : t('generator.input.generatedMany', { count });
+}
+
+function createGeneratedInputPartialMessage(
+  autoStd: AutoStdOutputContext,
+  inputCount: number,
+  outputCount: number
+): string {
+  return autoStd.enabled
+    ? t('generator.input.generatedPartialWithOutput', { inputCount, outputCount })
+    : t('generator.input.generatedPartial', { count: inputCount });
 }
 
 async function confirmEmptyGeneratorOutputForBatch(): Promise<EmptyGeneratorOutputAction | undefined> {
@@ -2730,6 +2882,31 @@ async function clearStdProgramCommand(
   await clearProblemStdProgram(context.workspaceFolder, context.problem.id);
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(t('stdCleared'));
+}
+
+async function toggleAutoGenerateOutputFromStdCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const result = await toggleProblemAutoGenerateOutputFromStd(context.workspaceFolder, context.problem.id);
+  if (!result) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(
+    result.enabled ? t('generator.autoOutput.enabled') : t('generator.autoOutput.disabled')
+  );
 }
 
 async function generateSampleAnswerWithStdCommand(

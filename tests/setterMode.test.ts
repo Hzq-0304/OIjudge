@@ -13,6 +13,7 @@ describe('setter mode config helpers', () => {
   it('normalizes empty setter config', () => {
     expect(normalizeSetterConfig(undefined)).toEqual({
       stdProgram: undefined,
+      autoGenerateOutputFromStd: undefined,
       dataCases: [],
       generator: {
         enabled: false,

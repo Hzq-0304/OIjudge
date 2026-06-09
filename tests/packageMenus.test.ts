@@ -47,7 +47,8 @@ describe('package tree sample add menu', () => {
         'oijudger.openProblemGenerator',
         'oijudger.removeProblemGenerator',
         'oijudger.addSetterInputSample',
-        'oijudger.generateSampleInput'
+        'oijudger.generateSampleInput',
+        'oijudger.toggleAutoGenerateOutputFromStd'
       ].includes(entry.command)
     );
 
@@ -67,7 +68,8 @@ describe('package tree sample add menu', () => {
       'oijudger.openProblemGeneratorInput',
       'oijudger.removeProblemGeneratorInput',
       'oijudger.addSetterInputSample',
-      'oijudger.generateSampleInput'
+      'oijudger.generateSampleInput',
+      'oijudger.toggleAutoGenerateOutputFromStd'
     ]));
     expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
       'onCommand:oijudger.generateSampleAnswerWithStd',
@@ -85,21 +87,28 @@ describe('package tree sample add menu', () => {
       'onCommand:oijudger.openProblemGeneratorInput',
       'onCommand:oijudger.removeProblemGeneratorInput',
       'onCommand:oijudger.addSetterInputSample',
-      'onCommand:oijudger.generateSampleInput'
+      'onCommand:oijudger.generateSampleInput',
+      'onCommand:oijudger.toggleAutoGenerateOutputFromStd'
     ]));
-    expect(menuCommands).toHaveLength(8);
+    expect(menuCommands).toHaveLength(9);
     expect(menuCommands.every((entry) => entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
     expect(menuCommands.find((entry) => entry.command === 'oijudger.generateSampleAnswerWithStd')?.when).toContain('viewItem == sample');
     expect(menuCommands.find((entry) => entry.command === 'oijudger.applyAllGeneratedSampleAnswers')?.when).toContain('samplesGroupWithGeneratedOutputs');
     expect(menuCommands.find((entry) => entry.command === 'oijudger.addProblemGenerator')?.when).toContain('viewItem == oijudgerProblemNormal');
     expect(menuCommands.find((entry) => entry.command === 'oijudger.generateSampleInput' && entry.group === 'inline@5')?.when)
       .toContain('samplesGroup');
+    expect(menuCommands.find((entry) => entry.command === 'oijudger.toggleAutoGenerateOutputFromStd')?.when)
+      .toContain('oijudgerProblemNormal');
     expect(packageJson.contributes.menus.commandPalette).toContainEqual({
       command: 'oijudger.addSetterInputSample',
       when: 'false'
     });
     expect(packageJson.contributes.menus.commandPalette).toContainEqual({
       command: 'oijudger.generateSampleInput',
+      when: 'false'
+    });
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.toggleAutoGenerateOutputFromStd',
       when: 'false'
     });
   });

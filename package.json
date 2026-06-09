@@ -85,6 +85,7 @@
     "onCommand:oijudger.selectStdProgram",
     "onCommand:oijudger.openStdProgram",
     "onCommand:oijudger.clearStdProgram",
+    "onCommand:oijudger.toggleAutoGenerateOutputFromStd",
     "onCommand:oijudger.generateSampleAnswerWithStd",
     "onCommand:oijudger.generateAllSampleAnswersWithStd",
     "onCommand:oijudger.viewCurrentSampleAnswer",
@@ -430,6 +431,11 @@
         "command": "oijudger.clearStdProgram",
         "title": "OI Judge: 清除 STD/Clear STD",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "oijudger.toggleAutoGenerateOutputFromStd",
+        "title": "OI Judge: 自动使用 STD 生成输出/Auto Generate Output with STD",
+        "icon": "$(sync)"
       },
       {
         "command": "oijudger.generateSampleAnswerWithStd",
@@ -904,6 +910,11 @@
           "group": "4_setter@3"
         },
         {
+          "command": "oijudger.toggleAutoGenerateOutputFromStd",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "4_setter@3.5"
+        },
+        {
           "command": "oijudger.generateAllSampleAnswersWithStd",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@4"
@@ -1047,6 +1058,10 @@
         },
         {
           "command": "oijudger.generateAllSampleAnswersWithStd",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.toggleAutoGenerateOutputFromStd",
           "when": "false"
         },
         {
