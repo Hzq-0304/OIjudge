@@ -169,6 +169,23 @@ describe('package tree sample add menu', () => {
     }
   });
 
+  it('contributes testcase export menus without requiring setter mode', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const entries = contextMenus.filter((entry) => entry.command === 'oijudger.exportTestcases');
+
+    expect(commands).toContain('oijudger.exportTestcases');
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.exportTestcases');
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
+    expect(entries.some((entry) => entry.when.includes('samplesGroup'))).toBe(true);
+    expect(entries.some((entry) => entry.when.includes('oijudgerProblemNormal'))).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.exportTestcases',
+      when: 'false'
+    });
+  });
+
   it('contributes generated answer review and apply menus for pending samples', () => {
     const generatedCommands = [
       'oijudger.viewCurrentSampleAnswer',

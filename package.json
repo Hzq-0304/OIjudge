@@ -40,6 +40,7 @@
     "onCommand:oijudger.addSampleFromSamplesGroup",
     "onCommand:oijudger.generateSampleInput",
     "onCommand:oijudger.setProblemTotalScore",
+    "onCommand:oijudger.exportTestcases",
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
@@ -215,6 +216,11 @@
         "command": "oijudger.setProblemTotalScore",
         "title": "OI Judge: 设置题目总分/Set Total Score",
         "icon": "$(symbol-number)"
+      },
+      {
+        "command": "oijudger.exportTestcases",
+        "title": "OI Judge: 导出测试点/Export Testcases",
+        "icon": "$(export)"
       },
       {
         "command": "oijudger.createSubtask",
@@ -694,6 +700,11 @@
           "group": "2_score@1"
         },
         {
+          "command": "oijudger.exportTestcases",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "7_export@1"
+        },
+        {
           "command": "oijudger.generateSampleInput",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
           "group": "inline@5"
@@ -969,6 +980,11 @@
           "group": "4_setter@4"
         },
         {
+          "command": "oijudger.exportTestcases",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "7_export@1"
+        },
+        {
           "command": "oijudger.addProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@5"
@@ -999,6 +1015,10 @@
         },
         {
           "command": "oijudger.setProblemTotalScore",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.exportTestcases",
           "when": "false"
         },
         {
