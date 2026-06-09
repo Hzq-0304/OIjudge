@@ -120,6 +120,11 @@ import {
   TestcaseExportFormat,
   TestcaseExportMode
 } from './testcaseExport';
+import {
+  runGeneratorStdStressTest,
+  runStandaloneStressTest,
+  StressTestMode
+} from './stressTest';
 import { runProcess } from './runner';
 import { withCompilerPathEnv } from './compilerRuntime';
 import { CompileResult, FileIoConfig, IoMode, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
@@ -402,6 +407,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.exportTestcases', async (problemArg?: unknown) => {
       await exportTestcasesCommand(readProblemId(problemArg));
+    }),
+    vscode.commands.registerCommand('oijudger.runStressTest', async (problemArg?: unknown) => {
+      await runStressTestCommand(readProblemId(problemArg));
     }),
     vscode.commands.registerCommand('oijudger.createSubtask', async (problemArg?: unknown) => {
       await createSubtaskCommand(readProblemId(problemArg), sampleTreeProvider);
@@ -1355,6 +1363,147 @@ function getTestcaseExportGeneratedMessage(format: TestcaseExportFormat | undefi
     return t('export.testcases.lemonlimeGenerated');
   }
   return t('export.testcases.luoguGenerated');
+}
+
+async function runStressTestCommand(problemId: string | undefined): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  const mode = await pickStressTestMode();
+  if (!mode) {
+    return;
+  }
+
+  if (mode === 'standalone') {
+    const program = await pickCppFile(t('stress.selectStandalone'));
+    if (!program) {
+      return;
+    }
+    const result = await runStandaloneStressTest({
+      workspaceFolder: context.workspaceFolder,
+      config: context.problem,
+      programPath: program.fsPath,
+      output
+    });
+    if (!result) {
+      vscode.window.showWarningMessage(t('stress.compileFailed'));
+      return;
+    }
+    vscode.window.showInformationMessage(t('stress.standaloneFinished'));
+    return;
+  }
+
+  const generator = await pickCppFile(t('stress.selectGenerator'));
+  if (!generator) {
+    return;
+  }
+  const std = await pickCppFile(t('stress.selectStd'));
+  if (!std) {
+    return;
+  }
+  const solution = await pickStressSolutionFile();
+  if (!solution) {
+    return;
+  }
+  const rounds = await pickStressRounds();
+  if (!rounds) {
+    return;
+  }
+
+  const result = await runGeneratorStdStressTest({
+    workspaceFolder: context.workspaceFolder,
+    config: context.problem,
+    generatorPath: generator.fsPath,
+    stdPath: std.fsPath,
+    solutionPath: solution.fsPath,
+    rounds,
+    output
+  });
+  if (!result) {
+    vscode.window.showWarningMessage(t('stress.compileFailed'));
+    return;
+  }
+  if (result.failedAt !== undefined) {
+    vscode.window.showWarningMessage(t('stress.failed', { round: result.failedAt }));
+    return;
+  }
+  vscode.window.showInformationMessage(t('stress.finished', { count: result.passed }));
+}
+
+async function pickStressTestMode(): Promise<StressTestMode | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: t('stress.mode.generatorStd'), mode: 'generator-std' as const },
+      { label: t('stress.mode.standalone'), mode: 'standalone' as const }
+    ],
+    {
+      title: t('stress.mode.select'),
+      placeHolder: t('stress.mode.select')
+    }
+  );
+  return picked?.mode;
+}
+
+async function pickStressRounds(): Promise<number | undefined> {
+  const value = await vscode.window.showInputBox({
+    title: t('stress.rounds.prompt'),
+    prompt: t('stress.rounds.prompt'),
+    value: '100',
+    validateInput: (text) => validateStressRounds(text) ? undefined : t('stress.rounds.invalid')
+  });
+  return value === undefined ? undefined : Number(value.trim());
+}
+
+function validateStressRounds(value: string): boolean {
+  if (!/^[1-9]\d*$/u.test(value.trim())) {
+    return false;
+  }
+  return Number(value.trim()) <= 100000;
+}
+
+async function pickStressSolutionFile(): Promise<vscode.Uri | undefined> {
+  const editor = vscode.window.activeTextEditor;
+  if (editor && editor.document.uri.scheme === 'file' && isCppFile(editor.document.uri.fsPath)) {
+    const picked = await vscode.window.showQuickPick(
+      [
+        {
+          label: path.basename(editor.document.uri.fsPath),
+          description: t('currentFile'),
+          uri: editor.document.uri
+        },
+        {
+          label: t('selectSourceFile'),
+          description: t('stress.selectSolution')
+        }
+      ],
+      {
+        title: t('stress.selectSolution'),
+        placeHolder: t('stress.selectSolution')
+      }
+    );
+    if (!picked) {
+      return undefined;
+    }
+    if ('uri' in picked) {
+      return picked.uri;
+    }
+  }
+  return pickCppFile(t('stress.selectSolution'));
+}
+
+async function pickCppFile(title: string): Promise<vscode.Uri | undefined> {
+  const uris = await vscode.window.showOpenDialog({
+    title,
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: t('select'),
+    filters: {
+      'C++ Source': ['cpp', 'cc', 'cxx', 'c++']
+    }
+  });
+  return uris?.[0];
 }
 
 function formatExportWarning(warning: string): string {

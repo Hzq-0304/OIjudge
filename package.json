@@ -112,7 +112,8 @@
     "onCommand:oijudger.addSetterInputSample",
     "onCommand:oijudger.setSampleName",
     "onCommand:oijudger.setSampleScore",
-    "onCommand:oijudger.clearSampleScore"
+    "onCommand:oijudger.clearSampleScore",
+    "onCommand:oijudger.runStressTest"
   ],
   "main": "./out/extension.js",
   "repository": {
@@ -221,6 +222,11 @@
         "command": "oijudger.exportTestcases",
         "title": "OI Judge: 导出测试点/Export Testcases",
         "icon": "$(export)"
+      },
+      {
+        "command": "oijudger.runStressTest",
+        "title": "OI Judge: 对拍/Run Stress Test",
+        "icon": "$(beaker)"
       },
       {
         "command": "oijudger.createSubtask",
@@ -646,6 +652,11 @@
           "command": "oijudger.refreshView",
           "when": "view == oijudger.samplesView",
           "group": "navigation@4"
+        },
+        {
+          "command": "oijudger.runStressTest",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -998,6 +1009,11 @@
           "command": "oijudger.removeProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@7"
+        },
+        {
+          "command": "oijudger.runStressTest",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "3_run@3"
         }
       ],
       "commandPalette": [
@@ -1223,6 +1239,10 @@
         },
         {
           "command": "oijudger.addSetterInputSample",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.runStressTest",
           "when": "false"
         }
       ]

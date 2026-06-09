@@ -7,6 +7,7 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'packa
   contributes: {
     commands: Array<{ command: string; icon?: string }>;
     menus: {
+      'view/title': Array<{ command: string; when: string; group: string }>;
       'view/item/context': Array<{ command: string; when: string; group: string }>;
       commandPalette: Array<{ command: string; when: string }>;
     };
@@ -182,6 +183,31 @@ describe('package tree sample add menu', () => {
     expect(entries.some((entry) => entry.when.includes('oijudgerProblemNormal'))).toBe(true);
     expect(packageJson.contributes.menus.commandPalette).toContainEqual({
       command: 'oijudger.exportTestcases',
+      when: 'false'
+    });
+  });
+
+  it('contributes stress test entry without requiring setter mode', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
+      entry.command === 'oijudger.runStressTest'
+    );
+    const contextMenus = packageJson.contributes.menus['view/item/context'].filter((entry) =>
+      entry.command === 'oijudger.runStressTest'
+    );
+
+    expect(commands).toContain('oijudger.runStressTest');
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.runStressTest');
+    expect(titleMenus).toContainEqual({
+      command: 'oijudger.runStressTest',
+      when: 'view == oijudger.samplesView',
+      group: 'navigation@4'
+    });
+    expect(contextMenus.length).toBeGreaterThan(0);
+    expect(contextMenus.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
+    expect(contextMenus.some((entry) => entry.when.includes('oijudgerProblemNormal'))).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.runStressTest',
       when: 'false'
     });
   });
