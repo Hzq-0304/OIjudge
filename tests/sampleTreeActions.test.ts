@@ -52,8 +52,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const unassignedGroup = (await provider.getChildren(samplesGroup))[0];
-    const emptyNodes = await provider.getChildren(unassignedGroup);
+    const emptyNodes = await provider.getChildren(samplesGroup);
 
     expect(emptyNodes).toHaveLength(1);
     expect(emptyNodes[0].command).toBeUndefined();
@@ -88,8 +87,7 @@ describe('sample tree add entry', () => {
     const problemChildren = await provider.getChildren(problemNode);
     const setterGroup = problemChildren.find((node) => node.group === 'setter');
     const samplesGroup = problemChildren.find((node) => node.group === 'samples');
-    const unassignedGroup = (await provider.getChildren(samplesGroup))[0];
-    const sampleNode = (await provider.getChildren(unassignedGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
 
     const setterCommands = (await provider.getChildren(setterGroup)).map((node) => node.command?.command);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
@@ -127,8 +125,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const unassignedGroup = (await provider.getChildren(samplesGroup))[0];
-    const sampleNode = (await provider.getChildren(unassignedGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
@@ -152,8 +149,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const unassignedGroup = (await provider.getChildren(samplesGroup))[0];
-    const sampleNode = (await provider.getChildren(unassignedGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
@@ -182,8 +178,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const unassignedGroup = (await provider.getChildren(samplesGroup))[0];
-    const sampleNode = (await provider.getChildren(unassignedGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup))[0];
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
@@ -194,7 +189,7 @@ describe('sample tree add entry', () => {
     expect(sampleCommands).not.toContain('oijudger.deleteGeneratedSampleAnswer');
   });
 
-  it('groups samples under unassigned and subtasks with status context values', async () => {
+  it('shows unassigned samples directly before subtask folders with status context values', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const first = await addEmptyProblemSample(workspaceFolder, problem.id);
@@ -212,16 +207,15 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const sampleContainers = await provider.getChildren(samplesGroup);
-    const unassignedGroup = sampleContainers.find((node) => node.group === 'unassignedSamples');
-    const subtaskNode = sampleContainers.find((node) => node.group === 'subtask');
-    const unassignedSamples = await provider.getChildren(unassignedGroup);
+    const sampleNodes = await provider.getChildren(samplesGroup);
+    const unassignedSample = sampleNodes.find((node) => node.kind === 'sample');
+    const subtaskNode = sampleNodes.find((node) => node.group === 'subtask');
     const subtaskSamples = await provider.getChildren(subtaskNode);
 
-    expect(provider.getTreeItem(unassignedGroup).contextValue).toBe('unassignedSamplesGroup');
+    expect(sampleNodes.map((node) => node.kind)).toEqual(['sample', 'subtask']);
     expect(provider.getTreeItem(subtaskNode).contextValue).toBe('subtaskFailed');
     expect(subtaskNode?.description).toBe('✗ 1/2');
-    expect(unassignedSamples.map((node) => node.sampleId)).toEqual([first?.index]);
+    expect(unassignedSample?.sampleId).toBe(first?.index);
     expect(subtaskSamples.map((node) => node.sampleId)).toEqual([second?.index]);
   });
 });

@@ -29,7 +29,6 @@ type NodeGroup =
   | 'programs'
   | 'limits'
   | 'samples'
-  | 'unassignedSamples'
   | 'subtask'
   | 'setter'
   | 'actions'
@@ -121,8 +120,6 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         return createLimitNodes(problem);
       case 'samples':
         return createSampleContainerNodes(workspaceFolder, problem);
-      case 'unassignedSamples':
-        return createSampleNodes(workspaceFolder, problem, getUnassignedProblemSamples(problem));
       case 'subtask':
         return createSampleNodes(workspaceFolder, problem, getSubtaskSamples(problem, element.subtaskId ?? ''));
       case 'setter':
@@ -160,7 +157,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     target: TreeNode | undefined,
     dataTransfer: vscode.DataTransfer
   ): Promise<void> {
-    if (!target || (target.group !== 'subtask' && target.group !== 'unassignedSamples')) {
+    if (!target || (target.group !== 'subtask' && target.group !== 'samples')) {
       return;
     }
 
@@ -428,21 +425,17 @@ async function createSampleContainerNodes(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig
 ): Promise<TreeNode[]> {
+  const unassignedSampleNodes = await createSampleNodes(
+    workspaceFolder,
+    problem,
+    getUnassignedProblemSamples(problem),
+    { showEmpty: false }
+  );
   const subtaskNodes = await Promise.all(
     (problem.subtasks ?? []).map((subtask) => createSubtaskNode(workspaceFolder, problem, subtask))
   );
-  return [
-    {
-      kind: 'group',
-      label: t('subtask.unassigned'),
-      icon: new vscode.ThemeIcon('list-unordered'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
-      group: 'unassignedSamples',
-      problemId: problem.id,
-      contextValue: 'unassignedSamplesGroup'
-    },
-    ...subtaskNodes
-  ];
+  const nodes = [...unassignedSampleNodes, ...subtaskNodes];
+  return nodes.length > 0 ? nodes : [createEmptySamplesNode()];
 }
 
 async function createSubtaskNode(
@@ -509,16 +502,11 @@ async function getSubtaskGeneratorInputStatus(
 async function createSampleNodes(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig,
-  samples: ProblemConfig['samples']
+  samples: ProblemConfig['samples'],
+  options: { showEmpty?: boolean } = {}
 ): Promise<TreeNode[]> {
   if (samples.length === 0) {
-    return [
-      {
-        kind: 'info',
-        label: t('subtask.empty'),
-        icon: new vscode.ThemeIcon('beaker-stop')
-      }
-    ];
+    return options.showEmpty === false ? [] : [createEmptySamplesNode()];
   }
 
   const report = await readReport(workspaceFolder, problem.id);
@@ -582,6 +570,14 @@ async function createSampleNodes(
       hasGeneratedAnswer
     };
   }));
+}
+
+function createEmptySamplesNode(): TreeNode {
+  return {
+    kind: 'info',
+    label: t('subtask.empty'),
+    icon: new vscode.ThemeIcon('beaker-stop')
+  };
 }
 
 function createRuntimeTooltipLines(report: SampleReport | undefined): string[] {
