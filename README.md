@@ -1,7 +1,7 @@
 # OI Judge
 
 <p align="center">
-  <a href="#中文介绍">
+  <a href="#chinese-introduction">
     <img src="https://img.shields.io/badge/中文介绍-点击查看-blue?style=for-the-badge" alt="中文介绍">
   </a>
 </p>
@@ -375,6 +375,8 @@ Commands:
 - `OI Judge: Clear Outputs`
 
 The default compiler command is `g++`. You can edit `.vscode/.OIJudge` to adjust per-problem compiler flags.
+
+<a id="chinese-introduction"></a>
 
 ## 中文介绍
 
