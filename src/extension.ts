@@ -1267,12 +1267,16 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
   output.show(true);
   output.appendLine('Export Testcases');
   output.appendLine(`Mode: Copy`);
-  output.appendLine(`Format: ${format === 'luogu' ? 'Luogu' : 'None'}`);
+  output.appendLine(`Format: ${getTestcaseExportFormatLabel(format)}`);
   output.appendLine(`Target: ${targetDir}`);
-  output.appendLine(`Generate config.yml: ${format ? 'yes' : 'no'}`);
+  output.appendLine(`Generate platform config: ${format ? 'yes' : 'no'}`);
 
   try {
     const result = await exportTestcases(context.workspaceFolder, context.problem, targetDir, format);
+    output.appendLine('Generated:');
+    for (const file of result.generatedFiles) {
+      output.appendLine(`  ${file}`);
+    }
     output.appendLine('Copied:');
     for (const file of result.copiedFiles) {
       output.appendLine(`  ${file}`);
@@ -1286,7 +1290,7 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
     vscode.window.showInformationMessage(t('export.testcases.done', { path: targetDir }));
     vscode.window.showInformationMessage(
       result.configGenerated
-        ? t('export.testcases.configGenerated')
+        ? getTestcaseExportGeneratedMessage(result.format)
         : t('export.testcases.configSkipped')
     );
     if (result.warnings.length > 0) {
@@ -1318,7 +1322,9 @@ async function pickTestcaseExportMode(): Promise<TestcaseExportMode | undefined>
 async function pickTestcaseExportFormat(): Promise<TestcaseExportFormat | undefined> {
   const picked = await vscode.window.showQuickPick(
     [
-      { label: t('export.testcases.format.luogu'), format: 'luogu' as const }
+      { label: t('export.testcases.format.luogu'), format: 'luogu' as const },
+      { label: t('export.testcases.format.polygon'), format: 'polygon' as const },
+      { label: t('export.testcases.format.lemonlime'), format: 'lemonlime' as const }
     ],
     {
       title: t('export.testcases.format.select'),
@@ -1326,6 +1332,29 @@ async function pickTestcaseExportFormat(): Promise<TestcaseExportFormat | undefi
     }
   );
   return picked?.format;
+}
+
+function getTestcaseExportFormatLabel(format: TestcaseExportFormat | undefined): string {
+  if (format === 'luogu') {
+    return 'Luogu';
+  }
+  if (format === 'polygon') {
+    return 'Codeforces / Polygon';
+  }
+  if (format === 'lemonlime') {
+    return 'LemonLime';
+  }
+  return 'None';
+}
+
+function getTestcaseExportGeneratedMessage(format: TestcaseExportFormat | undefined): string {
+  if (format === 'polygon') {
+    return t('export.testcases.polygonGenerated');
+  }
+  if (format === 'lemonlime') {
+    return t('export.testcases.lemonlimeGenerated');
+  }
+  return t('export.testcases.luoguGenerated');
 }
 
 function formatExportWarning(warning: string): string {

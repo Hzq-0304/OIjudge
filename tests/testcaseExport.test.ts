@@ -49,6 +49,95 @@ describe('testcase export', () => {
     expect(yaml).toContain('sample-2.in:\n  score: 30');
   });
 
+  it('generates Polygon import plan with bundled groups only', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const second = await addProblemSample(workspaceFolder, problem.id, '2\n', '2\n', { decodeEscapes: false });
+    const third = await addProblemSample(workspaceFolder, problem.id, '3\n', '3\n', { decodeEscapes: false });
+    const bundled = await createProblemSubtask(workspaceFolder, problem.id, 'Bundle');
+    const summed = await createProblemSubtask(workspaceFolder, problem.id, 'Sum');
+    await moveProblemSampleToSubtask(workspaceFolder, problem.id, first?.id ?? '', bundled?.id);
+    await moveProblemSampleToSubtask(workspaceFolder, problem.id, second?.id ?? '', summed?.id);
+    await setProblemSubtaskScoringMode(workspaceFolder, problem.id, bundled?.id ?? '', 'bundle');
+    await setProblemSubtaskScoringMode(workspaceFolder, problem.id, summed?.id ?? '', 'sum');
+    await setProblemSampleScore(workspaceFolder, problem.id, first?.id ?? '', 10);
+    await setProblemSampleScore(workspaceFolder, problem.id, second?.id ?? '', 20);
+    await setProblemSampleScore(workspaceFolder, problem.id, third?.id ?? '', 30);
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    const result = await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir, 'polygon');
+    const plan = JSON.parse(await fs.readFile(path.join(targetDir, 'polygon.json'), 'utf8')) as {
+      format: string;
+      tests: Array<{ inputFile: string; points: number; group?: string }>;
+      groups: Array<{ name: string; pointsPolicy: string }>;
+      notes: string[];
+    };
+    const readme = await fs.readFile(path.join(targetDir, 'POLYGON_EXPORT_README.txt'), 'utf8');
+
+    expect(result.configGenerated).toBe(true);
+    expect(plan.format).toBe('oijudge-polygon-import-plan');
+    expect(plan.tests).toEqual([
+      expect.objectContaining({ inputFile: 'sample-1.in', points: 10, group: 'subtask-1' }),
+      expect.objectContaining({ inputFile: 'sample-2.in', points: 20 }),
+      expect.objectContaining({ inputFile: 'sample-3.in', points: 30 })
+    ]);
+    expect(plan.tests[1]).not.toHaveProperty('group');
+    expect(plan.tests[2]).not.toHaveProperty('group');
+    expect(plan.groups).toEqual([
+      expect.objectContaining({ name: 'subtask-1', pointsPolicy: 'COMPLETE_GROUP' })
+    ]);
+    expect(plan.notes[0]).toContain('not an official Polygon package');
+    expect(readme).toContain('not an official Polygon package file');
+  });
+
+  it('generates LemonLime contest with bundled subtasks merged into one testcase', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'Lemon Problem');
+    const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const second = await addProblemSample(workspaceFolder, problem.id, '2\n', '2\n', { decodeEscapes: false });
+    const third = await addProblemSample(workspaceFolder, problem.id, '3\n', '3\n', { decodeEscapes: false });
+    const bundled = await createProblemSubtask(workspaceFolder, problem.id, 'Bundle');
+    await moveProblemSampleToSubtask(workspaceFolder, problem.id, first?.id ?? '', bundled?.id);
+    await moveProblemSampleToSubtask(workspaceFolder, problem.id, second?.id ?? '', bundled?.id);
+    await setProblemSubtaskScoringMode(workspaceFolder, problem.id, bundled?.id ?? '', 'bundle');
+    await setProblemSampleScore(workspaceFolder, problem.id, first?.id ?? '', 10);
+    await setProblemSampleScore(workspaceFolder, problem.id, second?.id ?? '', 20);
+    await setProblemSampleScore(workspaceFolder, problem.id, third?.id ?? '', 30);
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    const result = await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir, 'lemonlime');
+    const contest = JSON.parse(await fs.readFile(path.join(targetDir, 'contest.cdf'), 'utf8')) as {
+      tasks: Array<{
+        problemTitle: string;
+        sourceFileName: string;
+        testCases: Array<{ fullScore: number; inputFiles: string[]; outputFiles: string[] }>;
+      }>;
+    };
+    const readme = await fs.readFile(path.join(targetDir, 'LEMONLIME_EXPORT_README.txt'), 'utf8');
+
+    expect(result.configGenerated).toBe(true);
+    await expect(fs.access(path.join(targetDir, 'data', 'Lemon_Problem', 'sample-1.in'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'data', 'Lemon_Problem', 'sample-1.out'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'source'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, '.OIJudge', 'config.json'))).resolves.toBeUndefined();
+    expect(contest.tasks[0].problemTitle).toBe('Lemon Problem');
+    expect(contest.tasks[0].sourceFileName).toBe('Lemon_Problem');
+    expect(contest.tasks[0].testCases).toEqual([
+      expect.objectContaining({
+        fullScore: 30,
+        inputFiles: ['Lemon_Problem/sample-3.in'],
+        outputFiles: ['Lemon_Problem/sample-3.out']
+      }),
+      expect.objectContaining({
+        fullScore: 30,
+        inputFiles: ['Lemon_Problem/sample-1.in', 'Lemon_Problem/sample-2.in'],
+        outputFiles: ['Lemon_Problem/sample-1.out', 'Lemon_Problem/sample-2.out']
+      })
+    ]);
+    expect(readme).toContain('Bundled OI Judge subtasks are exported as one LemonLime TestCase');
+  });
+
   it('records warnings for missing outputs without skipping inputs', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
