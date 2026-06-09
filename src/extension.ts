@@ -119,12 +119,14 @@ type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
 type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
 type GeneratorInputBindMode = 'create' | 'files';
 type GeneratorInputBindModeItem = vscode.QuickPickItem & { mode: GeneratorInputBindMode };
+type EmptyGeneratorOutputAction = 'saveAll' | 'skip' | 'cancel';
 type GeneratorInputChoice = {
   label: string;
   sourceLabel: string;
   path: string;
   source: 'global' | 'subtask';
 };
+const MAX_GENERATED_SAMPLE_INPUT_COUNT = 100;
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -1518,26 +1520,63 @@ async function generateInputFromGenerator(
     return;
   }
 
-  const generated = await compileAndRunGenerator(workspaceFolder, problem, generatorPath, inputPath, inputChoice);
-  if (generated === undefined) {
-    return;
-  }
-  if (!generated && !(await confirmEmptyGeneratorOutput())) {
+  const count = await askSampleInputGenerateCount();
+  if (count === undefined) {
     return;
   }
 
-  const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, generated, subtask?.id);
-  if (!sample) {
-    vscode.window.showWarningMessage(t('sampleNotFound'));
+  const compile = await compileGenerator(workspaceFolder, problem, generatorPath, inputPath, inputChoice, count, subtask);
+  if (!compile) {
     return;
+  }
+
+  let generatedCount = 0;
+  let emptyOutputAction: EmptyGeneratorOutputAction | undefined;
+  for (let current = 1; current <= count; current += 1) {
+    output.appendLine(t('generator.input.generatingProgress', { current, total: count }));
+    const generated = await runCompiledGenerator(workspaceFolder, problem, compile, generatorPath, inputPath);
+    if (generated === undefined) {
+      output.appendLine(`Generator execution failed at ${current}/${count}.`);
+      output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+      sampleTreeProvider.refresh();
+      vscode.window.showWarningMessage(t('generator.input.generatedPartial', { count: generatedCount }));
+      return;
+    }
+    if (!generated) {
+      if (emptyOutputAction !== 'saveAll') {
+        emptyOutputAction = await confirmEmptyGeneratorOutputForBatch();
+      }
+      if (emptyOutputAction === 'cancel' || !emptyOutputAction) {
+        output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+        sampleTreeProvider.refresh();
+        vscode.window.showWarningMessage(t('generator.input.generatedPartial', { count: generatedCount }));
+        return;
+      }
+      if (emptyOutputAction === 'skip') {
+        output.appendLine(`[${current}/${count}] ${t('generator.input.skippedEmpty')}`);
+        continue;
+      }
+    }
+
+    const sample = await writeProblemGeneratedInputSample(workspaceFolder, problem.id, generated, subtask?.id);
+    if (!sample) {
+      output.appendLine(t('generator.input.generatedPartial', { count: generatedCount }));
+      sampleTreeProvider.refresh();
+      vscode.window.showWarningMessage(
+        t('generator.input.generatedPartial', { count: generatedCount })
+      );
+      return;
+    }
+
+    generatedCount += 1;
+    const inputFilePath = resolveWorkspacePath(workspaceFolder, sample.input);
+    output.appendLine(`[${current}/${count}] Generated: ${path.basename(sample.input)}`);
+    output.appendLine(`Generated sample input path: ${inputFilePath}`);
   }
 
   sampleTreeProvider.refresh();
-  const inputFilePath = resolveWorkspacePath(workspaceFolder, sample.input);
-  output.appendLine(`Generated sample input path: ${inputFilePath}`);
   output.appendLine('');
-  await openFileInEditor(inputFilePath, t('someSamplesMissing'));
-  vscode.window.showInformationMessage(t('generator.input.generated', { name: path.basename(sample.input) }));
+  vscode.window.showInformationMessage(t('generator.input.generatedMany', { count: generatedCount }));
 }
 
 async function resolveGeneratorForSubtask(
@@ -1662,27 +1701,69 @@ function validateGeneratorInputFileName(value: string): string | undefined {
   return undefined;
 }
 
-async function compileAndRunGenerator(
+async function askSampleInputGenerateCount(): Promise<number | undefined> {
+  const value = await vscode.window.showInputBox({
+    title: t('generator.input.count.prompt'),
+    prompt: t('generator.input.count.prompt'),
+    placeHolder: t('generator.input.count.placeholder'),
+    value: '1',
+    validateInput: validateSampleInputGenerateCount
+  });
+  if (value === undefined) {
+    return undefined;
+  }
+  return Number(value.trim());
+}
+
+function validateSampleInputGenerateCount(value: string): string | undefined {
+  const count = Number(value.trim());
+  if (!Number.isInteger(count) || count <= 0) {
+    return t('generator.input.count.invalid');
+  }
+  if (count > MAX_GENERATED_SAMPLE_INPUT_COUNT) {
+    return t('generator.input.count.tooLarge', { max: MAX_GENERATED_SAMPLE_INPUT_COUNT });
+  }
+  return undefined;
+}
+
+async function compileGenerator(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig,
   generatorPath: string,
   inputPath: string,
-  inputChoice: GeneratorInputChoice
-): Promise<string | undefined> {
+  inputChoice: GeneratorInputChoice,
+  count: number,
+  subtask: NonNullable<ProblemConfig['subtasks']>[number] | undefined
+): Promise<CompileResult | undefined> {
   output.clear();
   output.show(true);
-  output.appendLine('OI Judge Generator');
+  output.appendLine('Generate sample inputs');
+  output.appendLine(`Count: ${count}`);
+  output.appendLine(`Generator: ${path.basename(generatorPath)}`);
   output.appendLine(`Generator source: ${generatorPath}`);
+  output.appendLine(`Generator input: ${inputChoice.label}`);
   output.appendLine(`Generator input source: ${inputPath}`);
-  output.appendLine(`Generator input label: ${inputChoice.label}`);
   output.appendLine(`Generator input origin: ${inputChoice.sourceLabel}`);
+  output.appendLine(`Target: ${subtask ? 'subtask' : 'samples'}`);
+  if (subtask) {
+    output.appendLine(`Subtask: ${subtask.name}`);
+  }
 
   const compile = await compileSource(workspaceFolder, generatorPath, problem, output);
   if (!compile) {
     vscode.window.showErrorMessage(t('generator.compileFailed'));
     return undefined;
   }
+  return compile;
+}
 
+async function runCompiledGenerator(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig,
+  compile: CompileResult,
+  generatorPath: string,
+  inputPath: string
+): Promise<string | undefined> {
   const input = await fs.readFile(inputPath, 'utf8');
   output.appendLine(`Run command: ${compile.executablePath}`);
   let result: Awaited<ReturnType<typeof runProcess>>;
@@ -1715,14 +1796,27 @@ async function compileAndRunGenerator(
   return result.stdout;
 }
 
-async function confirmEmptyGeneratorOutput(): Promise<boolean> {
+async function confirmEmptyGeneratorOutputForBatch(): Promise<EmptyGeneratorOutputAction | undefined> {
+  const saveEmpty = t('generator.input.emptySaveAndContinue');
+  const skip = t('generator.input.emptySkip');
+  const cancel = t('generator.input.emptyCancel');
   const choice = await vscode.window.showWarningMessage(
     t('generator.input.emptyConfirm'),
     { modal: true },
-    t('continueAction'),
-    t('cancel')
+    saveEmpty,
+    skip,
+    cancel
   );
-  return choice === t('continueAction');
+  if (choice === saveEmpty) {
+    return 'saveAll';
+  }
+  if (choice === skip) {
+    return 'skip';
+  }
+  if (choice === cancel) {
+    return 'cancel';
+  }
+  return undefined;
 }
 
 async function resolveSourceForRun(
