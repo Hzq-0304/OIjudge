@@ -10,6 +10,7 @@ import {
   getDefaultProblemSource,
   getProblemGenerator,
   getProblemGenerators,
+  getProblemGeneratorInputs,
   getProblemReportPath,
   getSampleGeneratedAnswerStatus,
   getSubtaskSamples,
@@ -30,6 +31,7 @@ type NodeGroup =
   | 'programs'
   | 'limits'
   | 'samples'
+  | 'generatorInputs'
   | 'subtask'
   | 'setter'
   | 'actions'
@@ -46,6 +48,7 @@ type TreeNode = {
   group?: NodeGroup;
   problemId?: string;
   subtaskId?: string;
+  generatorInputId?: string;
   contextValue?: string;
   sampleId?: number;
   sampleStatus?: SampleStatus | 'Not Run';
@@ -121,6 +124,8 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         return createLimitNodes(problem);
       case 'samples':
         return createSampleContainerNodes(workspaceFolder, problem);
+      case 'generatorInputs':
+        return createGlobalGeneratorInputNodes(workspaceFolder, problem);
       case 'subtask':
         return createSampleNodes(workspaceFolder, problem, getSubtaskSamples(problem, element.subtaskId ?? ''));
       case 'setter':
@@ -426,6 +431,7 @@ async function createSampleContainerNodes(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig
 ): Promise<TreeNode[]> {
+  const globalInputNodes = isSetterModeEnabled() ? [createGlobalGeneratorInputsRootNode(problem)] : [];
   const unassignedSampleNodes = await createSampleNodes(
     workspaceFolder,
     problem,
@@ -435,8 +441,61 @@ async function createSampleContainerNodes(
   const subtaskNodes = await Promise.all(
     (problem.subtasks ?? []).map((subtask) => createSubtaskNode(workspaceFolder, problem, subtask))
   );
-  const nodes = [...unassignedSampleNodes, ...subtaskNodes];
+  const nodes = [...globalInputNodes, ...unassignedSampleNodes, ...subtaskNodes];
   return nodes.length > 0 ? nodes : [createEmptySamplesNode()];
+}
+
+function createGlobalGeneratorInputsRootNode(problem: ProblemConfig): TreeNode {
+  const inputs = getProblemGeneratorInputs(problem);
+  return {
+    kind: 'group',
+    label: t('generatorInput.global.root'),
+    description: inputs.length > 0 ? String(inputs.length) : undefined,
+    icon: new vscode.ThemeIcon('symbol-parameter'),
+    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+    group: 'generatorInputs',
+    problemId: problem.id,
+    contextValue: 'globalGeneratorInputsRoot'
+  };
+}
+
+function createGlobalGeneratorInputNodes(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): TreeNode[] {
+  const inputs = getProblemGeneratorInputs(problem);
+  if (inputs.length === 0) {
+    return [{
+      kind: 'info',
+      label: t('generatorInput.global.empty'),
+      icon: new vscode.ThemeIcon('info'),
+      problemId: problem.id
+    }];
+  }
+
+  return inputs.map((input) => {
+    const inputPath = input.source
+      ? resolveProblemReferencePath(workspaceFolder, input.source.path)
+      : undefined;
+    const missing = !inputPath || !existsSync(inputPath);
+    return {
+      kind: 'info',
+      label: input.name,
+      description: missing ? t('generatorInput.global.missingShort') : undefined,
+      tooltip: inputPath ?? t('generatorInput.global.missing'),
+      icon: missing
+        ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+        : new vscode.ThemeIcon('file'),
+      problemId: problem.id,
+      generatorInputId: input.id,
+      contextValue: missing ? 'globalGeneratorInputMissing' : 'globalGeneratorInput',
+      command: {
+        command: 'oijudger.openProblemGeneratorInput',
+        title: t('generatorInput.global.open'),
+        arguments: [problem.id, input.id]
+      }
+    };
+  });
 }
 
 async function createSubtaskNode(

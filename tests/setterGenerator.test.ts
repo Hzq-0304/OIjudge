@@ -5,13 +5,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import {
   addProblemGenerator,
+  addProblemGeneratorInputs,
   clearProblemGeneratorProgram,
   createProblemSubtaskGeneratorInputFile,
   createProblem,
   createProblemSubtask,
   getProblem,
+  getProblemGeneratorInputs,
   getProblemGenerators,
   getProblemGeneratorProgram,
+  removeProblemGeneratorInput,
   removeProblemGenerator,
   setProblemSubtaskGenerator,
   setProblemGeneratorProgram
@@ -67,6 +70,30 @@ describe('setter generator binding', () => {
     expect(updated ? getProblemGenerators(updated).map((generator) => generator.name) : []).toEqual(['chain.cpp', 'random.cpp']);
     expect(updated?.subtasks?.[0].generatorId).toBe(random?.generator.id);
     expect(chain?.generator.source.path).toBe('generator/chain.cpp');
+  });
+
+  it('stores global generator inputs independently from subtask generator bindings', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'generator-inputs', 'small.txt');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(inputPath, 'n = 10\n', 'utf8');
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Subtask 1');
+    const generatorPath = path.join(workspaceFolder.uri.fsPath, 'gen.cpp');
+    await fs.writeFile(generatorPath, 'int main() { return 0; }\n', 'utf8');
+    const generator = await addProblemGenerator(workspaceFolder, problem.id, generatorPath);
+    await setProblemSubtaskGenerator(workspaceFolder, problem.id, subtask?.id ?? '', generator?.generator.id ?? '');
+
+    const first = await addProblemGeneratorInputs(workspaceFolder, problem.id, [inputPath, inputPath]);
+    const removed = await removeProblemGeneratorInput(workspaceFolder, problem.id, first?.added[0].id ?? '');
+    const updated = await getProblem(workspaceFolder, problem.id);
+
+    expect(first?.added).toHaveLength(1);
+    expect(first?.added[0].source?.path).toBe('generator-inputs/small.txt');
+    expect(removed?.input.name).toBe('small.txt');
+    expect(updated ? getProblemGeneratorInputs(updated) : []).toEqual([]);
+    expect(updated?.subtasks?.[0].generatorId).toBe(generator?.generator.id);
+    await expect(fs.access(inputPath)).resolves.toBeUndefined();
   });
 
   it('removes a generator and clears subtask references without deleting files', async () => {

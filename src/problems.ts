@@ -41,6 +41,7 @@ import {
   JudgeReport,
   OITestConfig,
   ProblemConfig,
+  ProblemGeneratorInputConfig,
   ProblemsConfig,
   ProblemSource,
   ProblemStatementType,
@@ -646,6 +647,20 @@ export function getProblemGenerator(problem: ProblemConfig, generatorId: string 
   return getProblemGenerators(problem).find((generator) => generator.id === generatorId);
 }
 
+export function getProblemGeneratorInputs(problem: ProblemConfig): ProblemGeneratorInputConfig[] {
+  return problem.generatorInputs ?? [];
+}
+
+export function getProblemGeneratorInput(
+  problem: ProblemConfig,
+  inputId: string | undefined
+): ProblemGeneratorInputConfig | undefined {
+  if (!inputId) {
+    return undefined;
+  }
+  return getProblemGeneratorInputs(problem).find((input) => input.id === inputId);
+}
+
 export async function setProblemGeneratorProgram(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,
@@ -700,6 +715,49 @@ async function upsertProblemGenerator(
     };
   });
   return problem && added ? { problem, generator: added } : undefined;
+}
+
+export async function addProblemGeneratorInputs(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  inputPaths: string[]
+): Promise<{ problem: ProblemConfig; added: ProblemGeneratorInputConfig[] } | undefined> {
+  let added: ProblemGeneratorInputConfig[] = [];
+  const problem = await updateProblem(workspaceFolder, problemId, (entry) => {
+    const inputs = entry.generatorInputs ?? [];
+    const usedIds = inputs.map((input) => input.id);
+    const nextInputs = [...inputs];
+    for (const inputPath of inputPaths) {
+      const source = createProblemSource(workspaceFolder, inputPath);
+      if (nextInputs.some((input) => input.source?.path === source.path)) {
+        continue;
+      }
+      const input = {
+        id: createGeneratorInputId(source.name ?? path.basename(inputPath), usedIds),
+        name: source.name ?? path.basename(inputPath),
+        source
+      };
+      usedIds.push(input.id);
+      added.push(input);
+      nextInputs.push(input);
+    }
+    entry.generatorInputs = nextInputs;
+  });
+  return problem ? { problem, added } : undefined;
+}
+
+export async function removeProblemGeneratorInput(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  inputId: string
+): Promise<{ problem: ProblemConfig; input: ProblemGeneratorInputConfig } | undefined> {
+  let removed: ProblemGeneratorInputConfig | undefined;
+  const problem = await updateProblem(workspaceFolder, problemId, (entry) => {
+    const inputs = entry.generatorInputs ?? [];
+    removed = inputs.find((input) => input.id === inputId);
+    entry.generatorInputs = inputs.filter((input) => input.id !== inputId);
+  });
+  return problem && removed ? { problem, input: removed } : undefined;
 }
 
 export async function removeProblemGenerator(
@@ -1443,6 +1501,7 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
   const defaultSource = problem.defaultSource || problem.source || problem.sources?.[0]?.path;
   const sources = normalizeProblemSources(workspaceFolder, problem, defaultSource);
   const setter = normalizeProblemSetter(workspaceFolder, problem);
+  const generatorInputs = normalizeProblemGeneratorInputs(workspaceFolder, problem.generatorInputs ?? []);
   const samples = (problem.samples ?? []).map((sample, index) => normalizeProblemSample(workspaceFolder, sample, id, index + 1));
   const normalizedProblem: ProblemConfig = {
     ...defaults,
@@ -1470,7 +1529,8 @@ function normalizeProblem(workspaceFolder: vscode.WorkspaceFolder, problem: Prob
     standard: problem.standard ?? getStandardFromArgs((problem.compiler ?? defaults.compiler).args),
     source: problem.source,
     defaultSource,
-    sources
+    sources,
+    generatorInputs
   };
 }
 
@@ -1545,9 +1605,40 @@ function normalizeProblemGenerators(
   return normalized;
 }
 
+function normalizeProblemGeneratorInputs(
+  workspaceFolder: vscode.WorkspaceFolder,
+  inputs: ProblemGeneratorInputConfig[]
+): ProblemGeneratorInputConfig[] {
+  const usedIds = new Set<string>();
+  const usedPaths = new Set<string>();
+  const normalized: ProblemGeneratorInputConfig[] = [];
+  for (const input of inputs) {
+    const source = normalizeProblemSourceReference(workspaceFolder, input.source);
+    if (!source || usedPaths.has(source.path)) {
+      continue;
+    }
+    usedPaths.add(source.path);
+    const id = normalizeGeneratorInputId(input.id, source.name ?? input.name ?? path.basename(source.path), usedIds);
+    normalized.push({
+      ...input,
+      id,
+      name: input.name?.trim() || source.name || path.basename(source.path),
+      source
+    });
+  }
+  return normalized;
+}
+
 function normalizeGeneratorSource(
   workspaceFolder: vscode.WorkspaceFolder,
   source: SetterGeneratorItem['source'] | string | undefined
+): ProblemSource | undefined {
+  return normalizeProblemSourceReference(workspaceFolder, source);
+}
+
+function normalizeProblemSourceReference(
+  workspaceFolder: vscode.WorkspaceFolder,
+  source: ProblemSource | string | undefined
 ): ProblemSource | undefined {
   if (typeof source === 'string') {
     return createProblemSource(workspaceFolder, migrateInternalPath(source));
@@ -1578,6 +1669,23 @@ function normalizeGeneratorId(id: string | undefined, fallbackName: string, used
 
 function createGeneratorId(name: string, usedIds: string[]): string {
   return normalizeGeneratorId(undefined, name, new Set(usedIds));
+}
+
+function normalizeGeneratorInputId(id: string | undefined, fallbackName: string, used: Set<string>): string {
+  const safeFallback = fallbackName.replace(/\.[^.]+$/u, '').replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'input';
+  const base = id?.trim() || `input-${safeFallback}`;
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function createGeneratorInputId(name: string, usedIds: string[]): string {
+  return normalizeGeneratorInputId(undefined, name, new Set(usedIds));
 }
 
 function normalizeSubtaskResult(result: SubtaskRunResult | undefined): SubtaskRunResult | undefined {

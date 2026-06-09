@@ -94,6 +94,9 @@
     "onCommand:oijudger.addProblemGenerator",
     "onCommand:oijudger.openProblemGenerator",
     "onCommand:oijudger.removeProblemGenerator",
+    "onCommand:oijudger.addProblemGeneratorInput",
+    "onCommand:oijudger.openProblemGeneratorInput",
+    "onCommand:oijudger.removeProblemGeneratorInput",
     "onCommand:oijudger.selectGeneratorProgram",
     "onCommand:oijudger.openGeneratorProgram",
     "onCommand:oijudger.clearGeneratorProgram",
@@ -472,6 +475,21 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "oijudger.addProblemGeneratorInput",
+        "title": "OI Judge: 添加全局生成器输入/Add Global Generator Input",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "oijudger.openProblemGeneratorInput",
+        "title": "OI Judge: 打开全局生成器输入/Open Global Generator Input",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "oijudger.removeProblemGeneratorInput",
+        "title": "OI Judge: 移除全局生成器输入/Remove Global Generator Input",
+        "icon": "$(trash)"
+      },
+      {
         "command": "oijudger.bindSubtaskGenerator",
         "title": "OI Judge: 绑定数据生成器/Bind Generator",
         "icon": "$(symbol-parameter)"
@@ -624,9 +642,44 @@
           "group": "inline@2"
         },
         {
+          "command": "oijudger.addProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "inline@4"
+        },
+        {
           "command": "oijudger.applyAllGeneratedSampleAnswers",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == samplesGroupWithGeneratedOutputs",
           "group": "inline@3"
+        },
+        {
+          "command": "oijudger.addProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == globalGeneratorInputsRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.openProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == globalGeneratorInput || viewItem == globalGeneratorInputMissing)",
+          "group": "inline@1"
+        },
+        {
+          "command": "oijudger.removeProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == globalGeneratorInput || viewItem == globalGeneratorInputMissing)",
+          "group": "inline@2"
+        },
+        {
+          "command": "oijudger.addProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == globalGeneratorInputsRoot",
+          "group": "4_setter@1"
+        },
+        {
+          "command": "oijudger.openProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == globalGeneratorInput || viewItem == globalGeneratorInputMissing)",
+          "group": "4_setter@1"
+        },
+        {
+          "command": "oijudger.removeProblemGeneratorInput",
+          "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == globalGeneratorInput || viewItem == globalGeneratorInputMissing)",
+          "group": "4_setter@2"
         },
         {
           "command": "oijudger.runSubtask",
@@ -990,6 +1043,18 @@
         },
         {
           "command": "oijudger.removeProblemGenerator",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.addProblemGeneratorInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.openProblemGeneratorInput",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.removeProblemGeneratorInput",
           "when": "false"
         },
         {

@@ -45,6 +45,7 @@ import {
   addProblemInputSample,
   addProblemFromSource,
   addProblemGenerator,
+  addProblemGeneratorInputs,
   applyAllGeneratedAnswersForProblem,
   applyGeneratedAnswerForSample,
   bindProblemStatement,
@@ -63,12 +64,15 @@ import {
   getSampleGeneratedAnswerStatus,
   getProblem,
   getProblemGenerator,
+  getProblemGeneratorInput,
+  getProblemGeneratorInputs,
   getProblemGenerators,
   getProblemReportPath,
   getProblemSourcePath,
   importLegacyProblem,
   moveProblemSampleToSubtask,
   renameProblemSubtask,
+  removeProblemGeneratorInput,
   removeProblemGenerator,
   resolveProblemReferencePath,
   renameProblemSample,
@@ -544,6 +548,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.removeProblemGenerator', async (problemArg?: unknown) => {
       await removeProblemGeneratorCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
+    vscode.commands.registerCommand('oijudger.addProblemGeneratorInput', async (problemArg?: unknown) => {
+      await addProblemGeneratorInputCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.openProblemGeneratorInput', async (problemArg?: unknown, inputArg?: unknown) => {
+      await openProblemGeneratorInputCommand(readProblemId(problemArg), readGeneratorInputId(problemArg, inputArg));
+    }),
+    vscode.commands.registerCommand('oijudger.removeProblemGeneratorInput', async (problemArg?: unknown, inputArg?: unknown) => {
+      await removeProblemGeneratorInputCommand(readProblemId(problemArg), readGeneratorInputId(problemArg, inputArg), sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.selectGeneratorProgram', async (problemArg?: unknown) => {
       await addProblemGeneratorCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
@@ -796,6 +809,20 @@ async function pickGeneratorFile(): Promise<vscode.Uri | undefined> {
   });
 
   return uris?.[0];
+}
+
+async function pickGlobalGeneratorInputFiles(): Promise<vscode.Uri[] | undefined> {
+  return vscode.window.showOpenDialog({
+    title: t('generatorInput.global.select'),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: true,
+    openLabel: t('select'),
+    filters: {
+      [t('generatorInput.global.root')]: ['txt', 'in', 'json', 'yaml', 'yml'],
+      'All Files': ['*']
+    }
+  });
 }
 
 async function pickSamplesFolder(): Promise<vscode.Uri | undefined> {
@@ -2643,6 +2670,101 @@ async function removeProblemGeneratorCommand(
   vscode.window.showInformationMessage(t('generator.removed', { name: generator.name }));
 }
 
+async function addProblemGeneratorInputCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const uris = await pickGlobalGeneratorInputFiles();
+  if (!uris || uris.length === 0) {
+    return;
+  }
+
+  const result = await addProblemGeneratorInputs(
+    context.workspaceFolder,
+    context.problem.id,
+    uris.map((uri) => uri.fsPath)
+  );
+  if (!result) {
+    vscode.window.showWarningMessage(t('problemNotFound'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('generatorInput.global.added', { count: result.added.length }));
+}
+
+async function openProblemGeneratorInputCommand(
+  problemId: string | undefined,
+  inputId: string | undefined
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const input = await pickProblemGeneratorInput(context.problem, inputId, t('generatorInput.global.open'));
+  if (!input?.source) {
+    vscode.window.showWarningMessage(t('generatorInput.global.missing'));
+    return;
+  }
+
+  const inputPath = resolveProblemReferencePath(context.workspaceFolder, input.source.path);
+  await openFileInEditor(inputPath, t('generatorInput.global.missing'));
+}
+
+async function removeProblemGeneratorInputCommand(
+  problemId: string | undefined,
+  inputId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+  if (!isSetterModeEnabled()) {
+    vscode.window.showWarningMessage(t('setterOnlyFeature'));
+    return;
+  }
+
+  const input = await pickProblemGeneratorInput(context.problem, inputId, t('generatorInput.global.remove'));
+  if (!input) {
+    vscode.window.showWarningMessage(t('generatorInput.global.none'));
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    t('generatorInput.global.remove.confirm', { name: input.name }),
+    { modal: true },
+    t('delete'),
+    t('cancel')
+  );
+  if (confirmed !== t('delete')) {
+    return;
+  }
+
+  const result = await removeProblemGeneratorInput(context.workspaceFolder, context.problem.id, input.id);
+  if (!result) {
+    vscode.window.showWarningMessage(t('generatorInput.global.missing'));
+    return;
+  }
+
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('generatorInput.global.removed', { name: input.name }));
+}
+
 async function bindSubtaskGeneratorCommand(
   problemId: string | undefined,
   subtaskId: string | undefined,
@@ -2766,6 +2888,39 @@ async function pickProblemGenerator(
     }
   );
   return picked?.generator;
+}
+
+async function pickProblemGeneratorInput(
+  problem: ProblemConfig,
+  inputId: string | undefined,
+  title: string
+): Promise<ReturnType<typeof getProblemGeneratorInputs>[number] | undefined> {
+  const input = getProblemGeneratorInput(problem, inputId);
+  if (input) {
+    return input;
+  }
+
+  const inputs = getProblemGeneratorInputs(problem);
+  if (inputs.length === 0) {
+    return undefined;
+  }
+  if (inputs.length === 1) {
+    return inputs[0];
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    inputs.map((entry) => ({
+      label: entry.name,
+      description: entry.id,
+      detail: entry.source?.path,
+      input: entry
+    })),
+    {
+      title,
+      placeHolder: t('generatorInput.global.selectOne')
+    }
+  );
+  return picked?.input;
 }
 
 async function addSetterInputSampleCommand(
@@ -3516,6 +3671,17 @@ function readSubtaskId(value: unknown): string | undefined {
   if (typeof value === 'object' && value !== null && 'subtaskId' in value) {
     const subtaskId = (value as { subtaskId?: unknown }).subtaskId;
     return typeof subtaskId === 'string' ? subtaskId : undefined;
+  }
+  return undefined;
+}
+
+function readGeneratorInputId(value: unknown, fallback: unknown): string | undefined {
+  if (typeof fallback === 'string') {
+    return fallback;
+  }
+  if (typeof value === 'object' && value !== null && 'generatorInputId' in value) {
+    const inputId = (value as { generatorInputId?: unknown }).generatorInputId;
+    return typeof inputId === 'string' ? inputId : undefined;
   }
   return undefined;
 }

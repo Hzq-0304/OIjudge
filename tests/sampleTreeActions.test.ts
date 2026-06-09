@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import {
   addEmptyProblemSample,
+  addProblemGeneratorInputs,
   addProblemInputSample,
   createProblem,
   createProblemSubtask,
@@ -87,7 +88,7 @@ describe('sample tree add entry', () => {
     const problemChildren = await provider.getChildren(problemNode);
     const setterGroup = problemChildren.find((node) => node.group === 'setter');
     const samplesGroup = problemChildren.find((node) => node.group === 'samples');
-    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
 
     const setterCommands = (await provider.getChildren(setterGroup)).map((node) => node.command?.command);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
@@ -114,6 +115,54 @@ describe('sample tree add entry', () => {
     expect(problemChildren.find((node) => node.group === 'setter')).toBeUndefined();
   });
 
+  it('shows global generator inputs only in setter mode', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'inputs', 'small.txt');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(inputPath, 'small\n', 'utf8');
+    await addProblemGeneratorInputs(workspaceFolder, problem.id, [inputPath]);
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    expect((await provider.getChildren(samplesGroup)).find((node) => node.group === 'generatorInputs')).toBeUndefined();
+
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const setterNodes = await provider.getChildren(samplesGroup);
+    const inputsRoot = setterNodes.find((node) => node.group === 'generatorInputs');
+    const inputNodes = await provider.getChildren(inputsRoot);
+
+    expect(provider.getTreeItem(inputsRoot).contextValue).toBe('globalGeneratorInputsRoot');
+    expect(inputNodes[0].label).toBe('small.txt');
+    expect(provider.getTreeItem(inputNodes[0]).contextValue).toBe('globalGeneratorInput');
+    expect(inputNodes[0].command?.command).toBe('oijudger.openProblemGeneratorInput');
+  });
+
+  it('marks missing global generator inputs in the sample tree', async () => {
+    vscodeMock.__setConfiguration('setterMode.enabled', true);
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'inputs', 'missing.txt');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(inputPath, 'missing soon\n', 'utf8');
+    await addProblemGeneratorInputs(workspaceFolder, problem.id, [inputPath]);
+    await fs.rm(inputPath);
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+    const inputsRoot = (await provider.getChildren(samplesGroup)).find((node) => node.group === 'generatorInputs');
+    const inputNode = (await provider.getChildren(inputsRoot))[0];
+
+    expect(inputNode.description).toBe('Missing');
+    expect(provider.getTreeItem(inputNode).contextValue).toBe('globalGeneratorInputMissing');
+  });
+
   it('marks setter input-only samples as answer not generated without an error context', async () => {
     vscodeMock.__setConfiguration('setterMode.enabled', true);
     const workspaceFolder = await createWorkspace();
@@ -125,7 +174,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
@@ -149,7 +198,7 @@ describe('sample tree add entry', () => {
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
     const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
-    const sampleNode = (await provider.getChildren(samplesGroup))[0];
+    const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
     const treeItem = provider.getTreeItem(sampleNode);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 

@@ -109,6 +109,12 @@ export interface SetterGeneratorItem {
   args?: string[];
 }
 
+export interface ProblemGeneratorInputConfig {
+  id: string;
+  name: string;
+  source?: ProblemSource;
+}
+
 export type OITestConfig = {
   version: 1;
   compile?: {
@@ -144,6 +150,7 @@ export type ProblemConfig = OITestConfig & {
   defaultSource?: string;
   statement?: ProblemStatement;
   sources?: ProblemSource[];
+  generatorInputs?: ProblemGeneratorInputConfig[];
   subtasks?: SubtaskConfig[];
   standard: string;
 };

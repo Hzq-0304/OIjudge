@@ -62,6 +62,9 @@ describe('package tree sample add menu', () => {
       'oijudger.addProblemGenerator',
       'oijudger.openProblemGenerator',
       'oijudger.removeProblemGenerator',
+      'oijudger.addProblemGeneratorInput',
+      'oijudger.openProblemGeneratorInput',
+      'oijudger.removeProblemGeneratorInput',
       'oijudger.addSetterInputSample'
     ]));
     expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
@@ -76,6 +79,9 @@ describe('package tree sample add menu', () => {
       'onCommand:oijudger.addProblemGenerator',
       'onCommand:oijudger.openProblemGenerator',
       'onCommand:oijudger.removeProblemGenerator',
+      'onCommand:oijudger.addProblemGeneratorInput',
+      'onCommand:oijudger.openProblemGeneratorInput',
+      'onCommand:oijudger.removeProblemGeneratorInput',
       'onCommand:oijudger.addSetterInputSample'
     ]));
     expect(menuCommands).toHaveLength(6);
@@ -87,6 +93,40 @@ describe('package tree sample add menu', () => {
       command: 'oijudger.addSetterInputSample',
       when: 'false'
     });
+  });
+
+  it('contributes global generator input menus behind setter mode', () => {
+    const commands = packageJson.contributes.commands.map((entry) => entry.command);
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+
+    expect(commands).toEqual(expect.arrayContaining([
+      'oijudger.addProblemGeneratorInput',
+      'oijudger.openProblemGeneratorInput',
+      'oijudger.removeProblemGeneratorInput'
+    ]));
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
+      'onCommand:oijudger.addProblemGeneratorInput',
+      'onCommand:oijudger.openProblemGeneratorInput',
+      'onCommand:oijudger.removeProblemGeneratorInput'
+    ]));
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.addProblemGeneratorInput' && entry.group === 'inline@4')?.when)
+      .toContain('samplesGroup');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.addProblemGeneratorInput' && entry.group === 'inline@1')?.when)
+      .toContain('globalGeneratorInputsRoot');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.openProblemGeneratorInput' && entry.group === 'inline@1')?.when)
+      .toContain('globalGeneratorInputMissing');
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.removeProblemGeneratorInput' && entry.group === 'inline@2')?.when)
+      .toContain('globalGeneratorInput');
+    for (const command of [
+      'oijudger.addProblemGeneratorInput',
+      'oijudger.openProblemGeneratorInput',
+      'oijudger.removeProblemGeneratorInput'
+    ]) {
+      expect(contextMenus.filter((entry) => entry.command === command).every((entry) =>
+        entry.when.includes('oijudger.setterModeEnabled')
+      )).toBe(true);
+      expect(packageJson.contributes.menus.commandPalette).toContainEqual({ command, when: 'false' });
+    }
   });
 
   it('contributes generated answer review and apply menus for pending samples', () => {
