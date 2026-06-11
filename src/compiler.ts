@@ -44,6 +44,7 @@ export async function compileSource(
   output.appendLine(`Compiler dir: ${compilerDir ?? 'not an absolute compiler path'}`);
   output.appendLine(`Compiler dir in PATH: ${compilerDir ? (envPathIncludesDir(env, compilerDir) ? 'yes' : 'no') : 'n/a'}`);
   output.appendLine(`Compiler family: ${stack.compilerFamily ?? 'unknown'}`);
+  output.appendLine(`Compiler kind: ${formatCompilerKind(stack.compilerFamily)}`);
   output.appendLine(`Memory limit: ${config.limits.memoryMb} MB`);
   output.appendLine(`Auto stack size: ${stack.enabled ? 'enabled' : 'disabled'}`);
   if (stack.enabled) {
@@ -133,12 +134,16 @@ export function buildCompileArgs(
       .replace(/\{source\}/g, sourcePath)
       .replace(/\{exe\}/g, executablePath)
   );
+  const compilerFamily = stack.compilerFamily;
+  const compilerArgs = compilerFamily === 'msvc'
+    ? buildMsvcCompileArgs(baseArgs, sourcePath, executablePath)
+    : baseArgs;
 
   if (!stack.enabled) {
-    return { args: baseArgs, stack };
+    return { args: compilerArgs, stack };
   }
 
-  const args = removeStackArgs(baseArgs);
+  const args = removeStackArgs(compilerArgs);
   if (stack.flag) {
     args.push(stack.flag);
   }
@@ -170,9 +175,78 @@ function getCompileStackReport(command: string, config: OITestConfig): CompileSt
   return { enabled: false, sizeMb, sizeBytes, compilerFamily, unsupported: compilerFamily === 'msvc' };
 }
 
+function buildMsvcCompileArgs(args: string[], sourcePath: string, executablePath: string): string[] {
+  const nextArgs: string[] = [];
+  let outputArg: string | undefined;
+  let hasStandard = false;
+  let hasExceptionHandling = false;
+  let hasOptimization = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === sourcePath) {
+      continue;
+    }
+    if (arg === executablePath) {
+      continue;
+    }
+    if (arg === '-o') {
+      if (args[index + 1] === executablePath) {
+        index += 1;
+      }
+      outputArg ??= `/Fe:${executablePath}`;
+      continue;
+    }
+    if (arg.startsWith('-std=')) {
+      const standard = arg.slice('-std='.length);
+      if (!hasStandard) {
+        nextArgs.push(`/std:${standard}`);
+        hasStandard = true;
+      }
+      continue;
+    }
+    if (arg === '-O2') {
+      if (!hasOptimization) {
+        nextArgs.push('/O2');
+        hasOptimization = true;
+      }
+      continue;
+    }
+    if (arg === '-pipe' || arg === '-Wall' || arg === '-s') {
+      continue;
+    }
+    if (/^\/std:/iu.test(arg)) {
+      hasStandard = true;
+    }
+    if (/^\/EH/iu.test(arg)) {
+      hasExceptionHandling = true;
+    }
+    if (/^\/O[12xdis]/iu.test(arg)) {
+      hasOptimization = true;
+    }
+    if (/^\/Fe[:]?/iu.test(arg)) {
+      outputArg = arg;
+      continue;
+    }
+    nextArgs.push(arg);
+  }
+
+  if (!hasStandard) {
+    nextArgs.unshift('/std:c++17');
+  }
+  if (!hasExceptionHandling) {
+    const standardIndex = nextArgs.findIndex((arg) => /^\/std:/iu.test(arg));
+    nextArgs.splice(standardIndex >= 0 ? standardIndex + 1 : 0, 0, '/EHsc');
+  }
+  nextArgs.push(sourcePath);
+  nextArgs.push(outputArg ?? `/Fe:${executablePath}`);
+
+  return nextArgs;
+}
+
 function detectCompilerFamily(command: string): string {
   const name = path.basename(command).toLowerCase();
-  if (name === 'cl.exe' || name === 'cl') {
+  if (name === 'cl.exe' || name === 'cl' || name === 'clang-cl.exe' || name === 'clang-cl') {
     return 'msvc';
   }
   if (name.includes('clang')) {
@@ -180,6 +254,16 @@ function detectCompilerFamily(command: string): string {
   }
   if (name.includes('g++') || name.includes('gcc') || name.includes('mingw')) {
     return 'gcc';
+  }
+  return 'unknown';
+}
+
+function formatCompilerKind(compilerFamily: string | undefined): string {
+  if (compilerFamily === 'msvc') {
+    return 'msvc';
+  }
+  if (compilerFamily === 'gcc' || compilerFamily === 'clang') {
+    return 'gcc-like';
   }
   return 'unknown';
 }

@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type * as vscode from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildCompileArgs } from '../src/compiler';
 import { findCompiler } from '../src/compilerDetection';
 import { envPathIncludesDir, withCompilerPathEnv } from '../src/compilerRuntime';
 import { OITestConfig } from '../src/types';
@@ -50,6 +51,54 @@ describe('compiler runtime environment', () => {
   });
 });
 
+describe('compile argument generation', () => {
+  it('keeps gcc-like compiler arguments unchanged', async () => {
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'main.cpp');
+    const outputPath = path.join(workspaceFolder.uri.fsPath, 'main.exe');
+
+    const { args, stack } = buildCompileArgs(workspaceFolder, config('g++', { autoStack: false }), sourcePath, outputPath);
+
+    expect(stack.compilerFamily).toBe('gcc');
+    expect(args).toEqual([
+      sourcePath,
+      '-std=c++17',
+      '-O2',
+      '-o',
+      outputPath
+    ]);
+  });
+
+  it('uses MSVC arguments for cl.exe', async () => {
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'main.cpp');
+    const outputPath = path.join(workspaceFolder.uri.fsPath, 'main.exe');
+
+    const { args, stack } = buildCompileArgs(workspaceFolder, config('cl.exe', { autoStack: false }), sourcePath, outputPath);
+
+    expect(stack.compilerFamily).toBe('msvc');
+    expect(args).toEqual([
+      '/std:c++17',
+      '/EHsc',
+      '/O2',
+      sourcePath,
+      `/Fe:${outputPath}`
+    ]);
+  });
+
+  it('uses MSVC arguments for clang-cl.exe', async () => {
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'main.cpp');
+    const outputPath = path.join(workspaceFolder.uri.fsPath, 'main.exe');
+
+    const { args, stack } = buildCompileArgs(workspaceFolder, config('clang-cl.exe', { autoStack: false }), sourcePath, outputPath);
+
+    expect(stack.compilerFamily).toBe('msvc');
+    expect(args).toContain('/EHsc');
+    expect(args).toContain(`/Fe:${outputPath}`);
+  });
+});
+
 async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oijudge-compiler-'));
   workspaces.push(dir);
@@ -58,7 +107,7 @@ async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
   } as vscode.WorkspaceFolder;
 }
 
-function config(command: string): OITestConfig {
+function config(command: string, options?: { autoStack?: boolean }): OITestConfig {
   return {
     version: 1,
     compiler: {
@@ -72,6 +121,9 @@ function config(command: string): OITestConfig {
     limits: {
       timeMs: 1000,
       memoryMb: 256
+    },
+    stack: {
+      auto: options?.autoStack ?? true
     },
     samples: []
   };
