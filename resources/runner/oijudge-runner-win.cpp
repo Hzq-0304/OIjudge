@@ -17,6 +17,7 @@ struct Options {
   std::wstring stderrPath;
   std::vector<std::wstring> args;
   DWORD timeLimitMs = 1000;
+  DWORD hardKillLimitMs = 1000;
   uint64_t memoryLimitMiB = 0;
 };
 
@@ -152,6 +153,9 @@ static bool parseOptions(int argc, wchar_t** argv, Options& options, std::string
       options.stderrPath = next();
     } else if (key == L"--time-limit-ms") {
       options.timeLimitMs = static_cast<DWORD>(std::stoul(next()));
+      options.hardKillLimitMs = options.timeLimitMs;
+    } else if (key == L"--hard-kill-limit-ms") {
+      options.hardKillLimitMs = static_cast<DWORD>(std::stoul(next()));
     } else if (key == L"--memory-limit-mib") {
       options.memoryLimitMiB = static_cast<uint64_t>(std::stoull(next()));
     } else if (key == L"--arg") {
@@ -167,6 +171,9 @@ static bool parseOptions(int argc, wchar_t** argv, Options& options, std::string
   if (options.exe.empty() || options.cwd.empty() || options.stdinPath.empty() || options.stdoutPath.empty() || options.stderrPath.empty()) {
     error = "Missing required runner arguments";
     return false;
+  }
+  if (options.hardKillLimitMs < options.timeLimitMs) {
+    options.hardKillLimitMs = options.timeLimitMs;
   }
   return true;
 }
@@ -280,9 +287,9 @@ int main(int argc, char** argv) {
     AssignProcessToJobObject(job.get(), process.get());
   }
 
-  DWORD wait = WaitForSingleObject(process.get(), options.timeLimitMs);
-  bool timedOut = wait == WAIT_TIMEOUT;
-  if (timedOut) {
+  DWORD wait = WaitForSingleObject(process.get(), options.hardKillLimitMs);
+  bool killedByTimeout = wait == WAIT_TIMEOUT;
+  if (killedByTimeout) {
     TerminateJobObject(job.get(), 1);
     TerminateProcess(process.get(), 1);
     WaitForSingleObject(process.get(), INFINITE);
@@ -294,15 +301,19 @@ int main(int argc, char** argv) {
   DWORD exitCode = 0;
   GetExitCodeProcess(process.get(), &exitCode);
   uint64_t memoryBytes = queryProcessMemoryBytes(process.get(), job.get());
-  uint64_t timeMs = static_cast<uint64_t>(elapsedMs(frequency, start, end) + 0.999);
+  uint64_t actualTimeMs = static_cast<uint64_t>(elapsedMs(frequency, start, end) + 0.999);
+  uint64_t timeMs = killedByTimeout ? static_cast<uint64_t>(options.hardKillLimitMs) : actualTimeMs;
+  bool timedOut = killedByTimeout || actualTimeMs > static_cast<uint64_t>(options.timeLimitMs);
 
   std::cout << "{";
-  if (timedOut) {
+  if (killedByTimeout) {
     std::cout << "\"exitCode\":null";
   } else {
     std::cout << "\"exitCode\":" << static_cast<uint64_t>(exitCode);
   }
   std::cout << ",\"timedOut\":" << (timedOut ? "true" : "false");
+  std::cout << ",\"killedByTimeout\":" << (killedByTimeout ? "true" : "false");
+  std::cout << ",\"hardKillLimitMs\":" << static_cast<uint64_t>(options.hardKillLimitMs);
   std::cout << ",\"memoryExceeded\":false";
   std::cout << ",\"timeMs\":" << timeMs;
   if (memoryBytes > 0) {

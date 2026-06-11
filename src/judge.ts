@@ -30,6 +30,8 @@ import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainChe
 
 type RunClassification = 'TLE' | 'RE' | undefined;
 
+const TLE_KILL_RATIO = 1.2;
+
 type CheckerContext = {
   type: 'testlib' | 'plain';
   source: string;
@@ -460,6 +462,7 @@ async function judgeSample(
   let result: ProcessResult;
   try {
     const env = withCompilerPathEnv(compilerCommand);
+    const hardKillLimitMs = getHardKillLimitMs(timeLimitMs);
     result = await runNativeProcess({
       workspaceFolder,
       config: {
@@ -473,6 +476,7 @@ async function judgeSample(
       stdin: ioContext.stdin,
       cwd: ioContext.cwd,
       timeoutMs: timeLimitMs,
+      hardKillLimitMs,
       env,
       output
     }) ?? await runProcess(
@@ -481,7 +485,8 @@ async function judgeSample(
       ioContext.stdin,
       ioContext.cwd,
       timeLimitMs,
-      env
+      env,
+      hardKillLimitMs
     );
   } catch (error) {
     const runnerError = formatUnknownError(error);
@@ -555,6 +560,7 @@ async function judgeSample(
       exitCode: result.code,
       signal: result.signal,
       killedByTimeout: result.killedByTimeout,
+      hardKillLimitMs: result.hardKillLimitMs,
       stdinError: result.stdinError,
       stdoutError: result.stdoutError,
       stderrError: result.stderrError,
@@ -613,6 +619,7 @@ async function judgeSample(
       exitCode: result.code,
       signal: result.signal,
       killedByTimeout: result.killedByTimeout,
+      hardKillLimitMs: result.hardKillLimitMs,
       stdinError: result.stdinError,
       stdoutError: result.stdoutError,
       stderrError: result.stderrError,
@@ -900,6 +907,7 @@ function formatRunResultOutput(
     `Exit code: ${formatExitCode(result.code)}`,
     `Signal: ${result.signal ?? 'null'}`,
     `Killed by timeout: ${result.killedByTimeout}`,
+    ...(result.hardKillLimitMs !== undefined ? [`Hard kill limit: ${formatMs(result.hardKillLimitMs)} ms`] : []),
     `Time: ${formatMs(result.timeMs)} ms`,
     `Memory: ${formatMemoryKiB(result.memoryKiB)}`
   ];
@@ -932,7 +940,7 @@ function createSampleReport(
   outputRel: string,
   stderrRel: string,
   diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
+  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
   message?: string,
   score?: number,
   checker?: CheckerSampleReport
@@ -976,7 +984,7 @@ function createRuntimeDiagnostics(
   exePath: string,
   cwd: string,
   result: ProcessResult
-): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB'>> {
+): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB'>> {
   return {
     source: sourcePath,
     exe: exePath,
@@ -986,6 +994,7 @@ function createRuntimeDiagnostics(
     exitCode: result.code,
     signal: result.signal,
     killedByTimeout: result.killedByTimeout,
+    hardKillLimitMs: result.hardKillLimitMs,
     memoryBytes: result.memoryBytes,
     memoryKiB: result.memoryKiB,
     stdinError: result.stdinError,
@@ -1092,6 +1101,7 @@ function appendRuntimeDiagnostics(
     exitCode: number | null;
     signal: NodeJS.Signals | null;
     killedByTimeout: boolean;
+    hardKillLimitMs?: number;
     stdinError?: string;
     stdoutError?: string;
     stderrError?: string;
@@ -1110,6 +1120,9 @@ function appendRuntimeDiagnostics(
   output.appendLine(`  exitCode: ${details.exitCode ?? 'null'}`);
   output.appendLine(`  signal: ${details.signal ?? 'null'}`);
   output.appendLine(`  killedByTimeout: ${details.killedByTimeout}`);
+  if (details.hardKillLimitMs !== undefined) {
+    output.appendLine(`  hardKillLimitMs: ${formatMs(details.hardKillLimitMs)}`);
+  }
   output.appendLine(`  stdinError: ${details.stdinError ?? 'none'}`);
   output.appendLine(`  stdoutError: ${details.stdoutError ?? 'none'}`);
   output.appendLine(`  stderrError: ${details.stderrError ?? 'none'}`);
@@ -1165,6 +1178,10 @@ function classifyRunResult(result: ProcessResult): RunClassification {
     return 'RE';
   }
   return undefined;
+}
+
+function getHardKillLimitMs(timeLimitMs: number): number {
+  return Math.ceil(timeLimitMs * TLE_KILL_RATIO);
 }
 
 function firstLines(value: string, count: number): string {

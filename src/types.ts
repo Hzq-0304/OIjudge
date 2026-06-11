@@ -175,6 +175,7 @@ export type ProcessResult = {
   signal: NodeJS.Signals | null;
   timedOut: boolean;
   killedByTimeout: boolean;
+  hardKillLimitMs?: number;
   memoryBytes?: number;
   memoryKiB?: number;
   stdinError?: string;
@@ -269,6 +270,7 @@ export type SampleReport = {
   exitCode?: number | null;
   signal?: NodeJS.Signals | null;
   killedByTimeout?: boolean;
+  hardKillLimitMs?: number;
   stdinError?: string;
   stdoutError?: string;
   stderrError?: string;

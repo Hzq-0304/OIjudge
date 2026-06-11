@@ -7,7 +7,8 @@ export function runProcess(
   input: string,
   cwd: string,
   timeoutMs: number,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  hardKillLimitMs = timeoutMs
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint();
@@ -19,7 +20,7 @@ export function runProcess(
     });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
-    let timedOut = false;
+    let killedByTimeout = false;
     let timeoutTimeMs: number | undefined;
     let settled = false;
     let stdinError: string | undefined;
@@ -27,10 +28,10 @@ export function runProcess(
     let stderrError: string | undefined;
 
     const timer = setTimeout(() => {
-      timedOut = true;
+      killedByTimeout = true;
       timeoutTimeMs = elapsedMs(startedAt);
       child.kill();
-    }, timeoutMs);
+    }, hardKillLimitMs);
 
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
@@ -57,14 +58,17 @@ export function runProcess(
       }
       settled = true;
       clearTimeout(timer);
-      const timeMs = timedOut && timeoutTimeMs !== undefined ? timeoutTimeMs : elapsedMs(startedAt);
+      const actualTimeMs = killedByTimeout && timeoutTimeMs !== undefined ? timeoutTimeMs : elapsedMs(startedAt);
+      const timedOut = killedByTimeout || actualTimeMs > timeoutMs;
+      const timeMs = killedByTimeout ? hardKillLimitMs : actualTimeMs;
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
         stderr: Buffer.concat(stderrChunks).toString('utf8'),
         code,
         signal,
         timedOut,
-        killedByTimeout: timedOut,
+        killedByTimeout,
+        hardKillLimitMs,
         stdinError,
         stdoutError,
         stderrError,

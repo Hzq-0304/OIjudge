@@ -47,6 +47,8 @@ type JudgeReportTestcaseViewModel = {
   scoreEarned: number;
   scoreTotal: number;
   timeMs?: number;
+  killedByTimeout?: boolean;
+  hardKillLimitMs?: number;
   memoryKiB?: number;
   subtaskId?: string;
   systemMessage: string;
@@ -301,6 +303,8 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       scoreEarned,
       scoreTotal,
       timeMs: sample.timeMs ?? sample.elapsedMs,
+      killedByTimeout: sample.killedByTimeout,
+      hardKillLimitMs: sample.hardKillLimitMs,
       memoryKiB: getSampleMemoryKiB(sample),
       subtaskId: problem?.subtasks?.find((entry) => entry.sampleIds.includes(sample.id))?.id,
       systemMessage: buildSystemMessage(sample, report),
@@ -432,7 +436,7 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
       <span class="testcaseName">${escapeHtml(t('report.testcaseNumber', { index: testcase.index }))}</span>
       <span class="statusPill ${statusClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
       <span>${testcase.scoreEarned}/${testcase.scoreTotal}</span>
-      <span>${escapeHtml(formatDuration(testcase.timeMs))}</span>
+      <span>${escapeHtml(formatTestcaseDuration(testcase))}</span>
       <span>${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
     </summary>
     ${details}
@@ -552,7 +556,7 @@ function renderSampleCard(
       <span class="status ${statusClass(sample.status)}">${escapeHtml(statusLabel(sample.status))}</span>
     </div>
     <dl>
-      <dt>${escapeHtml(t('elapsed'))}</dt><dd>${formatDuration(sample.timeMs ?? sample.elapsedMs)}</dd>
+      <dt>${escapeHtml(t('elapsed'))}</dt><dd>${formatSampleDuration(sample)}</dd>
       <dt>${escapeHtml(t('compareTime'))}</dt><dd>${formatDuration(sample.compareTimeMs)}</dd>
       <dt>${escapeHtml(t('source'))}</dt><dd>${escapeHtml(t(sourceType === 'external' ? 'externalSample' : 'managedSample'))}</dd>
       ${sample.status === 'Scored' ? `<dt>${escapeHtml(t('checkerScore'))}</dt><dd>${escapeHtml(sample.checker?.scoreText ?? String(sample.score ?? ''))}</dd>` : ''}
@@ -1124,6 +1128,22 @@ function formatMs(value: number | undefined): number | string {
 
 function formatDuration(value: number | undefined): string {
   return value === undefined ? '-' : `${Math.round(value)} ms`;
+}
+
+function formatSampleDuration(sample: Pick<SampleReport, 'timeMs' | 'elapsedMs' | 'killedByTimeout' | 'hardKillLimitMs'>): string {
+  const timeMs = sample.killedByTimeout && sample.hardKillLimitMs !== undefined
+    ? sample.hardKillLimitMs
+    : sample.timeMs ?? sample.elapsedMs;
+  const prefix = sample.killedByTimeout ? '>' : '';
+  return timeMs === undefined ? '-' : `${prefix}${Math.round(timeMs)} ms`;
+}
+
+function formatTestcaseDuration(testcase: Pick<JudgeReportTestcaseViewModel, 'timeMs' | 'killedByTimeout' | 'hardKillLimitMs'>): string {
+  const timeMs = testcase.killedByTimeout && testcase.hardKillLimitMs !== undefined
+    ? testcase.hardKillLimitMs
+    : testcase.timeMs;
+  const prefix = testcase.killedByTimeout ? '>' : '';
+  return timeMs === undefined ? '-' : `${prefix}${Math.round(timeMs)} ms`;
 }
 
 function statusLabel(status: string): string {

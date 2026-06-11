@@ -10,6 +10,8 @@ import { OITestConfig, ProcessResult } from './types';
 type NativeRunResult = {
   exitCode?: number | null;
   timedOut?: boolean;
+  killedByTimeout?: boolean;
+  hardKillLimitMs?: number;
   timeMs?: number;
   memoryBytes?: number;
   stdoutError?: string;
@@ -28,6 +30,7 @@ export async function runNativeProcess(input: {
   stdin: string;
   cwd: string;
   timeoutMs: number;
+  hardKillLimitMs?: number;
   env?: NodeJS.ProcessEnv;
   output?: vscode.OutputChannel;
 }): Promise<ProcessResult | undefined> {
@@ -65,6 +68,7 @@ export async function runNativeProcess(input: {
       '--stdout', stdoutPath,
       '--stderr', stderrPath,
       '--time-limit-ms', String(input.timeoutMs),
+      '--hard-kill-limit-ms', String(input.hardKillLimitMs ?? input.timeoutMs),
       '--memory-limit-mib', String(input.config.limits.memoryMb),
       ...input.args.flatMap((arg) => ['--arg', arg])
     ], input.cwd, runnerEnv);
@@ -87,10 +91,11 @@ export async function runNativeProcess(input: {
     return {
       stdout,
       stderr,
-      code: parsed.timedOut ? null : parsed.exitCode ?? null,
+      code: parsed.killedByTimeout ? null : parsed.exitCode ?? null,
       signal: null,
       timedOut: Boolean(parsed.timedOut),
-      killedByTimeout: Boolean(parsed.timedOut),
+      killedByTimeout: Boolean(parsed.killedByTimeout),
+      hardKillLimitMs: parsed.hardKillLimitMs,
       timeMs,
       elapsedMs: Math.round(timeMs),
       memoryBytes,
@@ -127,7 +132,7 @@ async function ensureNativeRunnerHelper(
 ): Promise<NativeRunnerHelper | undefined> {
   const sourcePath = path.resolve(__dirname, '..', 'resources', 'runner', 'oijudge-runner-win.cpp');
   const helperPath = path.join(getOITestDir(workspaceFolder), 'bin', 'oijudge-runner-win.exe');
-  const helperSignature = 'win-runner-static-wideargs-20260611';
+  const helperSignature = 'win-runner-hard-kill-ratio-20260611';
   const signaturePath = `${helperPath}.stamp`;
   if (!(await exists(sourcePath))) {
     helperUnavailableReason = 'helper source file is missing';

@@ -1056,8 +1056,10 @@ async function readReport(
 }
 
 function formatElapsed(report: SampleReport): string {
-  const timeMs = report.timeMs ?? report.elapsedMs;
-  if (report.status === 'TLE') {
+  const timeMs = report.killedByTimeout && report.hardKillLimitMs !== undefined
+    ? report.hardKillLimitMs
+    : report.timeMs ?? report.elapsedMs;
+  if (report.killedByTimeout) {
     return `>${formatMs(timeMs)}ms`;
   }
   return `${formatMs(timeMs)}ms`;
