@@ -8,6 +8,7 @@ import { withCompilerPathEnv } from './compilerRuntime';
 import { isOutputAccepted } from './comparator';
 import { exists, getOiJudgeDataRelPath, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
+import { runNativeProcess } from './nativeRunner';
 import { runProcess } from './runner';
 import { calculateJudgeScore, calculateEffectiveSampleScores } from './scoring';
 import {
@@ -133,6 +134,7 @@ export async function runAllSamples(
         runCwd,
         sample,
         config.limits.timeMs,
+        config.limits.memoryMb,
         getIoMode(config),
         getFileIoConfig(config),
         output,
@@ -380,6 +382,7 @@ async function judgeSample(
   cwd: string,
   sample: SampleConfig,
   timeLimitMs: number,
+  memoryLimitMb: number,
   ioMode: IoMode,
   fileIo: FileIoConfig,
   output: vscode.OutputChannel,
@@ -456,13 +459,29 @@ async function judgeSample(
 
   let result: ProcessResult;
   try {
-    result = await runProcess(
+    const env = withCompilerPathEnv(compilerCommand);
+    result = await runNativeProcess({
+      workspaceFolder,
+      config: {
+        version: 1,
+        compiler: { command: compilerCommand ?? '', args: [] },
+        limits: { timeMs: timeLimitMs, memoryMb: memoryLimitMb },
+        samples: []
+      },
+      command: path.resolve(executablePath),
+      args: [],
+      stdin: ioContext.stdin,
+      cwd: ioContext.cwd,
+      timeoutMs: timeLimitMs,
+      env,
+      output
+    }) ?? await runProcess(
       path.resolve(executablePath),
       [],
       ioContext.stdin,
       ioContext.cwd,
       timeLimitMs,
-      withCompilerPathEnv(compilerCommand)
+      env
     );
   } catch (error) {
     const runnerError = formatUnknownError(error);
@@ -881,7 +900,8 @@ function formatRunResultOutput(
     `Exit code: ${formatExitCode(result.code)}`,
     `Signal: ${result.signal ?? 'null'}`,
     `Killed by timeout: ${result.killedByTimeout}`,
-    `Time: ${formatMs(result.timeMs)} ms`
+    `Time: ${formatMs(result.timeMs)} ms`,
+    `Memory: ${formatMemoryKiB(result.memoryKiB)}`
   ];
 
   if (result.stdinError) {
@@ -956,7 +976,7 @@ function createRuntimeDiagnostics(
   exePath: string,
   cwd: string,
   result: ProcessResult
-): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryKiB'>> {
+): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB'>> {
   return {
     source: sourcePath,
     exe: exePath,
@@ -966,6 +986,7 @@ function createRuntimeDiagnostics(
     exitCode: result.code,
     signal: result.signal,
     killedByTimeout: result.killedByTimeout,
+    memoryBytes: result.memoryBytes,
     memoryKiB: result.memoryKiB,
     stdinError: result.stdinError,
     stdoutError: result.stdoutError,
@@ -1168,6 +1189,10 @@ function elapsedMs(startedAt: bigint): number {
 
 function formatMs(value: number): number {
   return Math.round(value);
+}
+
+function formatMemoryKiB(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? `${value} KiB` : '-';
 }
 
 function formatExitCode(code: number | null): string {
