@@ -2330,7 +2330,7 @@ async function compileGenerator(
   }
 
   const compile = await compileSource(workspaceFolder, generatorPath, problem, output);
-  if (!compile) {
+  if (!compile || compile.status !== 'OK' || !compile.executablePath) {
     vscode.window.showErrorMessage(t('generator.compileFailed'));
     return undefined;
   }
@@ -2348,6 +2348,10 @@ async function runCompiledGenerator(
   output.appendLine(`Run command: ${compile.executablePath}`);
   let result: Awaited<ReturnType<typeof runProcess>>;
   try {
+    if (compile.status !== 'OK' || !compile.executablePath) {
+      vscode.window.showErrorMessage(t('generator.compileFailed'));
+      return undefined;
+    }
     result = await runProcess(
       compile.executablePath,
       [],
@@ -2411,7 +2415,7 @@ async function prepareAutoStdOutputGeneration(
   output.appendLine(`STD source: ${stdPath}`);
   output.appendLine('STD compile:');
   const compile = await compileSource(workspaceFolder, stdPath, problem, output);
-  if (!compile) {
+  if (!compile || compile.status !== 'OK' || !compile.executablePath) {
     vscode.window.showErrorMessage(t('generator.autoOutput.compileFailed'));
     return undefined;
   }
@@ -2439,6 +2443,9 @@ async function generateOutputForGeneratedSample(
   const execution = await prepareStdSampleExecution(workspaceFolder, problem, sample, input);
   let result: Awaited<ReturnType<typeof runProcess>>;
   try {
+    if (std.compile.status !== 'OK' || !std.compile.executablePath) {
+      return { ok: false, reason: t('stdCompileFailed') };
+    }
     result = await runProcess(
       std.compile.executablePath,
       [],
@@ -4110,7 +4117,7 @@ async function prepareStdAnswerGeneration(
   output.appendLine('STD compile:');
   output.appendLine(`STD source: ${stdPath}`);
   const compile = await compileSource(workspaceFolder, stdPath, problem, output);
-  if (!compile) {
+  if (!compile || compile.status !== 'OK' || !compile.executablePath) {
     vscode.window.showErrorMessage(t('stdCompileFailed'));
     return undefined;
   }
@@ -4139,6 +4146,9 @@ async function generateAnswerForSample(
   const execution = await prepareStdSampleExecution(workspaceFolder, problem, sample, input);
   let result;
   try {
+    if (std.compile.status !== 'OK' || !std.compile.executablePath) {
+      return { ok: false, reason: t('stdCompileFailed') };
+    }
     result = await runProcess(
       std.compile.executablePath,
       [],

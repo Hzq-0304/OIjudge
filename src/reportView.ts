@@ -14,6 +14,8 @@ import { inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
 
+const maxSystemMessageLength = 12_000;
+
 const openProblemReportPanels = new Map<string, {
   panel: vscode.WebviewPanel;
   workspaceFolder: vscode.WorkspaceFolder;
@@ -48,10 +50,6 @@ type JudgeReportTestcaseViewModel = {
   memoryKiB?: number;
   subtaskName?: string;
   systemMessage: string;
-  stderr?: string;
-  checkerMessage?: string;
-  diff?: string;
-  message?: string;
   sampleIndex?: number;
   hasCheckerOutput: boolean;
   defaultOpen: boolean;
@@ -288,13 +286,9 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       timeMs: sample.timeMs ?? sample.elapsedMs,
       memoryKiB: getSampleMemoryKiB(sample),
       subtaskName: subtask?.name,
-      systemMessage: buildSystemMessage(sample),
-      stderr: sample.stderrPreview ?? sample.stderr,
-      checkerMessage: buildCheckerMessage(sample),
-      diff: sample.diff,
-      message: sample.message,
+      systemMessage: buildSystemMessage(sample, report),
       sampleIndex,
-      hasCheckerOutput: Boolean(sample.checker?.output || sample.checker?.stdout || sample.checker?.stderr),
+      hasCheckerOutput: false,
       defaultOpen: false
     };
   });
@@ -337,16 +331,8 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
 }
 
 function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
-  const sections = [
-    renderDetailBlock(t('report.systemInfo'), testcase.systemMessage),
-    renderDetailBlock(t('report.stderr'), testcase.stderr),
-    renderDetailBlock(t('report.checkerInfo'), testcase.checkerMessage),
-    renderDetailBlock(t('report.diff'), testcase.diff),
-    renderDetailBlock(t('message'), testcase.message)
-  ].filter(Boolean).join('');
-
   return `<div class="testcaseDetails">
-    ${sections || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
+    ${renderDetailBlock(t('report.systemInfo'), testcase.systemMessage) || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
     ${renderActionButtons(testcase.sampleIndex, problemId, testcase.status, testcase.hasCheckerOutput)}
   </div>`;
 }
@@ -422,8 +408,6 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       input: 'oijudger.openSampleInput',
       expected: 'oijudger.openSampleAnswer',
       output: 'oijudger.openSampleUserOutput',
-      diff: 'oijudger.openSampleDiff',
-      checkerOutput: 'oijudger.openCheckerOutput',
       copyFreopen: 'oijudger.copyTestcaseFreopenInput',
       delete: 'oijudger.deleteSample'
     };
@@ -515,18 +499,18 @@ function renderActionButtons(
   sampleId: number | undefined,
   problemId: string | undefined,
   status: string,
-  hasCheckerOutput: boolean
+  _hasCheckerOutput: boolean
 ): string {
+  if (status === 'CE') {
+    return '';
+  }
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
-  const diffDisabled = status === 'WA' ? disabled : ' disabled';
   const sampleValue = sampleId ?? '';
   return `<div class="buttons">
     <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
     <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
     <button data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
-    <button data-command="diff" data-sample="${sampleValue}"${diffDisabled}>${escapeHtml(t('openDiff'))}</button>
-    ${hasCheckerOutput ? `<button data-command="checkerOutput" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('checkerOutput'))}</button>` : ''}
     <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
   </div>`;
 }
@@ -871,17 +855,27 @@ function formatMemoryKiB(value: number | undefined): string {
   return value === undefined ? '-' : `${Math.round(value)} KiB`;
 }
 
-function buildSystemMessage(sample: SampleReport): string {
-  const lines: string[] = [];
+function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
+  if (sample.status === 'CE') {
+    return truncateSystemMessage(formatCompileErrorSystemMessage(report));
+  }
+  if (sample.status === 'WA') {
+    return buildWrongAnswerSystemMessage(sample);
+  }
   if (sample.status === 'TLE') {
-    lines.push('Time limit exceeded.');
-  } else if (sample.status === 'MLE') {
+    return 'Time Limit Exceeded';
+  }
+  if (sample.status === 'RE') {
+    return buildRuntimeErrorSystemMessage(sample);
+  }
+  const lines: string[] = [];
+  if (sample.status === 'MLE') {
     lines.push('Memory limit exceeded.');
   } else if (sample.exitCode !== undefined && sample.exitCode !== null) {
     lines.push(t('report.exitCode', { code: sample.exitCode }));
   } else if (sample.signal) {
     lines.push(`Terminated by signal ${sample.signal}.`);
-  } else if (sample.status === 'AC' || sample.status === 'WA' || sample.status === 'Scored') {
+  } else if (sample.status === 'AC' || sample.status === 'Scored') {
     lines.push(t('report.exitCode', { code: 0 }));
   }
   if (sample.killedByTimeout) {
@@ -906,6 +900,43 @@ function buildSystemMessage(sample: SampleReport): string {
     lines.push(`compareError: ${sample.compareError}`);
   }
   return lines.join('\n') || t('report.noDetails');
+}
+
+function buildRuntimeErrorSystemMessage(sample: SampleReport): string {
+  const lines: string[] = [];
+  if (sample.exitCode !== undefined && sample.exitCode !== null) {
+    lines.push(t('report.exitCode', { code: sample.exitCode }));
+  } else if (sample.signal) {
+    lines.push(`Terminated by signal ${sample.signal}.`);
+  } else {
+    lines.push(t('report.noDetails'));
+  }
+  if (sample.stderrPreview?.trim()) {
+    lines.push('', sample.stderrPreview.trimEnd());
+  }
+  return lines.join('\n');
+}
+
+function buildWrongAnswerSystemMessage(sample: SampleReport): string {
+  const checkerMessage = buildCheckerMessage(sample);
+  if (checkerMessage) {
+    return checkerMessage;
+  }
+  return sample.message?.trim() || t('report.noDetails');
+}
+
+function formatCompileErrorSystemMessage(report: JudgeReport): string {
+  const output = [report.compile?.stderr, report.compile?.stdout]
+    .filter((entry): entry is string => Boolean(entry && entry.trim()))
+    .join('\n');
+  return output ? `Compile Error\n\n${output.trimEnd()}` : 'Compile Error';
+}
+
+function truncateSystemMessage(value: string): string {
+  if (value.length <= maxSystemMessageLength) {
+    return value;
+  }
+  return `${value.slice(0, maxSystemMessageLength).trimEnd()}\n\nOutput truncated.`;
 }
 
 function buildCheckerMessage(sample: SampleReport): string | undefined {

@@ -24,7 +24,7 @@ import {
   resolveSamplePath
 } from './sampleFiles';
 import { isSetterModeEnabled } from './setterMode';
-import { CheckerSampleReport, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
+import { CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
 type RunClassification = 'TLE' | 'RE' | undefined;
@@ -71,6 +71,15 @@ export async function runAllSamples(
   const compile = await compileSource(workspaceFolder, sourcePath, config, output);
   if (!compile) {
     return undefined;
+  }
+  if (compile.status === 'CE' || !compile.executablePath) {
+    const report = createCompileErrorJudgeReport(sourcePath, config, compile, totalStartedAt);
+    await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
+    await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    output.appendLine('');
+    output.appendLine('Summary: Compile Error');
+    output.appendLine(`Report: ${getOiJudgeDataRelPath('outputs', 'report.json')}`);
+    return report;
   }
 
   const samples: SampleReport[] = [];
@@ -203,6 +212,67 @@ export async function runAllSamples(
   }
 
   return report;
+}
+
+function createCompileErrorJudgeReport(
+  sourcePath: string,
+  config: OITestConfig,
+  compile: CompileResult,
+  totalStartedAt: bigint
+): JudgeReport {
+  const samples: SampleReport[] = config.samples.map((sample) => ({
+    id: sample.id,
+    index: sample.index,
+    name: sample.name,
+    status: 'CE',
+    timeMs: 0,
+    compareTimeMs: 0,
+    elapsedMs: 0,
+    input: sample.input,
+    answer: sample.answer,
+    actualOutput: '',
+    output: '',
+    stderr: '',
+    diff: '',
+    message: 'Compile Error'
+  }));
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    source: sourcePath,
+    sourceName: sourcePath.replace(/^.*[\\/]/u, ''),
+    compile: {
+      status: 'CE',
+      timeMs: compile.timeMs,
+      stack: compile.stack,
+      stdout: compile.stdout,
+      stderr: compile.stderr,
+      message: compile.message,
+      exitCode: compile.exitCode,
+      timedOut: compile.timedOut
+    },
+    totalTimeMs: elapsedMs(totalStartedAt),
+    judgeMode: getJudgeMode(config),
+    checkerType: config.checker?.type === 'testlib' || config.checker?.type === 'plain' ? config.checker.type : undefined,
+    ioMode: getIoMode(config),
+    fileIo: getIoMode(config) === 'fileio' ? getFileIoConfig(config) : undefined,
+    checker: config.checker?.enabled ? config.checker : undefined,
+    timeLimitMs: config.limits.timeMs,
+    memoryLimitMb: config.limits.memoryMb,
+    summary: {
+      accepted: 0,
+      total: samples.length,
+      wrongAnswer: 0,
+      scored: 0,
+      checkerError: 0
+    },
+    score: {
+      earned: 0,
+      total: 100
+    },
+    results: samples,
+    samples
+  };
 }
 
 function getJudgeMode(config: OITestConfig): 'normal' | 'checker' {
@@ -667,8 +737,10 @@ async function judgeSample(
   const compareTimeMs = elapsedMs(compareStartedAt);
 
   if (!accepted) {
-    await saveTextOutput(outputPaths.diffPath, createDiffSummary(answer, judgeOutput));
-    await saveRunResultOutput(outputPaths.runResultPath, 'WA', result, withStdinMessage('Output differs from answer.', result), undefined, ioDiagnostics);
+    const diffSummary = createDiffSummary(answer, judgeOutput);
+    const mismatchSummary = createMismatchSummary(answer, judgeOutput);
+    await saveTextOutput(outputPaths.diffPath, diffSummary);
+    await saveRunResultOutput(outputPaths.runResultPath, 'WA', result, withStdinMessage(mismatchSummary, result), undefined, ioDiagnostics);
     output.appendLine(`[WA] ${sample.name} (${formatMs(result.timeMs)} ms)`);
     output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
     output.appendLine(`${sample.name} compare time: ${formatMs(compareTimeMs)} ms`);
@@ -687,7 +759,7 @@ async function judgeSample(
         ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
         ...ioDiagnostics
       },
-      withStdinMessage('Output differs from answer.', result)
+      withStdinMessage(mismatchSummary, result)
     );
   }
 
@@ -957,6 +1029,30 @@ function createDiffSummary(answer: string, actual: string): string {
     'User output:',
     actual
   ].join('\n');
+}
+
+function createMismatchSummary(expected: string, actual: string): string {
+  const expectedLines = expected.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const actualLines = actual.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const maxLines = Math.max(expectedLines.length, actualLines.length);
+  for (let lineIndex = 0; lineIndex < maxLines; lineIndex += 1) {
+    const expectedLine = expectedLines[lineIndex] ?? '';
+    const actualLine = actualLines[lineIndex] ?? '';
+    if (expectedLine === actualLine) {
+      continue;
+    }
+    const maxColumns = Math.max(expectedLine.length, actualLine.length);
+    for (let columnIndex = 0; columnIndex < maxColumns; columnIndex += 1) {
+      if ((expectedLine[columnIndex] ?? '') !== (actualLine[columnIndex] ?? '')) {
+        return `On line ${lineIndex + 1} column ${columnIndex + 1}, read ${formatMismatchToken(actualLine)}, expected ${formatMismatchToken(expectedLine)}.`;
+      }
+    }
+  }
+  return 'Output differs from answer.';
+}
+
+function formatMismatchToken(value: string): string {
+  return value.length > 80 ? `${value.slice(0, 80)}...` : value || '<empty>';
 }
 
 function appendRuntimeDiagnostics(

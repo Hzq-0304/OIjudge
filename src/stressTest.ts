@@ -177,7 +177,9 @@ async function compileStressProgram(
     id
   };
   const result = await compileSource(workspaceFolder, sourcePath, compileConfig, output);
-  return result ? { sourcePath, executablePath: result.executablePath, compilerCommand: result.compilerCommand } : undefined;
+  return result?.status === 'OK' && result.executablePath
+    ? { sourcePath, executablePath: result.executablePath, compilerCommand: result.compilerCommand }
+    : undefined;
 }
 
 async function runStressProgram(

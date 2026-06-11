@@ -61,16 +61,28 @@ export async function compileSource(
   try {
     result = await runProcess(compilerCommand, args, '', workspaceFolder.uri.fsPath, 60_000, env);
   } catch (error) {
+    const message = formatSpawnError(error);
     output.appendLine('Compile failed to start.');
     output.appendLine(`Compiler: ${compilerCommand}`);
     output.appendLine(`cwd: ${workspaceFolder.uri.fsPath}`);
     output.appendLine(`args: ${args.map(quoteArg).join(' ')}`);
-    output.appendLine(formatSpawnError(error));
+    output.appendLine(message);
     vscode.window.showErrorMessage(t('compileStartFailed'));
-    return undefined;
+    return {
+      status: 'CE',
+      timeMs: 0,
+      stack,
+      compilerCommand,
+      compilerBin: compilerDir,
+      stderr: message,
+      message
+    };
   }
 
   if (result.code !== 0 || result.timedOut) {
+    const message = result.timedOut
+      ? 'Compile timed out.'
+      : `Compile failed with code ${result.code ?? 'null'}.`;
     output.appendLine('Compile failed.');
     if (result.stderr.trim()) {
       output.appendLine(result.stderr.trimEnd());
@@ -79,7 +91,18 @@ export async function compileSource(
       output.appendLine(result.stdout.trimEnd());
     }
     vscode.window.showErrorMessage(t('compileFailed'));
-    return undefined;
+    return {
+      status: 'CE',
+      timeMs: result.timeMs,
+      stack,
+      compilerCommand,
+      compilerBin: compilerDir,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message,
+      exitCode: result.code,
+      timedOut: result.timedOut
+    };
   }
 
   output.appendLine('Compile succeeded.');

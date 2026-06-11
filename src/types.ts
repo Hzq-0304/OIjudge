@@ -183,15 +183,20 @@ export type ProcessResult = {
 };
 
 export type CompileReport = {
-  status: 'OK';
+  status: 'OK' | 'CE';
   timeMs: number;
   stack?: CompileStackReport;
+  stdout?: string;
+  stderr?: string;
+  message?: string;
+  exitCode?: number | null;
+  timedOut?: boolean;
 };
 
 export type CompileResult = CompileReport & {
   compilerCommand?: string;
   compilerBin?: string;
-  executablePath: string;
+  executablePath?: string;
 };
 
 export type CompileStackReport = {

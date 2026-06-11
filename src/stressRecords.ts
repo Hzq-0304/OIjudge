@@ -138,7 +138,7 @@ export async function rerunStressFailedCase(input: {
   input.output.appendLine('');
 
   const compile = await compileSource(input.workspaceFolder, input.solutionPath, compileConfig, input.output);
-  if (!compile) {
+  if (!compile || compile.status !== 'OK' || !compile.executablePath) {
     return undefined;
   }
 
