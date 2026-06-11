@@ -837,6 +837,11 @@
           "group": "3_run"
         },
         {
+          "command": "oijudger.setSubtaskScoringMode",
+          "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
+          "group": "inline@5"
+        },
+        {
           "command": "oijudger.renameSubtask",
           "when": "view == oijudger.samplesView && (viewItem == subtask || viewItem == subtaskPassed || viewItem == subtaskFailed)",
           "group": "8_subtask"
