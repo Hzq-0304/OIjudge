@@ -205,7 +205,7 @@ function renderReportBody(
         <div><span>${escapeHtml(t('report.score'))}</span><strong>${viewModel.earnedScore}/${viewModel.totalScore}</strong></div>
         <div><span>${escapeHtml(t('report.accepted'))}</span><strong>${viewModel.acceptedCount}/${viewModel.totalCount}</strong></div>
         <div><span>${escapeHtml(t('report.maxTime'))}</span><strong>${escapeHtml(formatDuration(viewModel.maxTimeMs))}</strong></div>
-        <div><span>${escapeHtml(t('report.maxMemory'))}</span><strong>${escapeHtml(formatMemoryKiB(viewModel.maxMemoryKiB))}</strong></div>
+        <div><span>${escapeHtml(t('report.maxMemory'))}</span><strong>${escapeHtml(formatMemory(viewModel.maxMemoryKiB))}</strong></div>
       </div>
     </section>
     <section class="metaStrip">
@@ -319,7 +319,7 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
       <span class="statusPill ${statusClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
       <span>${testcase.scoreEarned}/${testcase.scoreTotal}</span>
       <span>${escapeHtml(formatDuration(testcase.timeMs))}</span>
-      <span>${escapeHtml(formatMemoryKiB(testcase.memoryKiB))}</span>
+      <span>${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
       <span class="subtaskCell">${escapeHtml(testcase.subtaskName ?? '-')}</span>
     </summary>
     ${details}
@@ -874,8 +874,19 @@ function getMaxMemoryKiB(samples: SampleReport[]): number | undefined {
   return values.length > 0 ? Math.max(...values) : undefined;
 }
 
-function formatMemoryKiB(value: number | undefined): string {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? `${Math.ceil(value)} KiB` : '-';
+function formatMemory(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return '-';
+  }
+
+  const memoryMiB = value / 1024;
+  if (memoryMiB < 10) {
+    return `${memoryMiB.toFixed(2)} MB`;
+  }
+  if (memoryMiB < 100) {
+    return `${memoryMiB.toFixed(1)} MB`;
+  }
+  return `${Math.round(memoryMiB)} MB`;
 }
 
 function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
