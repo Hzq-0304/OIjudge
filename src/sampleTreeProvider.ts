@@ -1091,6 +1091,7 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
     case 'Scored':
       return 'question';
     case 'TLE':
+    case 'OLE':
     case 'MLE':
       return 'watch';
     case 'RE':
@@ -1112,6 +1113,8 @@ function statusLabel(status: SampleStatus | 'Not Run'): string {
       return t('statusWA');
     case 'TLE':
       return t('statusTLE');
+    case 'OLE':
+      return t('statusOLE');
     case 'RE':
       return t('statusRE');
     case 'CE':

@@ -28,9 +28,10 @@ import { isSetterModeEnabled } from './setterMode';
 import { CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
-type RunClassification = 'TLE' | 'RE' | undefined;
+type RunClassification = 'OLE' | 'TLE' | 'RE' | undefined;
 
 const TLE_KILL_RATIO = 1.2;
+const DEFAULT_OUTPUT_LIMIT_BYTES = 256 * 1024 * 1024;
 
 type CheckerContext = {
   type: 'testlib' | 'plain';
@@ -53,6 +54,9 @@ type FileIoOutput = {
   exists: boolean;
   content: string;
   outputPath: string;
+  outputLimitExceeded?: boolean;
+  outputBytes?: number;
+  outputLimitBytes?: number;
 };
 
 export async function runAllSamples(
@@ -329,17 +333,41 @@ async function prepareSampleIo(
 
 async function readFileIoOutput(
   outputPaths: ReturnType<typeof getSampleOutputPaths>,
-  fileIo: FileIoConfig
+  fileIo: FileIoConfig,
+  outputLimitBytes?: number
 ): Promise<FileIoOutput> {
   const outputPath = path.join(outputPaths.runDirPath, fileIo.outputFileName);
   if (!(await exists(outputPath))) {
     return { exists: false, content: '', outputPath };
   }
+  const stat = await fs.stat(outputPath);
+  if (outputLimitBytes !== undefined && stat.size > outputLimitBytes) {
+    const handle = await fs.open(outputPath, 'r');
+    try {
+      const buffer = Buffer.alloc(outputLimitBytes);
+      const { bytesRead } = await handle.read(buffer, 0, outputLimitBytes, 0);
+      await handle.close();
+      await fs.truncate(outputPath, outputLimitBytes);
+      return {
+        exists: true,
+        content: buffer.subarray(0, bytesRead).toString('utf8'),
+        outputPath,
+        outputLimitExceeded: true,
+        outputBytes: stat.size,
+        outputLimitBytes
+      };
+    } catch (error) {
+      await handle.close().catch(() => undefined);
+      throw error;
+    }
+  }
 
   return {
     exists: true,
     content: await fs.readFile(outputPath, 'utf8'),
-    outputPath
+    outputPath,
+    outputBytes: stat.size,
+    outputLimitBytes
   };
 }
 
@@ -463,6 +491,8 @@ async function judgeSample(
   try {
     const env = withCompilerPathEnv(compilerCommand);
     const hardKillLimitMs = getHardKillLimitMs(timeLimitMs);
+    const outputLimitBytes = DEFAULT_OUTPUT_LIMIT_BYTES;
+    const fileOutputPath = ioMode === 'fileio' ? path.join(outputPaths.runDirPath, fileIo.outputFileName) : undefined;
     result = await runNativeProcess({
       workspaceFolder,
       config: {
@@ -477,6 +507,8 @@ async function judgeSample(
       cwd: ioContext.cwd,
       timeoutMs: timeLimitMs,
       hardKillLimitMs,
+      outputLimitBytes,
+      fileOutputPath,
       env,
       output
     }) ?? await runProcess(
@@ -486,7 +518,9 @@ async function judgeSample(
       ioContext.cwd,
       timeLimitMs,
       env,
-      hardKillLimitMs
+      hardKillLimitMs,
+      outputLimitBytes,
+      fileOutputPath
     );
   } catch (error) {
     const runnerError = formatUnknownError(error);
@@ -499,6 +533,7 @@ async function judgeSample(
       signal: null,
       timedOut: false,
       killedByTimeout: false,
+      outputLimitExceeded: false,
       timeMs: 0,
       elapsedMs: 0
     }, `Failed to start executable: ${runnerError}`, undefined, ioContext.diagnostics);
@@ -531,10 +566,42 @@ async function judgeSample(
   }
 
   const fileIoOutput = ioMode === 'fileio'
-    ? await readFileIoOutput(outputPaths, fileIo)
+    ? await readFileIoOutput(outputPaths, fileIo, DEFAULT_OUTPUT_LIMIT_BYTES)
     : undefined;
   const ioDiagnostics = mergeFileIoOutputDiagnostics(ioContext.diagnostics, fileIoOutput);
   const judgeOutput = ioMode === 'fileio' ? (fileIoOutput?.content ?? '') : result.stdout;
+  if (result.outputLimitExceeded || fileIoOutput?.outputLimitExceeded) {
+    if (fileIoOutput?.outputLimitExceeded) {
+      result.outputLimitExceeded = true;
+      result.outputBytes = result.outputBytes ?? fileIoOutput.outputBytes;
+      result.outputLimitBytes = result.outputLimitBytes ?? fileIoOutput.outputLimitBytes;
+    }
+    await saveTextOutput(outputPaths.outputPath, judgeOutput);
+    await saveTextOutput(outputPaths.stderrPath, result.stderr);
+    await saveRunResultOutput(outputPaths.runResultPath, 'OLE', result, 'Output Limit Exceeded.', undefined, ioDiagnostics);
+    output.appendLine(`[OLE] ${sample.name} (${formatMs(result.timeMs)} ms)`);
+    output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
+    output.appendLine(`${sample.name} compare time: 0 ms`);
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'OLE',
+      result.timeMs,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics,
+        outputLimitExceeded: true,
+        outputBytes: result.outputBytes ?? fileIoOutput?.outputBytes,
+        outputLimitBytes: result.outputLimitBytes ?? fileIoOutput?.outputLimitBytes
+      },
+      'Output Limit Exceeded.'
+    );
+  }
   await saveTextOutput(outputPaths.outputPath, judgeOutput);
   await saveTextOutput(outputPaths.stderrPath, result.stderr);
   if (result.stdinError) {
@@ -908,6 +975,9 @@ function formatRunResultOutput(
     `Signal: ${result.signal ?? 'null'}`,
     `Killed by timeout: ${result.killedByTimeout}`,
     ...(result.hardKillLimitMs !== undefined ? [`Hard kill limit: ${formatMs(result.hardKillLimitMs)} ms`] : []),
+    ...(result.outputLimitExceeded !== undefined ? [`Output limit exceeded: ${result.outputLimitExceeded}`] : []),
+    ...(result.outputBytes !== undefined ? [`Output bytes: ${result.outputBytes}`] : []),
+    ...(result.outputLimitBytes !== undefined ? [`Output limit: ${result.outputLimitBytes} bytes`] : []),
     `Time: ${formatMs(result.timeMs)} ms`,
     `Memory: ${formatMemoryKiB(result.memoryKiB)}`
   ];
@@ -940,7 +1010,7 @@ function createSampleReport(
   outputRel: string,
   stderrRel: string,
   diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
+  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'outputLimitExceeded' | 'outputBytes' | 'outputLimitBytes' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
   message?: string,
   score?: number,
   checker?: CheckerSampleReport
@@ -984,7 +1054,7 @@ function createRuntimeDiagnostics(
   exePath: string,
   cwd: string,
   result: ProcessResult
-): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB'>> {
+): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'outputLimitExceeded' | 'outputBytes' | 'outputLimitBytes' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB'>> {
   return {
     source: sourcePath,
     exe: exePath,
@@ -995,6 +1065,9 @@ function createRuntimeDiagnostics(
     signal: result.signal,
     killedByTimeout: result.killedByTimeout,
     hardKillLimitMs: result.hardKillLimitMs,
+    outputLimitExceeded: result.outputLimitExceeded,
+    outputBytes: result.outputBytes,
+    outputLimitBytes: result.outputLimitBytes,
     memoryBytes: result.memoryBytes,
     memoryKiB: result.memoryKiB,
     stdinError: result.stdinError,
@@ -1102,6 +1175,9 @@ function appendRuntimeDiagnostics(
     signal: NodeJS.Signals | null;
     killedByTimeout: boolean;
     hardKillLimitMs?: number;
+    outputLimitExceeded?: boolean;
+    outputBytes?: number;
+    outputLimitBytes?: number;
     stdinError?: string;
     stdoutError?: string;
     stderrError?: string;
@@ -1122,6 +1198,15 @@ function appendRuntimeDiagnostics(
   output.appendLine(`  killedByTimeout: ${details.killedByTimeout}`);
   if (details.hardKillLimitMs !== undefined) {
     output.appendLine(`  hardKillLimitMs: ${formatMs(details.hardKillLimitMs)}`);
+  }
+  if (details.outputLimitExceeded) {
+    output.appendLine(`  outputLimitExceeded: true`);
+    if (details.outputBytes !== undefined) {
+      output.appendLine(`  outputBytes: ${details.outputBytes}`);
+    }
+    if (details.outputLimitBytes !== undefined) {
+      output.appendLine(`  outputLimitBytes: ${details.outputLimitBytes}`);
+    }
   }
   output.appendLine(`  stdinError: ${details.stdinError ?? 'none'}`);
   output.appendLine(`  stdoutError: ${details.stdoutError ?? 'none'}`);
@@ -1168,6 +1253,9 @@ function appendCompileStackLine(
 }
 
 function classifyRunResult(result: ProcessResult): RunClassification {
+  if (result.outputLimitExceeded) {
+    return 'OLE';
+  }
   if (result.killedByTimeout || result.timedOut) {
     return 'TLE';
   }

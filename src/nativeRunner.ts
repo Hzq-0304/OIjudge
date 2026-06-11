@@ -12,6 +12,9 @@ type NativeRunResult = {
   timedOut?: boolean;
   killedByTimeout?: boolean;
   hardKillLimitMs?: number;
+  outputLimitExceeded?: boolean;
+  outputBytes?: number;
+  outputLimitBytes?: number;
   timeMs?: number;
   memoryBytes?: number;
   stdoutError?: string;
@@ -31,6 +34,8 @@ export async function runNativeProcess(input: {
   cwd: string;
   timeoutMs: number;
   hardKillLimitMs?: number;
+  outputLimitBytes?: number;
+  fileOutputPath?: string;
   env?: NodeJS.ProcessEnv;
   output?: vscode.OutputChannel;
 }): Promise<ProcessResult | undefined> {
@@ -69,6 +74,8 @@ export async function runNativeProcess(input: {
       '--stderr', stderrPath,
       '--time-limit-ms', String(input.timeoutMs),
       '--hard-kill-limit-ms', String(input.hardKillLimitMs ?? input.timeoutMs),
+      ...(input.outputLimitBytes ? ['--output-limit-bytes', String(input.outputLimitBytes)] : []),
+      ...(input.fileOutputPath ? ['--file-output', input.fileOutputPath] : []),
       '--memory-limit-mib', String(input.config.limits.memoryMb),
       ...input.args.flatMap((arg) => ['--arg', arg])
     ], input.cwd, runnerEnv);
@@ -96,6 +103,9 @@ export async function runNativeProcess(input: {
       timedOut: Boolean(parsed.timedOut),
       killedByTimeout: Boolean(parsed.killedByTimeout),
       hardKillLimitMs: parsed.hardKillLimitMs,
+      outputLimitExceeded: Boolean(parsed.outputLimitExceeded),
+      outputBytes: parsed.outputBytes,
+      outputLimitBytes: parsed.outputLimitBytes,
       timeMs,
       elapsedMs: Math.round(timeMs),
       memoryBytes,
@@ -132,7 +142,7 @@ async function ensureNativeRunnerHelper(
 ): Promise<NativeRunnerHelper | undefined> {
   const sourcePath = path.resolve(__dirname, '..', 'resources', 'runner', 'oijudge-runner-win.cpp');
   const helperPath = path.join(getOITestDir(workspaceFolder), 'bin', 'oijudge-runner-win.exe');
-  const helperSignature = 'win-runner-hard-kill-ratio-20260611';
+  const helperSignature = 'win-runner-output-limit-20260611';
   const signaturePath = `${helperPath}.stamp`;
   if (!(await exists(sourcePath))) {
     helperUnavailableReason = 'helper source file is missing';

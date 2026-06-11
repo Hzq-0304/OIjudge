@@ -951,6 +951,9 @@ function getOverallStatus(report: JudgeReport, earnedScore: number | undefined):
   if (report.samples.some((sample) => sample.status === 'CE')) {
     return 'CE';
   }
+  if (report.samples.some((sample) => sample.status === 'OLE')) {
+    return 'OLE';
+  }
   if (report.samples.some((sample) => sample.status === 'TLE')) {
     return 'TLE';
   }
@@ -1022,6 +1025,11 @@ function formatMemory(value: number | undefined): string {
   return `${Math.round(memoryMiB)} MB`;
 }
 
+function formatBytesAsMb(value: number): string {
+  const mib = value / 1024 / 1024;
+  return `${Number.isInteger(mib) ? mib : mib.toFixed(1)} MB`;
+}
+
 function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
   if (sample.status === 'CE') {
     return truncateSystemMessage(formatCompileErrorSystemMessage(report));
@@ -1031,6 +1039,9 @@ function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
   }
   if (sample.status === 'TLE') {
     return 'Time Limit Exceeded';
+  }
+  if (sample.status === 'OLE') {
+    return buildOutputLimitSystemMessage(sample);
   }
   if (sample.status === 'RE') {
     return buildRuntimeErrorSystemMessage(sample);
@@ -1090,6 +1101,14 @@ function buildWrongAnswerSystemMessage(sample: SampleReport): string {
     return checkerMessage;
   }
   return sample.message?.trim() || t('report.noDetails');
+}
+
+function buildOutputLimitSystemMessage(sample: SampleReport): string {
+  const limit = sample.outputLimitBytes ?? 256 * 1024 * 1024;
+  return [
+    'Output Limit Exceeded',
+    `Output exceeded ${formatBytesAsMb(limit)}.`
+  ].join('\n');
 }
 
 function formatCompileErrorSystemMessage(report: JudgeReport): string {
@@ -1154,6 +1173,8 @@ function statusLabel(status: string): string {
       return t('statusWA');
     case 'TLE':
       return t('statusTLE');
+    case 'OLE':
+      return t('statusOLE');
     case 'RE':
       return t('statusRE');
     case 'CE':

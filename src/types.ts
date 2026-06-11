@@ -176,6 +176,9 @@ export type ProcessResult = {
   timedOut: boolean;
   killedByTimeout: boolean;
   hardKillLimitMs?: number;
+  outputLimitExceeded?: boolean;
+  outputBytes?: number;
+  outputLimitBytes?: number;
   memoryBytes?: number;
   memoryKiB?: number;
   stdinError?: string;
@@ -211,7 +214,7 @@ export type CompileStackReport = {
   unsupported?: boolean;
 };
 
-export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing' | 'Output Missing';
+export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'OLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing' | 'Output Missing';
 
 export type CheckerSampleReport = {
   enabled: boolean;
@@ -271,6 +274,10 @@ export type SampleReport = {
   signal?: NodeJS.Signals | null;
   killedByTimeout?: boolean;
   hardKillLimitMs?: number;
+  outputLimitExceeded?: boolean;
+  outputBytes?: number;
+  outputLimitBytes?: number;
+  systemMessage?: string;
   stdinError?: string;
   stdoutError?: string;
   stderrError?: string;

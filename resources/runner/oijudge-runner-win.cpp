@@ -15,9 +15,11 @@ struct Options {
   std::wstring stdinPath;
   std::wstring stdoutPath;
   std::wstring stderrPath;
+  std::wstring fileOutputPath;
   std::vector<std::wstring> args;
   DWORD timeLimitMs = 1000;
   DWORD hardKillLimitMs = 1000;
+  uint64_t outputLimitBytes = 0;
   uint64_t memoryLimitMiB = 0;
 };
 
@@ -151,11 +153,15 @@ static bool parseOptions(int argc, wchar_t** argv, Options& options, std::string
       options.stdoutPath = next();
     } else if (key == L"--stderr") {
       options.stderrPath = next();
+    } else if (key == L"--file-output") {
+      options.fileOutputPath = next();
     } else if (key == L"--time-limit-ms") {
       options.timeLimitMs = static_cast<DWORD>(std::stoul(next()));
       options.hardKillLimitMs = options.timeLimitMs;
     } else if (key == L"--hard-kill-limit-ms") {
       options.hardKillLimitMs = static_cast<DWORD>(std::stoul(next()));
+    } else if (key == L"--output-limit-bytes") {
+      options.outputLimitBytes = static_cast<uint64_t>(std::stoull(next()));
     } else if (key == L"--memory-limit-mib") {
       options.memoryLimitMiB = static_cast<uint64_t>(std::stoull(next()));
     } else if (key == L"--arg") {
@@ -200,6 +206,36 @@ static uint64_t queryProcessMemoryBytes(HANDLE process, HANDLE job) {
   }
 
   return memory;
+}
+
+static uint64_t fileSizeBytes(const std::wstring& path) {
+  if (path.empty()) {
+    return 0;
+  }
+  WIN32_FILE_ATTRIBUTE_DATA data;
+  if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+    return 0;
+  }
+  ULARGE_INTEGER size;
+  size.HighPart = data.nFileSizeHigh;
+  size.LowPart = data.nFileSizeLow;
+  return size.QuadPart;
+}
+
+static void truncateFileToLimit(const std::wstring& path, uint64_t limitBytes) {
+  if (path.empty() || limitBytes == 0) {
+    return;
+  }
+  HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return;
+  }
+  LARGE_INTEGER position;
+  position.QuadPart = static_cast<LONGLONG>(limitBytes);
+  if (SetFilePointerEx(file, position, nullptr, FILE_BEGIN)) {
+    SetEndOfFile(file);
+  }
+  CloseHandle(file);
 }
 
 static double elapsedMs(const LARGE_INTEGER& frequency, const LARGE_INTEGER& start, const LARGE_INTEGER& end) {
@@ -287,8 +323,40 @@ int main(int argc, char** argv) {
     AssignProcessToJobObject(job.get(), process.get());
   }
 
-  DWORD wait = WaitForSingleObject(process.get(), options.hardKillLimitMs);
-  bool killedByTimeout = wait == WAIT_TIMEOUT;
+  DWORD wait = WAIT_TIMEOUT;
+  bool killedByTimeout = false;
+  bool outputLimitExceeded = false;
+  uint64_t outputBytes = 0;
+  const DWORD pollMs = 10;
+  DWORD waitedMs = 0;
+  while (true) {
+    DWORD sliceMs = waitedMs >= options.hardKillLimitMs
+      ? 0
+      : std::min<DWORD>(pollMs, options.hardKillLimitMs - waitedMs);
+    wait = WaitForSingleObject(process.get(), sliceMs);
+    if (wait != WAIT_TIMEOUT) {
+      break;
+    }
+    waitedMs += sliceMs;
+    if (options.outputLimitBytes > 0) {
+      uint64_t stdoutBytes = fileSizeBytes(options.stdoutPath);
+      uint64_t fileOutBytes = fileSizeBytes(options.fileOutputPath);
+      outputBytes = std::max(stdoutBytes, fileOutBytes);
+      if (outputBytes > options.outputLimitBytes) {
+        outputLimitExceeded = true;
+        TerminateJobObject(job.get(), 2);
+        TerminateProcess(process.get(), 2);
+        WaitForSingleObject(process.get(), INFINITE);
+        truncateFileToLimit(options.stdoutPath, options.outputLimitBytes);
+        truncateFileToLimit(options.fileOutputPath, options.outputLimitBytes);
+        break;
+      }
+    }
+    if (waitedMs >= options.hardKillLimitMs) {
+      killedByTimeout = true;
+      break;
+    }
+  }
   if (killedByTimeout) {
     TerminateJobObject(job.get(), 1);
     TerminateProcess(process.get(), 1);
@@ -303,10 +371,13 @@ int main(int argc, char** argv) {
   uint64_t memoryBytes = queryProcessMemoryBytes(process.get(), job.get());
   uint64_t actualTimeMs = static_cast<uint64_t>(elapsedMs(frequency, start, end) + 0.999);
   uint64_t timeMs = killedByTimeout ? static_cast<uint64_t>(options.hardKillLimitMs) : actualTimeMs;
-  bool timedOut = killedByTimeout || actualTimeMs > static_cast<uint64_t>(options.timeLimitMs);
+  if (options.outputLimitBytes > 0 && outputBytes == 0) {
+    outputBytes = std::max(fileSizeBytes(options.stdoutPath), fileSizeBytes(options.fileOutputPath));
+  }
+  bool timedOut = !outputLimitExceeded && (killedByTimeout || actualTimeMs > static_cast<uint64_t>(options.timeLimitMs));
 
   std::cout << "{";
-  if (killedByTimeout) {
+  if (killedByTimeout || outputLimitExceeded) {
     std::cout << "\"exitCode\":null";
   } else {
     std::cout << "\"exitCode\":" << static_cast<uint64_t>(exitCode);
@@ -314,6 +385,13 @@ int main(int argc, char** argv) {
   std::cout << ",\"timedOut\":" << (timedOut ? "true" : "false");
   std::cout << ",\"killedByTimeout\":" << (killedByTimeout ? "true" : "false");
   std::cout << ",\"hardKillLimitMs\":" << static_cast<uint64_t>(options.hardKillLimitMs);
+  std::cout << ",\"outputLimitExceeded\":" << (outputLimitExceeded ? "true" : "false");
+  std::cout << ",\"outputBytes\":" << outputBytes;
+  if (options.outputLimitBytes > 0) {
+    std::cout << ",\"outputLimitBytes\":" << options.outputLimitBytes;
+  } else {
+    std::cout << ",\"outputLimitBytes\":null";
+  }
   std::cout << ",\"memoryExceeded\":false";
   std::cout << ",\"timeMs\":" << timeMs;
   if (memoryBytes > 0) {
@@ -321,7 +399,7 @@ int main(int argc, char** argv) {
   } else {
     std::cout << ",\"memoryBytes\":null";
   }
-  std::cout << ",\"message\":\"" << (timedOut ? "Time Limit Exceeded" : "") << "\"";
+  std::cout << ",\"message\":\"" << (outputLimitExceeded ? "Output Limit Exceeded" : timedOut ? "Time Limit Exceeded" : "") << "\"";
   std::cout << "}\n";
   return 0;
 }
