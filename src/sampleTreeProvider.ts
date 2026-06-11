@@ -165,7 +165,9 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     target: TreeNode | undefined,
     dataTransfer: vscode.DataTransfer
   ): Promise<void> {
-    if (!target || (target.group !== 'subtask' && target.group !== 'samples')) {
+    const targetSubtaskId = resolveDropTargetSubtaskId(target);
+    const targetProblemId = target?.problemId;
+    if (!targetProblemId || (target !== undefined && target.group !== 'samples' && targetSubtaskId === undefined)) {
       return;
     }
 
@@ -182,7 +184,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     }
 
     for (const sample of samples) {
-      if (!sample.problemId || sample.sampleId === undefined || sample.problemId !== target.problemId) {
+      if (!sample.problemId || sample.sampleId === undefined || sample.problemId !== targetProblemId) {
         continue;
       }
       const config = await ensureProblemsConfig(workspaceFolder);
@@ -195,7 +197,7 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         workspaceFolder,
         sample.problemId,
         targetSample.id,
-        target.group === 'subtask' ? target.subtaskId : undefined
+        targetSubtaskId
       );
     }
     this.refresh();
@@ -671,6 +673,7 @@ async function createSampleNodes(
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'sampleActions',
       problemId: problem.id,
+      subtaskId: sampleSubtaskId(problem, sample),
       sampleId: sample.index,
       sampleStatus: status,
       hasCheckerOutput: Boolean(sampleReport?.checker?.output || sampleReport?.checker?.stdout || sampleReport?.checker?.stderr),
@@ -686,6 +689,26 @@ function createEmptySamplesNode(): TreeNode {
     label: t('subtask.empty'),
     icon: new vscode.ThemeIcon('beaker-stop')
   };
+}
+
+function resolveDropTargetSubtaskId(target: TreeNode | undefined): string | undefined {
+  if (!target) {
+    return undefined;
+  }
+
+  if (target.group === 'subtask') {
+    return target.subtaskId;
+  }
+
+  if (target.kind === 'sample') {
+    return target.subtaskId;
+  }
+
+  return undefined;
+}
+
+function sampleSubtaskId(problem: ProblemConfig, sample: ProblemConfig['samples'][number]): string | undefined {
+  return problem.subtasks?.find((subtask) => subtask.sampleIds.includes(sample.id))?.id;
 }
 
 function createRuntimeTooltipLines(report: SampleReport | undefined): string[] {
