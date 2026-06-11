@@ -35,7 +35,7 @@ type JudgeReportViewModel = {
   judgeMode: string;
   ioMode: string;
   generatedAt: string;
-  testcases: JudgeReportTestcaseViewModel[];
+  testcaseSections: JudgeReportTestcaseSectionViewModel[];
 };
 
 type JudgeReportTestcaseViewModel = {
@@ -48,12 +48,31 @@ type JudgeReportTestcaseViewModel = {
   scoreTotal: number;
   timeMs?: number;
   memoryKiB?: number;
-  subtaskName?: string;
+  subtaskId?: string;
   systemMessage: string;
   sampleIndex?: number;
   hasCheckerOutput: boolean;
   defaultOpen: boolean;
 };
+
+type JudgeReportTestcaseSectionViewModel =
+  | {
+      kind: 'testcase';
+      testcase: JudgeReportTestcaseViewModel;
+    }
+  | {
+      kind: 'subtask';
+      id: string;
+      name: string;
+      status: 'AC' | 'PARTIAL' | 'WA';
+      statusText: string;
+      scoreEarned: number;
+      scoreTotal: number;
+      passedCount: number;
+      totalCount: number;
+      defaultOpen: boolean;
+      testcases: JudgeReportTestcaseViewModel[];
+    };
 
 export async function openLastReport(context: vscode.ExtensionContext): Promise<void> {
   const workspaceFolder = getWorkspaceFolder();
@@ -233,9 +252,8 @@ function renderReportBody(
           <span>${escapeHtml(t('report.score'))}</span>
           <span>${escapeHtml(t('time'))}</span>
           <span>${escapeHtml(t('memory'))}</span>
-          <span>${escapeHtml(t('subtask.run'))}</span>
         </div>
-        ${viewModel.testcases.map((testcase) => renderTestcaseRow(testcase, problemId)).join('')}
+        ${viewModel.testcaseSections.map((section) => renderTestcaseSection(section, problemId)).join('')}
       </div>
     </section>`;
 }
@@ -272,7 +290,6 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
   const effectiveScores = problem ? calculateEffectiveSampleScores(problem) : undefined;
   const testcases = report.samples.map((sample) => {
     const sampleIndex = getReportSampleIndex(sample);
-    const subtask = problem?.subtasks?.find((entry) => entry.sampleIds.includes(sample.id));
     const scoreEarned = score?.sampleScores.get(sample.id) ?? sample.score ?? 0;
     const scoreTotal = effectiveScores?.sampleScores.get(sample.id)?.score ?? sample.scoreTotal ?? 0;
     return {
@@ -285,13 +302,15 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       scoreTotal,
       timeMs: sample.timeMs ?? sample.elapsedMs,
       memoryKiB: getSampleMemoryKiB(sample),
-      subtaskName: subtask?.name,
+      subtaskId: problem?.subtasks?.find((entry) => entry.sampleIds.includes(sample.id))?.id,
       systemMessage: buildSystemMessage(sample, report),
       sampleIndex,
       hasCheckerOutput: false,
       defaultOpen: false
     };
   });
+
+  const testcaseSections = buildTestcaseSections(problem, testcases, score);
 
   return {
     status: getOverallStatus(report, score?.earnedScore),
@@ -307,20 +326,114 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
     judgeMode: formatJudgeMode(report),
     ioMode: formatIoMode(report),
     generatedAt: new Date(report.generatedAt).toLocaleString(),
-    testcases
+    testcaseSections
   };
 }
 
-function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
+function buildTestcaseSections(
+  problem: ProblemConfig | undefined,
+  testcases: JudgeReportTestcaseViewModel[],
+  score: ReturnType<typeof calculateJudgeScore> | undefined
+): JudgeReportTestcaseSectionViewModel[] {
+  if (!problem?.subtasks?.length) {
+    return testcases.map((testcase) => ({ kind: 'testcase', testcase }));
+  }
+
+  const grouped = new Map<string, JudgeReportTestcaseViewModel[]>();
+  const rootTestcases: JudgeReportTestcaseViewModel[] = [];
+  for (const testcase of testcases) {
+    if (testcase.subtaskId) {
+      const list = grouped.get(testcase.subtaskId) ?? [];
+      list.push(testcase);
+      grouped.set(testcase.subtaskId, list);
+    } else {
+      rootTestcases.push(testcase);
+    }
+  }
+
+  const sections: JudgeReportTestcaseSectionViewModel[] = [];
+  for (const testcase of rootTestcases) {
+    sections.push({ kind: 'testcase', testcase });
+  }
+
+  for (const subtask of problem.subtasks) {
+    const subtaskTestcases = grouped.get(subtask.id) ?? [];
+    if (subtaskTestcases.length === 0) {
+      continue;
+    }
+    const subtaskScore = score?.subtaskScores.get(subtask.id) ?? { earned: 0, total: 0 };
+    const passedCount = subtaskTestcases.filter((testcase) => testcase.status === 'AC' || testcase.status === 'Scored').length;
+    const totalCount = subtaskTestcases.length;
+    const status = subtaskStatus(subtaskScore.earned, subtaskScore.total, passedCount, totalCount);
+    sections.push({
+      kind: 'subtask',
+      id: subtask.id,
+      name: subtask.name,
+      status,
+      statusText: subtaskStatusText(status),
+      scoreEarned: subtaskScore.earned,
+      scoreTotal: subtaskScore.total,
+      passedCount,
+      totalCount,
+      defaultOpen: true,
+      testcases: subtaskTestcases
+    });
+  }
+
+  return sections;
+}
+
+function subtaskStatus(
+  earned: number,
+  total: number,
+  passedCount: number,
+  totalCount: number
+): 'AC' | 'PARTIAL' | 'WA' {
+  if (totalCount > 0 && passedCount === totalCount && earned >= total) {
+    return 'AC';
+  }
+  if (earned > 0) {
+    return 'PARTIAL';
+  }
+  return 'WA';
+}
+
+function subtaskStatusText(status: 'AC' | 'PARTIAL' | 'WA'): string {
+  if (status === 'AC') {
+    return t('statusAC');
+  }
+  if (status === 'PARTIAL') {
+    return t('report.partialAccepted');
+  }
+  return t('statusWA');
+}
+
+function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, problemId?: string): string {
+  if (section.kind === 'testcase') {
+    return renderTestcaseRow(section.testcase, problemId);
+  }
+  return `<details class="testcaseGroup subtask ${statusClass(section.status)}" open>
+    <summary>
+      <span class="testcaseName">${escapeHtml(section.name)}</span>
+      <span class="statusPill ${statusClass(section.status)}">${escapeHtml(section.statusText)}</span>
+      <span>${section.scoreEarned}/${section.scoreTotal}</span>
+      <span>${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
+    </summary>
+    <div class="testcaseGroupBody">
+      ${section.testcases.map((testcase) => renderTestcaseRow(testcase, problemId, true)).join('')}
+    </div>
+  </details>`;
+}
+
+function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: string, nested = false): string {
   const details = renderTestcaseDetails(testcase, problemId);
-  return `<details class="testcaseRow ${statusClass(testcase.status)}"${testcase.defaultOpen ? ' open' : ''}>
+  return `<details class="testcaseRow ${nested ? 'nested' : ''} ${statusClass(testcase.status)}"${testcase.defaultOpen ? ' open' : ''}>
     <summary>
       <span class="testcaseName">${escapeHtml(t('report.testcaseNumber', { index: testcase.index }))}</span>
       <span class="statusPill ${statusClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
       <span>${testcase.scoreEarned}/${testcase.scoreTotal}</span>
       <span>${escapeHtml(formatDuration(testcase.timeMs))}</span>
       <span>${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
-      <span class="subtaskCell">${escapeHtml(testcase.subtaskName ?? '-')}</span>
     </summary>
     ${details}
   </details>`;
@@ -688,7 +801,7 @@ function renderPage(title: string, body: string): string {
     .testcaseRow summary {
       align-items: center;
       display: grid;
-      grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px minmax(110px, 1fr);
+      grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px;
       gap: 12px;
       padding: 10px 14px;
     }
@@ -707,6 +820,10 @@ function renderPage(title: string, body: string): string {
     .testcaseRow {
       border-top: 1px solid var(--vscode-panel-border);
     }
+    .testcaseGroup.subtask > summary {
+      background: color-mix(in srgb, var(--vscode-list-inactiveSelectionBackground) 16%, transparent);
+      font-weight: 700;
+    }
     .testcaseRow summary {
       cursor: pointer;
       list-style: none;
@@ -720,6 +837,9 @@ function renderPage(title: string, body: string): string {
       transition: transform 120ms ease;
     }
     .testcaseRow[open] .testcaseName::before { transform: rotate(90deg); }
+    .testcaseRow.nested .testcaseName {
+      padding-left: 18px;
+    }
     .testcaseRow[open] summary {
       background: var(--vscode-list-hoverBackground);
       background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 18%, transparent);
@@ -730,15 +850,12 @@ function renderPage(title: string, body: string): string {
       font-weight: 700;
       width: fit-content;
     }
-    .subtaskCell {
-      color: var(--vscode-descriptionForeground);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
     .testcaseDetails {
       border-top: 1px solid var(--vscode-panel-border);
       padding: 12px 14px 14px 42px;
+    }
+    .testcaseGroupBody {
+      border-top: 1px solid var(--vscode-panel-border);
     }
     .detailBlock {
       margin-bottom: 12px;
