@@ -668,6 +668,7 @@ function renderPage(title: string, body: string): string {
     .testcaseTable {
       border: 1px solid var(--vscode-panel-border);
       border-radius: 10px;
+      min-width: 720px;
       overflow: hidden;
       background: var(--vscode-sideBar-background);
     }
@@ -678,6 +679,10 @@ function renderPage(title: string, body: string): string {
       grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px minmax(110px, 1fr);
       gap: 12px;
       padding: 10px 14px;
+    }
+    .testcaseHeader > span,
+    .testcaseRow summary > span {
+      min-width: 0;
     }
     .testcaseHeader {
       background: var(--vscode-editorWidget-background);
@@ -776,11 +781,9 @@ function renderPage(title: string, body: string): string {
     }
     @media (max-width: 780px) {
       .reportHero { grid-template-columns: 1fr; }
-      .testcaseHeader { display: none; }
-      .testcaseRow summary {
-        grid-template-columns: 1fr 1fr;
+      section:has(.testcaseTable) {
+        overflow-x: auto;
       }
-      .testcaseDetails { padding-left: 14px; }
     }
   </style>
 </head>
@@ -854,18 +857,25 @@ function getSampleMemoryKiB(sample: SampleReport): number | undefined {
   const raw = (sample as { memoryKiB?: unknown; memoryKb?: unknown; memory?: unknown }).memoryKiB
     ?? (sample as { memoryKb?: unknown }).memoryKb
     ?? (sample as { memory?: unknown }).memory;
-  return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return raw;
+  }
+  const bytes = (sample as { memoryBytes?: unknown }).memoryBytes;
+  if (typeof bytes === 'number' && Number.isFinite(bytes) && bytes > 0) {
+    return Math.ceil(bytes / 1024);
+  }
+  return undefined;
 }
 
 function getMaxMemoryKiB(samples: SampleReport[]): number | undefined {
   const values = samples
     .map(getSampleMemoryKiB)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
   return values.length > 0 ? Math.max(...values) : undefined;
 }
 
 function formatMemoryKiB(value: number | undefined): string {
-  return value === undefined ? '-' : `${Math.round(value)} KiB`;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? `${Math.ceil(value)} KiB` : '-';
 }
 
 function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {

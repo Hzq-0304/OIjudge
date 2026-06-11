@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <psapi.h>
+#include <shellapi.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -44,7 +45,7 @@ static std::wstring utf8ToWide(const std::string& value) {
   }
   int size = MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0);
   std::wstring result(size, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), result.data(), size);
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), &result[0], size);
   return result;
 }
 
@@ -54,7 +55,7 @@ static std::string wideToUtf8(const std::wstring& value) {
   }
   int size = WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
   std::string result(size, '\0');
-  WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), result.data(), size, nullptr, nullptr);
+  WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), &result[0], size, nullptr, nullptr);
   return result;
 }
 
@@ -128,35 +129,35 @@ static std::string jsonEscape(const std::string& value) {
   return out.str();
 }
 
-static bool parseOptions(int argc, char** argv, Options& options, std::string& error) {
+static bool parseOptions(int argc, wchar_t** argv, Options& options, std::string& error) {
   for (int index = 1; index < argc; index += 1) {
-    std::string key = argv[index];
-    auto next = [&]() -> std::string {
+    std::wstring key = argv[index];
+    auto next = [&]() -> std::wstring {
       if (index + 1 >= argc) {
-        error = "Missing value for " + key;
-        return "";
+        error = "Missing value for " + wideToUtf8(key);
+        return L"";
       }
       index += 1;
       return argv[index];
     };
-    if (key == "--exe") {
-      options.exe = utf8ToWide(next());
-    } else if (key == "--cwd") {
-      options.cwd = utf8ToWide(next());
-    } else if (key == "--stdin") {
-      options.stdinPath = utf8ToWide(next());
-    } else if (key == "--stdout") {
-      options.stdoutPath = utf8ToWide(next());
-    } else if (key == "--stderr") {
-      options.stderrPath = utf8ToWide(next());
-    } else if (key == "--time-limit-ms") {
+    if (key == L"--exe") {
+      options.exe = next();
+    } else if (key == L"--cwd") {
+      options.cwd = next();
+    } else if (key == L"--stdin") {
+      options.stdinPath = next();
+    } else if (key == L"--stdout") {
+      options.stdoutPath = next();
+    } else if (key == L"--stderr") {
+      options.stderrPath = next();
+    } else if (key == L"--time-limit-ms") {
       options.timeLimitMs = static_cast<DWORD>(std::stoul(next()));
-    } else if (key == "--memory-limit-mib") {
+    } else if (key == L"--memory-limit-mib") {
       options.memoryLimitMiB = static_cast<uint64_t>(std::stoull(next()));
-    } else if (key == "--arg") {
-      options.args.push_back(utf8ToWide(next()));
+    } else if (key == L"--arg") {
+      options.args.push_back(next());
     } else {
-      error = "Unknown argument: " + key;
+      error = "Unknown argument: " + wideToUtf8(key);
       return false;
     }
     if (!error.empty()) {
@@ -203,7 +204,16 @@ int main(int argc, char** argv) {
 
   Options options;
   std::string error;
-  if (!parseOptions(argc, argv, options, error)) {
+  int wideArgc = 0;
+  wchar_t** wideArgv = CommandLineToArgvW(GetCommandLineW(), &wideArgc);
+  if (!wideArgv) {
+    std::cout << "{\"exitCode\":null,\"timedOut\":false,\"memoryExceeded\":false,\"timeMs\":0,\"memoryBytes\":null,\"message\":\"Failed to parse command line\"}\n";
+    return 2;
+  }
+
+  bool parsed = parseOptions(wideArgc, wideArgv, options, error);
+  LocalFree(wideArgv);
+  if (!parsed) {
     std::cout << "{\"exitCode\":null,\"timedOut\":false,\"memoryExceeded\":false,\"timeMs\":0,\"memoryBytes\":null,\"message\":\""
               << jsonEscape(error) << "\"}\n";
     return 2;
@@ -241,7 +251,7 @@ int main(int argc, char** argv) {
 
   BOOL created = CreateProcessW(
     nullptr,
-    commandLine.data(),
+    &commandLine[0],
     nullptr,
     nullptr,
     TRUE,

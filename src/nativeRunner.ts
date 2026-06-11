@@ -35,10 +35,10 @@ export async function runNativeProcess(input: {
     return undefined;
   }
 
-  let helperPath: string | undefined;
+  let helper: NativeRunnerHelper | undefined;
   try {
-    helperPath = await ensureNativeRunnerHelper(input.workspaceFolder, input.config, input.output);
-    if (!helperPath) {
+    helper = await ensureNativeRunnerHelper(input.workspaceFolder, input.config, input.output);
+    if (!helper) {
       logNativeRunnerUnavailable(input.output);
       return undefined;
     }
@@ -57,7 +57,8 @@ export async function runNativeProcess(input: {
   await fs.writeFile(stdinPath, input.stdin, 'utf8');
 
   try {
-    const helperResult = await runHelper(helperPath, [
+    const runnerEnv = withCompilerPathEnv(helper.compilerCommand, input.env);
+    const helperResult = await runHelper(helper.helperPath, [
       '--exe', input.command,
       '--cwd', input.cwd,
       '--stdin', stdinPath,
@@ -66,9 +67,9 @@ export async function runNativeProcess(input: {
       '--time-limit-ms', String(input.timeoutMs),
       '--memory-limit-mib', String(input.config.limits.memoryMb),
       ...input.args.flatMap((arg) => ['--arg', arg])
-    ], input.cwd, input.env);
+    ], input.cwd, runnerEnv);
     if (helperResult.code !== 0) {
-      helperUnavailableReason = helperResult.stderr.trim() || helperResult.stdout.trim() || `helper exited with code ${helperResult.code ?? 'null'}`;
+      helperUnavailableReason = helperResult.stderr.trim() || helperResult.stdout.trim() || `helper exited with code ${formatExitCode(helperResult.code)}`;
       logNativeRunnerUnavailable(input.output);
       return undefined;
     }
@@ -114,20 +115,23 @@ export function getNativeRunnerUnavailableReason(): string | undefined {
   return helperUnavailableReason;
 }
 
+type NativeRunnerHelper = {
+  helperPath: string;
+  compilerCommand?: string;
+};
+
 async function ensureNativeRunnerHelper(
   workspaceFolder: vscode.WorkspaceFolder,
   config: OITestConfig,
   output?: vscode.OutputChannel
-): Promise<string | undefined> {
+): Promise<NativeRunnerHelper | undefined> {
   const sourcePath = path.resolve(__dirname, '..', 'resources', 'runner', 'oijudge-runner-win.cpp');
   const helperPath = path.join(getOITestDir(workspaceFolder), 'bin', 'oijudge-runner-win.exe');
+  const helperSignature = 'win-runner-static-wideargs-20260611';
+  const signaturePath = `${helperPath}.stamp`;
   if (!(await exists(sourcePath))) {
     helperUnavailableReason = 'helper source file is missing';
     return undefined;
-  }
-
-  if (await isHelperFresh(sourcePath, helperPath)) {
-    return helperPath;
   }
 
   const compiler = await findCompiler(workspaceFolder, config);
@@ -137,26 +141,45 @@ async function ensureNativeRunnerHelper(
     return undefined;
   }
 
+  if (await isHelperFresh(sourcePath, helperPath, signaturePath, helperSignature)) {
+    return { helperPath, compilerCommand };
+  }
+
   await fs.mkdir(path.dirname(helperPath), { recursive: true });
-  const args = [
-    sourcePath,
-    '-std=c++17',
+  const baseArgs = [
+    '-std=c++11',
     '-O2',
     '-s',
     '-o',
     helperPath,
-    '-lpsapi'
+    '-lpsapi',
+    '-lshell32'
   ];
-  const result = await runSpawn(compilerCommand, args, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
+  const staticArgs = [
+    sourcePath,
+    ...baseArgs.slice(0, 2),
+    '-static',
+    '-static-libgcc',
+    '-static-libstdc++',
+    ...baseArgs.slice(2)
+  ];
+  const dynamicArgs = [sourcePath, ...baseArgs];
+  let result = await runSpawn(compilerCommand, staticArgs, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
   if (result.code !== 0) {
-    helperUnavailableReason = result.stderr.trim() || result.stdout.trim() || `helper compiler exited with code ${result.code ?? 'null'}`;
-    return undefined;
+    const staticError = result.stderr.trim() || result.stdout.trim() || `helper compiler exited with code ${result.code ?? 'null'}`;
+    result = await runSpawn(compilerCommand, dynamicArgs, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
+    if (result.code !== 0) {
+      helperUnavailableReason = result.stderr.trim() || result.stdout.trim() || staticError;
+      return undefined;
+    }
+    output?.appendLine('Native runner: static helper build failed; using PATH-backed helper.');
   }
+  await fs.writeFile(signaturePath, helperSignature, 'utf8');
 
   helperUnavailableReason = undefined;
   output?.appendLine('Native runner: enabled');
   output?.appendLine(`Runner: ${helperPath}`);
-  return helperPath;
+  return { helperPath, compilerCommand };
 }
 
 function logNativeRunnerUnavailable(output?: vscode.OutputChannel): void {
@@ -243,13 +266,19 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-async function isHelperFresh(sourcePath: string, helperPath: string): Promise<boolean> {
+async function isHelperFresh(
+  sourcePath: string,
+  helperPath: string,
+  signaturePath: string,
+  expectedSignature: string
+): Promise<boolean> {
   try {
-    const [sourceStat, helperStat] = await Promise.all([
+    const [sourceStat, helperStat, actualSignature] = await Promise.all([
       fs.stat(sourcePath),
-      fs.stat(helperPath)
+      fs.stat(helperPath),
+      fs.readFile(signaturePath, 'utf8')
     ]);
-    return helperStat.mtimeMs >= sourceStat.mtimeMs;
+    return helperStat.mtimeMs >= sourceStat.mtimeMs && actualSignature === expectedSignature;
   } catch {
     return false;
   }
@@ -257,4 +286,12 @@ async function isHelperFresh(sourcePath: string, helperPath: string): Promise<bo
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatExitCode(code: number | null): string {
+  if (code === null) {
+    return 'null';
+  }
+  const unsigned = code < 0 ? code >>> 0 : code;
+  return code < 0 ? `${code} (0x${unsigned.toString(16).toUpperCase()})` : String(code);
 }
