@@ -221,7 +221,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (firstWorkspaceFolder) {
         const problems = await ensureProblemsConfig(firstWorkspaceFolder);
         if (problems.problems.length > 0) {
-          await runProblemSamplesCommand(activeProblemId, sampleTreeProvider, false);
+          await runProblemSamplesCommand(activeProblemId, sampleTreeProvider, false, context);
           return;
         }
       }
@@ -480,10 +480,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await batchAddSamplesCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.runProblemSamples', async (problemArg?: unknown) => {
-      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, false);
+      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, false, context);
     }),
     vscode.commands.registerCommand('oijudger.runSamplesWithProgram', async (problemArg?: unknown) => {
-      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true);
+      await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true, context);
     }),
     vscode.commands.registerCommand('oijudger.setProblemTimeLimit', async (problemArg?: unknown) => {
       await setProblemLimitCommand(readProblemId(problemArg), 'timeMs', sampleTreeProvider);
@@ -1162,7 +1162,8 @@ async function batchAddSamplesCommand(
 async function runProblemSamplesCommand(
   problemId: string | undefined,
   sampleTreeProvider: SampleTreeProvider,
-  forceProgramPicker: boolean
+  forceProgramPicker: boolean,
+  extensionContext: vscode.ExtensionContext
 ): Promise<void> {
   const context = await getProblemContext(problemId, true);
   if (!context) {
@@ -1197,6 +1198,7 @@ async function runProblemSamplesCommand(
   const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output);
   if (report) {
     await saveProblemReport(context.workspaceFolder, problem.id, report);
+    await openProblemReport(extensionContext, problem.id);
   }
   activeProblemId = problem.id;
   sampleTreeProvider.refresh();
