@@ -404,6 +404,7 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       input: 'oijudger.openSampleInput',
       expected: 'oijudger.openSampleAnswer',
       output: 'oijudger.openSampleUserOutput',
+      diff: 'oijudger.openSampleDiff',
       copyFreopen: 'oijudger.copyTestcaseFreopenInput',
       delete: 'oijudger.deleteSample'
     };
@@ -521,10 +522,13 @@ function renderReportActionButtons(
   }
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
   const sampleValue = sampleId ?? '';
+  const diffButton = status === 'WA'
+    ? `\n    <button data-command="diff" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('report.showDiff'))}</button>`
+    : '';
   return `<div class="buttons">
     <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
+    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}
   </div>`;
 }
 
