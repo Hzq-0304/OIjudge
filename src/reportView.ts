@@ -410,6 +410,14 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
     };
     const command = commandMap[typed.command];
     if (command) {
+      if (typed.command === 'diff') {
+        await vscode.commands.executeCommand(command, {
+          problemId,
+          sampleId: typed.sampleId,
+          sourceViewColumn: panel.viewColumn
+        });
+        return;
+      }
       await vscode.commands.executeCommand(command, problemId, typed.sampleId);
     }
   });

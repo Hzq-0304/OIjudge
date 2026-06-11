@@ -579,7 +579,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await openSampleFileCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'stderr');
     }),
     vscode.commands.registerCommand('oijudger.openSampleDiff', async (problemArg?: unknown, sampleArg?: unknown) => {
-      await openSampleDiffCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
+      await openSampleDiffCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), readSourceViewColumn(problemArg));
     }),
     vscode.commands.registerCommand('oijudger.openCheckerOutput', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
@@ -4548,30 +4548,114 @@ function toCppStringLiteralPath(filePath: string): string {
     .replace(/"/gu, '\\"');
 }
 
-async function openSampleDiffCommand(problemId: string | undefined, sampleId: number | undefined): Promise<void> {
-  const context = await getSampleContext(problemId, sampleId);
-  if (!context) {
+async function openSampleDiffCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sourceViewColumn?: vscode.ViewColumn
+): Promise<void> {
+  const files = await resolveSampleDiffFiles(problemId, sampleId);
+  if (!files) {
     return;
   }
 
-  const fileStatus = await getSampleFileStatus(context.workspaceFolder, context.sample);
-  if (fileStatus.answerMissing) {
-    vscode.window.showWarningMessage(t('expectedOutputMissing'));
-    return;
-  }
+  await ensureDiffEditorSideBySide();
 
-  const outputPath = await findExistingUserOutput(context.workspaceFolder, context.sample, context.problem.id);
-  if (!outputPath) {
-    vscode.window.showWarningMessage(t('diffUnavailable'));
-    return;
+  const targetViewColumn = getDiffTargetViewColumn(sourceViewColumn);
+  const options: vscode.TextDocumentShowOptions = {
+    preview: false,
+    preserveFocus: false
+  };
+  if (targetViewColumn !== undefined) {
+    options.viewColumn = targetViewColumn;
   }
 
   await vscode.commands.executeCommand(
     'vscode.diff',
-    vscode.Uri.file(fileStatus.answerPath),
-    vscode.Uri.file(outputPath),
-    t('diffTitle', { sample: context.sample.name })
+    vscode.Uri.file(files.expectedPath),
+    vscode.Uri.file(files.actualPath),
+    t('diffTitle', { sample: files.sampleName }),
+    options
   );
+}
+
+async function ensureDiffEditorSideBySide(): Promise<void> {
+  const config = vscode.workspace.getConfiguration('diffEditor');
+  const update = typeof config.update === 'function' ? config.update.bind(config) : undefined;
+  if (!update) {
+    return;
+  }
+
+  const updates: Thenable<void>[] = [];
+  if (config.get<boolean>('renderSideBySide') !== true) {
+    updates.push(update('renderSideBySide', true, vscode.ConfigurationTarget.Workspace));
+  }
+  if (config.get<boolean>('useInlineViewWhenSpaceIsLimited') !== false) {
+    updates.push(update('useInlineViewWhenSpaceIsLimited', false, vscode.ConfigurationTarget.Workspace));
+  }
+
+  if (updates.length === 0) {
+    return;
+  }
+
+  try {
+    await Promise.all(updates);
+  } catch (error) {
+    output.appendLine(`[WARN] Failed to update diff editor layout settings: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function resolveSampleDiffFiles(
+  problemId: string | undefined,
+  sampleId: number | undefined
+): Promise<{ expectedPath: string; actualPath: string; sampleName: string } | undefined> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return undefined;
+  }
+
+  const fileStatus = await getSampleFileStatus(context.workspaceFolder, context.sample);
+  if (fileStatus.answerMissing) {
+    vscode.window.showWarningMessage(t('diffFilesMissing'));
+    return undefined;
+  }
+
+  const outputPath = await findExistingUserOutput(context.workspaceFolder, context.sample, context.problem.id);
+  if (!outputPath) {
+    vscode.window.showWarningMessage(t('diffFilesMissing'));
+    return undefined;
+  }
+
+  return {
+    expectedPath: fileStatus.answerPath,
+    actualPath: outputPath,
+    sampleName: context.sample.name
+  };
+}
+
+function getDiffTargetViewColumn(sourceViewColumn?: vscode.ViewColumn): vscode.ViewColumn | undefined {
+  if (sourceViewColumn === undefined) {
+    return undefined;
+  }
+
+  const columns = [...(vscode.window.tabGroups?.all ?? [])]
+    .map((group) => group.viewColumn)
+    .filter((viewColumn): viewColumn is vscode.ViewColumn => typeof viewColumn === 'number' && viewColumn > 0)
+    .sort((left, right) => left - right);
+
+  const candidates = [...new Set(columns)].filter((viewColumn) => viewColumn !== sourceViewColumn);
+  if (candidates.length > 0) {
+    return candidates[candidates.length - 1];
+  }
+
+  return sourceViewColumn === vscode.ViewColumn.One ? vscode.ViewColumn.Beside : vscode.ViewColumn.One;
+}
+
+function readSourceViewColumn(value: unknown): vscode.ViewColumn | undefined {
+  if (typeof value === 'object' && value !== null && 'sourceViewColumn' in value) {
+    const viewColumn = (value as { sourceViewColumn?: unknown }).sourceViewColumn;
+    return typeof viewColumn === 'number' ? viewColumn as vscode.ViewColumn : undefined;
+  }
+  return undefined;
 }
 
 async function createRunResultFallback(context: {
