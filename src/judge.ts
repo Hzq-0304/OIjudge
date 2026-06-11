@@ -956,7 +956,7 @@ function createRuntimeDiagnostics(
   exePath: string,
   cwd: string,
   result: ProcessResult
-): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview'>> {
+): Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryKiB'>> {
   return {
     source: sourcePath,
     exe: exePath,
@@ -966,6 +966,7 @@ function createRuntimeDiagnostics(
     exitCode: result.code,
     signal: result.signal,
     killedByTimeout: result.killedByTimeout,
+    memoryKiB: result.memoryKiB,
     stdinError: result.stdinError,
     stdoutError: result.stdoutError,
     stderrError: result.stderrError,
