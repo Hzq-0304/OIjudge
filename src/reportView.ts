@@ -292,10 +292,6 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       defaultOpen: false
     };
   });
-  const defaultOpen = testcases.find((sample) => sample.status !== 'AC') ?? testcases[0];
-  if (defaultOpen) {
-    defaultOpen.defaultOpen = true;
-  }
 
   return {
     status: getOverallStatus(report, score?.earnedScore),
@@ -333,7 +329,7 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
 function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
   return `<div class="testcaseDetails">
     ${renderDetailBlock(t('report.systemInfo'), testcase.systemMessage) || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
-    ${renderActionButtons(testcase.sampleIndex, problemId, testcase.status, testcase.hasCheckerOutput)}
+    ${renderReportActionButtons(testcase.sampleIndex, problemId, testcase.status)}
   </div>`;
 }
 
@@ -512,6 +508,23 @@ function renderActionButtons(
     <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
     <button data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
     <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
+  </div>`;
+}
+
+function renderReportActionButtons(
+  sampleId: number | undefined,
+  problemId: string | undefined,
+  status: string
+): string {
+  if (status === 'CE') {
+    return '';
+  }
+  const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
+  const sampleValue = sampleId ?? '';
+  return `<div class="buttons">
+    <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
+    <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
+    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
   </div>`;
 }
 
