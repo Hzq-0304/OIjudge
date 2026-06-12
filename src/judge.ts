@@ -28,7 +28,7 @@ import { isSetterModeEnabled } from './setterMode';
 import { CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
-type RunClassification = 'OLE' | 'TLE' | 'RE' | undefined;
+type RunClassification = 'OLE' | 'TLE' | 'MLE' | 'RE' | undefined;
 
 const TLE_KILL_RATIO = 1.2;
 const DEFAULT_OUTPUT_LIMIT_BYTES = 256 * 1024 * 1024;
@@ -607,7 +607,7 @@ async function judgeSample(
   if (result.stdinError) {
     appendStdinWarning(output, sample.name, result);
   }
-  const runStatus = classifyRunResult(result);
+  const runStatus = classifyRunResult(result, memoryLimitMb);
 
   if (runStatus === 'TLE') {
     await saveRunResultOutput(outputPaths.runResultPath, 'TLE', result, 'Time limit exceeded.', undefined, ioDiagnostics);
@@ -647,6 +647,47 @@ async function judgeSample(
         ...ioDiagnostics
       },
       withStdinMessage('Time limit exceeded.', result)
+    );
+  }
+
+  if (runStatus === 'MLE') {
+    await saveRunResultOutput(outputPaths.runResultPath, 'MLE', result, 'Memory limit exceeded.', undefined, ioDiagnostics);
+    output.appendLine(`[MLE] ${sample.name} (${formatMs(result.timeMs)} ms)`);
+    output.appendLine(`${sample.name} run time: ${formatMs(result.timeMs)} ms`);
+    output.appendLine(`${sample.name} compare time: 0 ms`);
+    output.appendLine(`  actual output: ${outputPaths.outputRel}`);
+    appendRuntimeDiagnostics(output, sample.name, {
+      sourcePath,
+      exePath: executablePath,
+      cwd: ioContext.cwd,
+      inputPath: fileStatus.inputPath,
+      answerPath: fileStatus.answerPath,
+      outputPath: outputPaths.outputPath,
+      stderrPath: outputPaths.stderrPath,
+      timeMs: result.timeMs,
+      exitCode: result.code,
+      signal: result.signal,
+      killedByTimeout: result.killedByTimeout,
+      hardKillLimitMs: result.hardKillLimitMs,
+      stdinError: result.stdinError,
+      stdoutError: result.stdoutError,
+      stderrError: result.stderrError,
+      stderr: result.stderr
+    });
+    return createSampleReport(
+      workspaceFolder,
+      sample,
+      'MLE',
+      result.timeMs,
+      0,
+      outputPaths.outputRel,
+      outputPaths.stderrRel,
+      outputPaths.diffRel,
+      {
+        ...createRuntimeDiagnostics(sourcePath, executablePath, ioContext.cwd, result),
+        ...ioDiagnostics
+      },
+      withStdinMessage('Memory limit exceeded.', result)
     );
   }
 
@@ -1252,12 +1293,15 @@ function appendCompileStackLine(
   );
 }
 
-function classifyRunResult(result: ProcessResult): RunClassification {
+export function classifyRunResult(result: ProcessResult, memoryLimitMb: number): RunClassification {
   if (result.outputLimitExceeded) {
     return 'OLE';
   }
   if (result.killedByTimeout || result.timedOut) {
     return 'TLE';
+  }
+  if (isMemoryLimitExceeded(result, memoryLimitMb)) {
+    return 'MLE';
   }
   if (result.code !== null && result.code !== 0) {
     return 'RE';
@@ -1266,6 +1310,18 @@ function classifyRunResult(result: ProcessResult): RunClassification {
     return 'RE';
   }
   return undefined;
+}
+
+function isMemoryLimitExceeded(result: ProcessResult, memoryLimitMb: number): boolean {
+  if (
+    result.memoryBytes === undefined ||
+    !Number.isFinite(result.memoryBytes) ||
+    !Number.isFinite(memoryLimitMb) ||
+    memoryLimitMb <= 0
+  ) {
+    return false;
+  }
+  return result.memoryBytes > memoryLimitMb * 1024 * 1024;
 }
 
 function getHardKillLimitMs(timeLimitMs: number): number {
