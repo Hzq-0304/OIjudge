@@ -96,6 +96,7 @@ describe('sample tree add entry', () => {
     expect(setterCommands).toContain('oijudger.toggleAutoGenerateOutputFromStd');
     expect(setterCommands).toContain('oijudger.addSetterInputSample');
     expect(setterCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
+    expect(setterCommands).toContain('oijudger.exportTestcases');
     expect(setterCommands).toContain('oijudger.addProblemGenerator');
     expect(setterCommands).toContain('oijudger.openProblemGenerator');
     expect(setterCommands).toContain('oijudger.removeProblemGenerator');

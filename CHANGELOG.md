@@ -3,6 +3,7 @@
 ## Unreleased
 
 - 新增完整题目包导出功能 / Add full problem package export.
+- 修复出题人模式中缺少导出测试点入口的问题 / Fix missing export testcases entry in setter mode.
 
 ## 5.0.5 - 2026-06-15
 

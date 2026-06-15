@@ -855,6 +855,7 @@ function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: Pro
     ),
     actionNode(t('setter.sample.addInput'), 'oijudger.addSetterInputSample', 'file-add', problem.id),
     actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id),
+    actionNode(t('export.testcases'), 'oijudger.exportTestcases', 'export', problem.id),
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),
     actionNode(t('openStd'), 'oijudger.openStdProgram', 'go-to-file', problem.id),
     actionNode(t('clearStd'), 'oijudger.clearStdProgram', 'clear-all', problem.id),
