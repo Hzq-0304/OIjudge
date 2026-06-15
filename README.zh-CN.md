@@ -246,6 +246,13 @@ int main() {
 - 导出目录包含 statement、source、STD、checker、generator、samples、Subtasks、scores 和 OI Judge 配置快照。
 - 第一版导出为目录，包含 `oijudge-package.json` 和 `README.txt`，不生成 zip。
 
+## 完整题目包导入
+
+- `OI Judge: Import Problem Package` 可以导入由 OI Judge 导出的完整题目包目录。
+- 导入后会在当前工作区创建新的 problem。
+- 文件会复制到当前工作区 `.vscode/.OIJudge/` 下，导入后的 problem 不依赖原 package 目录。
+- 第一版只支持目录导入，不支持 zip。
+
 ## Testlib Checker
 
 - OI Judge 支持按题目配置的 testlib 风格 Checker。

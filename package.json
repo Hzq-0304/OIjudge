@@ -42,6 +42,7 @@
     "onCommand:oijudger.setProblemTotalScore",
     "onCommand:oijudger.exportTestcases",
     "onCommand:oijudger.exportProblemPackage",
+    "onCommand:oijudger.importProblemPackage",
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
@@ -235,6 +236,11 @@
         "command": "oijudger.exportProblemPackage",
         "title": "OI Judge: 导出完整题目包/Export Problem Package",
         "icon": "$(package)"
+      },
+      {
+        "command": "oijudger.importProblemPackage",
+        "title": "OI Judge: 导入完整题目包/Import Problem Package",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "oijudger.runStressTest",
@@ -696,6 +702,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "oijudger.importProblemPackage",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@4"
+        },
+        {
           "command": "oijudger.refreshView",
           "when": "view == oijudger.samplesView",
           "group": "navigation@4"
@@ -771,6 +782,11 @@
           "command": "oijudger.exportProblemPackage",
           "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
           "group": "7_export@2"
+        },
+        {
+          "command": "oijudger.importProblemPackage",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "7_export@3"
         },
         {
           "command": "oijudger.generateSampleInput",
@@ -1147,6 +1163,9 @@
         {
           "command": "oijudger.exportProblemPackage",
           "when": "false"
+        },
+        {
+          "command": "oijudger.importProblemPackage"
         },
         {
           "command": "oijudger.addProblemSample",

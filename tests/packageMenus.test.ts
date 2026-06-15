@@ -267,6 +267,39 @@ describe('package tree sample add menu', () => {
     expect(registeredCommands()).toContain('oijudger.exportProblemPackage');
   });
 
+  it('contributes problem package import to command palette and top-level problem list actions only', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.importProblemPackage');
+    const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
+      entry.command === 'oijudger.importProblemPackage'
+    );
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const entries = contextMenus.filter((entry) => entry.command === 'oijudger.importProblemPackage');
+
+    expect(command?.title).toContain('Import Problem Package');
+    expect(command?.title).toContain('导入完整题目包');
+    expect(command?.icon).toBe('$(cloud-download)');
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.importProblemPackage');
+    expect(titleMenus).toContainEqual({
+      command: 'oijudger.importProblemPackage',
+      when: 'view == oijudger.samplesView',
+      group: 'navigation@4'
+    });
+    expect(entries).toEqual([
+      {
+        command: 'oijudger.importProblemPackage',
+        when: 'view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)',
+        group: '7_export@3'
+      }
+    ]);
+    expect(entries.every((entry) => !entry.when.includes('sample ||'))).toBe(true);
+    expect(entries.every((entry) => !entry.when.includes('subtask ||'))).toBe(true);
+    expect(entries.every((entry) => !entry.when.includes('stress'))).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.importProblemPackage'
+    });
+    expect(registeredCommands()).toContain('oijudger.importProblemPackage');
+  });
+
   it('contributes stress test entry without requiring setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>

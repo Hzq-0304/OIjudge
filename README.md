@@ -251,6 +251,13 @@ Problem Package Export:
 - The exported directory includes statement, source programs, STD, checker, generators, samples, Subtasks, scores, and an OI Judge config snapshot.
 - The first version exports a folder with `oijudge-package.json` and `README.txt`; it does not create a zip archive.
 
+Problem Package Import:
+
+- `OI Judge: Import Problem Package` imports a complete problem package directory exported by OI Judge.
+- Import creates a new problem in the current workspace.
+- Package files are copied into the current workspace under `.vscode/.OIJudge/`; the imported problem does not depend on the original package directory.
+- The first version supports directory import only; zip archives are not supported.
+
 Testlib Checker:
 
 - OI Judge supports testlib-style checkers for per-problem judging.

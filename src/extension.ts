@@ -69,6 +69,7 @@ import {
   getProblemGeneratorInputs,
   getProblemGenerators,
   getProblemReportPath,
+  getProblemRoot,
   getProblemSourcePath,
   isProblemAutoGenerateOutputFromStdEnabled,
   importLegacyProblem,
@@ -122,6 +123,10 @@ import {
   TestcaseExportMode
 } from './testcaseExport';
 import { exportProblemPackage } from './problemPackageExport';
+import {
+  importProblemPackage,
+  ProblemPackageVersionError
+} from './problemPackageImport';
 import {
   runGeneratorStdStressTest,
   runStandaloneStressTest,
@@ -425,6 +430,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.exportProblemPackage', async (problemArg?: unknown) => {
       await exportProblemPackageCommand(readProblemId(problemArg));
+    }),
+    vscode.commands.registerCommand('oijudger.importProblemPackage', async () => {
+      await importProblemPackageCommand(sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.runStressTest', async (problemArg?: unknown) => {
       await runStressTestCommand(readProblemId(problemArg), stressRecordsTreeProvider);
@@ -1425,6 +1433,129 @@ async function exportProblemPackageCommand(problemId: string | undefined): Promi
   if (open === t('openFolder')) {
     await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(result.targetDir));
   }
+}
+
+async function importProblemPackageCommand(sampleTreeProvider: SampleTreeProvider): Promise<void> {
+  const workspaceFolder = getWorkspaceFolder();
+  if (!workspaceFolder) {
+    return;
+  }
+
+  const picked = await vscode.window.showOpenDialog({
+    title: t('import.problemPackage.target.select'),
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: t('select')
+  });
+  const packageDir = picked?.[0]?.fsPath;
+  if (!packageDir) {
+    return;
+  }
+
+  output.clear();
+  output.show(true);
+  output.appendLine('Import Problem Package');
+  output.appendLine(`Source: ${packageDir}`);
+
+  let allowNewerVersion = false;
+  let result: Awaited<ReturnType<typeof importProblemPackage>>;
+  try {
+    result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: t('import.problemPackage.progress'),
+        cancellable: false
+      },
+      async () => importProblemPackage(workspaceFolder, packageDir)
+    );
+  } catch (error) {
+    if (error instanceof ProblemPackageVersionError) {
+      const action = await vscode.window.showWarningMessage(
+        t('import.problemPackage.newerVersion', { version: error.version }),
+        { modal: true },
+        t('continueAction'),
+        t('cancel')
+      );
+      if (action !== t('continueAction')) {
+        return;
+      }
+      allowNewerVersion = true;
+    } else {
+      vscode.window.showErrorMessage(formatProblemPackageImportError(error));
+      return;
+    }
+    try {
+      result = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: t('import.problemPackage.progress'),
+          cancellable: false
+        },
+        async () => importProblemPackage(workspaceFolder, packageDir, { allowNewerVersion })
+      );
+    } catch (retryError) {
+      vscode.window.showErrorMessage(formatProblemPackageImportError(retryError));
+      return;
+    }
+  }
+
+  activeProblemId = result.problem.id;
+  sampleTreeProvider.refresh();
+  await updateStatusBar(result.problem.id);
+
+  output.appendLine(`Problem: ${result.problem.name}`);
+  output.appendLine('Copied:');
+  for (const file of result.copiedFiles) {
+    output.appendLine(`  ${file}`);
+  }
+  if (result.warnings.length > 0) {
+    output.appendLine('Warnings:');
+    for (const warning of result.warnings) {
+      output.appendLine(`  ${warning}`);
+    }
+  }
+
+  const message = result.warnings.length > 0
+    ? t('import.problemPackage.doneWithWarnings', {
+      problem: result.problem.name,
+      copied: result.copiedFiles.length,
+      warnings: result.warnings.length
+    })
+    : t('import.problemPackage.done', {
+      problem: result.problem.name,
+      copied: result.copiedFiles.length
+    });
+  const action = await vscode.window.showInformationMessage(
+    message,
+    t('openProblem'),
+    t('openFolder')
+  );
+  if (action === t('openProblem')) {
+    activeProblemId = result.problem.id;
+    sampleTreeProvider.refresh();
+    await updateStatusBar(result.problem.id);
+  }
+  if (action === t('openFolder')) {
+    await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(getProblemRoot(workspaceFolder, result.problem.id)));
+  }
+}
+
+function formatProblemPackageImportError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === 'import.problemPackage.manifestMissing') {
+    return t('import.problemPackage.manifestMissing');
+  }
+  if (message === 'import.problemPackage.invalidFormat') {
+    return t('import.problemPackage.invalidFormat');
+  }
+  if (message === 'import.problemPackage.invalidVersion') {
+    return t('import.problemPackage.invalidVersion');
+  }
+  if (message === 'import.problemPackage.unsafePath') {
+    return t('import.problemPackage.unsafePath');
+  }
+  return t('import.problemPackage.failed', { error: message });
 }
 
 async function pickTestcaseExportMode(): Promise<TestcaseExportMode | undefined> {
