@@ -14,6 +14,7 @@
 - Added testcase export formats for Luogu `config.yml`, Polygon import plan, and LemonLime `contest.cdf`.
 - Added custom checker documentation for normal compare, testlib checker, plain checker, and merged checker output.
 - Cleaned up command/UI metadata by normalizing user-visible command titles and keeping legacy stderr commands internal.
+- Fixed Windows MinGW/RedPanda-Cpp compiler launches by keeping the compiler bin directory on child process PATH without mutating the global environment.
 
 ## 0.4.0 - 2026-05-28
 

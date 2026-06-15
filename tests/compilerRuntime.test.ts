@@ -3,9 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import type * as vscode from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildCompileArgs } from '../src/compiler';
+import { buildCompileArgs, compileSource } from '../src/compiler';
 import { findCompiler } from '../src/compilerDetection';
-import { envPathIncludesDir, withCompilerPathEnv } from '../src/compilerRuntime';
+import { envPathIncludesDir, getCompilerDir, withCompilerPathEnv } from '../src/compilerRuntime';
 import { OITestConfig } from '../src/types';
 
 const workspaces: string[] = [];
@@ -24,10 +24,60 @@ describe('compiler runtime environment', () => {
     expect(envPathIncludesDir(env, compilerDir)).toBe(true);
   });
 
+  it('handles quoted compiler commands without mutating the base environment', () => {
+    const compilerPath = path.join(os.tmpdir(), 'quoted compiler', 'mingw64', 'bin', 'g++.exe');
+    const compilerDir = path.dirname(compilerPath);
+    const baseEnv = { Path: 'C:\\Windows\\System32' };
+    const env = withCompilerPathEnv(`"${compilerPath}"`, baseEnv);
+
+    expect(getCompilerDir(`"${compilerPath}"`)).toBe(compilerDir);
+    expect(env).not.toBe(baseEnv);
+    expect(baseEnv.Path).toBe('C:\\Windows\\System32');
+    expect(env.Path).toBe(`${compilerDir}${path.delimiter}C:\\Windows\\System32`);
+  });
+
+  it('preserves the existing PATH key casing', () => {
+    const compilerPath = path.join(os.tmpdir(), 'compiler', 'bin', 'g++.exe');
+    const compilerDir = path.dirname(compilerPath);
+    const env = withCompilerPathEnv(compilerPath, { PATH: '/usr/bin' });
+
+    expect(env.PATH).toBe(`${compilerDir}${path.delimiter}/usr/bin`);
+    expect(env.Path).toBeUndefined();
+  });
+
+  it('creates a platform default PATH key when the environment has none', () => {
+    const compilerPath = path.join(os.tmpdir(), 'compiler', 'bin', 'g++.exe');
+    const compilerDir = path.dirname(compilerPath);
+    const env = withCompilerPathEnv(compilerPath, {});
+    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+
+    expect(env[pathKey]).toBe(compilerDir);
+  });
+
+  it('does not duplicate a compiler directory that is already in PATH', () => {
+    const compilerPath = path.join(os.tmpdir(), 'compiler', 'bin', 'g++.exe');
+    const compilerDir = path.dirname(compilerPath);
+    const env = withCompilerPathEnv(compilerPath, { Path: `${compilerDir}${path.delimiter}C:\\Windows\\System32` });
+
+    expect(env.Path?.split(path.delimiter).filter((entry) => entry === compilerDir)).toHaveLength(1);
+  });
+
+  it('compares Windows-style PATH entries case-insensitively on Windows', () => {
+    const compilerPath = 'C:\\Program Files\\RedPanda-Cpp\\mingw64\\bin\\g++.exe';
+    const compilerDir = 'C:\\Program Files\\RedPanda-Cpp\\mingw64\\bin';
+    const existingDir = process.platform === 'win32' ? compilerDir.toUpperCase() : compilerDir;
+    const env = withCompilerPathEnv(compilerPath, { Path: `${existingDir}${path.delimiter}C:\\Windows\\System32` });
+
+    const entries = env.Path?.split(path.delimiter).filter(Boolean) ?? [];
+    expect(entries.filter((entry) => entry.toLowerCase() === compilerDir.toLowerCase())).toHaveLength(1);
+  });
+
   it('leaves PATH unchanged for unresolved command names', () => {
     const baseEnv = { Path: 'C:\\Windows\\System32' };
+    const env = withCompilerPathEnv('g++', baseEnv);
 
-    expect(withCompilerPathEnv('g++', baseEnv)).toBe(baseEnv);
+    expect(env).not.toBe(baseEnv);
+    expect(env).toEqual(baseEnv);
   });
 
   it('falls back to .vscode/settings.json C_Cpp.default.compilerPath when project compiler is unavailable', async () => {
@@ -49,6 +99,39 @@ describe('compiler runtime environment', () => {
       source: '.vscode/settings.json C_Cpp.default.compilerPath'
     });
   });
+
+  it('uses the compiler bin only in the child process environment during compile', async () => {
+    const redPandaGpp = 'C:\\Program Files\\RedPanda-Cpp\\mingw64\\bin\\g++.exe';
+    if (process.platform !== 'win32' || !(await exists(redPandaGpp))) {
+      return;
+    }
+
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'main.cpp');
+    await fs.writeFile(sourcePath, 'int main(){return 0;}\n', 'utf8');
+    const originalPath = process.env.Path;
+    const originalPATH = process.env.PATH;
+    const redPandaBin = path.dirname(redPandaGpp);
+    const stripRedPanda = (value: string | undefined) =>
+      value
+        ?.split(path.delimiter)
+        .filter((entry) => path.normalize(entry).toLowerCase() !== path.normalize(redPandaBin).toLowerCase())
+        .join(path.delimiter);
+
+    try {
+      process.env.Path = stripRedPanda(process.env.Path);
+      process.env.PATH = stripRedPanda(process.env.PATH);
+      const output = createOutputChannel();
+      const result = await compileSource(workspaceFolder, sourcePath, config(redPandaGpp), output);
+
+      expect(result?.status).toBe('OK');
+      expect(result?.executablePath ? await exists(result.executablePath) : false).toBe(true);
+      expect(envPathIncludesDir(process.env, redPandaBin)).toBe(false);
+    } finally {
+      restoreEnvKey('Path', originalPath);
+      restoreEnvKey('PATH', originalPATH);
+    }
+  }, 120_000);
 });
 
 describe('compile argument generation', () => {
@@ -105,6 +188,31 @@ async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
   return {
     uri: { fsPath: dir }
   } as vscode.WorkspaceFolder;
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createOutputChannel(): vscode.OutputChannel {
+  return {
+    appendLine: () => undefined,
+    clear: () => undefined,
+    show: () => undefined
+  } as unknown as vscode.OutputChannel;
+}
+
+function restoreEnvKey(key: 'Path' | 'PATH', value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
 }
 
 function config(command: string, options?: { autoStack?: boolean }): OITestConfig {

@@ -1,23 +1,27 @@
 import * as path from 'path';
 
 export function getCompilerDir(compilerPath: string | undefined): string | undefined {
-  return compilerPath && path.isAbsolute(compilerPath) ? path.dirname(compilerPath) : undefined;
+  const normalized = normalizeCompilerCommand(compilerPath);
+  return normalized && path.isAbsolute(normalized) ? path.dirname(normalized) : undefined;
 }
 
 export function withCompilerPathEnv(
   compilerPath: string | undefined,
   baseEnv: NodeJS.ProcessEnv = process.env
 ): NodeJS.ProcessEnv {
+  const env = { ...baseEnv };
   const compilerDir = getCompilerDir(compilerPath);
   if (!compilerDir) {
-    return baseEnv;
+    return env;
   }
 
-  const pathKey = getPathKey(baseEnv);
-  return {
-    ...baseEnv,
-    [pathKey]: [compilerDir, baseEnv[pathKey]].filter(Boolean).join(path.delimiter)
-  };
+  const pathKey = getPathKey(env);
+  if (envPathIncludesDir(env, compilerDir)) {
+    return env;
+  }
+
+  env[pathKey] = [compilerDir, env[pathKey]].filter(Boolean).join(path.delimiter);
+  return env;
 }
 
 export function envPathIncludesDir(
@@ -37,7 +41,18 @@ export function envPathIncludesDir(
 }
 
 function getPathKey(env: NodeJS.ProcessEnv): string {
-  return Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  return Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? (process.platform === 'win32' ? 'Path' : 'PATH');
+}
+
+function normalizeCompilerCommand(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
 }
 
 function normalizePathForCompare(value: string): string {
