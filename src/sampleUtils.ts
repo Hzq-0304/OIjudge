@@ -10,7 +10,18 @@ export function createSampleInternalId(index: number): string {
 }
 
 export function getSampleDisplayNameFromInput(inputPath: string): string {
-  return path.parse(inputPath).name || path.basename(inputPath) || 'sample';
+  const baseName = crossPlatformBasename(inputPath);
+  return stripExtension(baseName) || baseName || 'sample';
+}
+
+export function crossPlatformBasename(filePath: string): string {
+  const normalized = filePath.replace(/\\/gu, '/');
+  return normalized.split('/').filter(Boolean).pop() ?? filePath;
+}
+
+function stripExtension(fileName: string): string {
+  const extension = path.extname(fileName);
+  return extension ? fileName.slice(0, -extension.length) : fileName;
 }
 
 export function uniqueSampleName(samples: Array<Pick<SampleConfig, 'name'>>, desiredName: string): string {
