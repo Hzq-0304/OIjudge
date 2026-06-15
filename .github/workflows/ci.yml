@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node 24
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Test
+        run: npm test
+
+      - name: Pack dry run
+        run: npm pack --dry-run
+
+      - name: POSIX native runner smoke test
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          g++ -std=c++11 -O2 -s resources/runner/oijudge-runner-posix.cpp -o /tmp/oijudge-runner-posix
+          tmp=$(mktemp -d)
+          printf 'hello
+' > "$tmp/in"
+          /tmp/oijudge-runner-posix --exe /bin/cat --cwd "$tmp" --stdin "$tmp/in" --stdout "$tmp/out" --stderr "$tmp/err" --time-limit-ms 1000 --hard-kill-limit-ms 1000 --memory-limit-mib 256
+          cat "$tmp/out"
+          grep -q "hello" "$tmp/out"
+          rm -rf "$tmp"

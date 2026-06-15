@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 添加三平台 GitHub Actions CI / Add three-platform GitHub Actions CI.
 - 新增完整题目包导出功能 / Add full problem package export.
 - 新增完整题目包导入功能 / Add full problem package import.
 - 修复出题人模式中缺少导出测试点入口的问题 / Fix missing export testcases entry in setter mode.
