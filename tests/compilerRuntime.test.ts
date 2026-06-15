@@ -62,14 +62,34 @@ describe('compiler runtime environment', () => {
     expect(env.Path?.split(path.delimiter).filter((entry) => entry === compilerDir)).toHaveLength(1);
   });
 
-  it('compares Windows-style PATH entries case-insensitively on Windows', () => {
+  it('uses semicolons and de-duplicates Windows PATH entries case-insensitively', () => {
     const compilerPath = 'C:\\Program Files\\RedPanda-Cpp\\mingw64\\bin\\g++.exe';
     const compilerDir = 'C:\\Program Files\\RedPanda-Cpp\\mingw64\\bin';
-    const existingDir = process.platform === 'win32' ? compilerDir.toUpperCase() : compilerDir;
-    const env = withCompilerPathEnv(compilerPath, { Path: `${existingDir}${path.delimiter}C:\\Windows\\System32` });
+    const existingDir = compilerDir.toUpperCase();
+    const env = withCompilerPathEnv(compilerPath, { Path: `${existingDir};C:\\Windows\\System32` }, { platform: 'win32' });
 
-    const entries = env.Path?.split(path.delimiter).filter(Boolean) ?? [];
+    expect(env.Path).toBe(`${existingDir};C:\\Windows\\System32`);
+    const entries = env.Path?.split(';').filter(Boolean) ?? [];
     expect(entries.filter((entry) => entry.toLowerCase() === compilerDir.toLowerCase())).toHaveLength(1);
+  });
+
+  it.each(['Path', 'PATH', 'path'] as const)('preserves existing Windows PATH key casing for %s', (pathKey) => {
+    const compilerPath = 'C:\\Tools\\mingw64\\bin\\g++.exe';
+    const compilerDir = 'C:\\Tools\\mingw64\\bin';
+    const env = withCompilerPathEnv(compilerPath, { [pathKey]: 'C:\\Windows\\System32' }, { platform: 'win32' });
+
+    expect(env[pathKey]).toBe(`${compilerDir};C:\\Windows\\System32`);
+  });
+
+  it('uses colons for POSIX PATH entries and compares them case-sensitively', () => {
+    const compilerPath = '/opt/ToolChain/bin/g++';
+    const compilerDir = '/opt/ToolChain/bin';
+    const env = withCompilerPathEnv(compilerPath, { PATH: '/opt/toolchain/bin:/usr/bin' }, { platform: 'linux' });
+
+    expect(env.PATH).toBe(`${compilerDir}:/opt/toolchain/bin:/usr/bin`);
+    expect(envPathIncludesDir(env, compilerDir, { platform: 'linux' })).toBe(true);
+    expect(envPathIncludesDir(env, '/opt/toolchain/bin', { platform: 'linux' })).toBe(true);
+    expect(envPathIncludesDir({ PATH: compilerDir }, '/opt/toolchain/bin', { platform: 'linux' })).toBe(false);
   });
 
   it('leaves PATH unchanged for unresolved command names', () => {

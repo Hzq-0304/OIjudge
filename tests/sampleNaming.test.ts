@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createSampleInternalId,
+  crossPlatformBasename,
   getNextSampleIndex,
   getSampleDisplayNameFromInput,
   getSampleOutputDirRel,
@@ -12,11 +13,23 @@ import { SampleConfig } from '../src/types';
 
 describe('sample naming and internal indices', () => {
   it.each([
-    ['C:\\data\\book3.in', 'book3'],
-    ['C:\\data\\test_large.in', 'test_large'],
-    ['C:\\data\\001.in', '001']
+    ['C:\\a\\b\\sample.in', 'sample'],
+    ['C:\\data with spaces\\book3.in', 'book3'],
+    ['/a/b/sample.in', 'sample'],
+    ['/data with spaces/test_large.in', 'test_large'],
+    ['sample.in', 'sample'],
+    ['001.in', '001']
   ])('uses input basename for %s', (inputPath, expected) => {
     expect(getSampleDisplayNameFromInput(inputPath)).toBe(expected);
+  });
+
+  it.each([
+    ['C:\\a\\b\\sample.in', 'sample.in'],
+    ['/a/b/sample.in', 'sample.in'],
+    ['sample.in', 'sample.in'],
+    ['C:\\data with spaces\\sample 1.in', 'sample 1.in']
+  ])('extracts cross-platform basename for %s', (inputPath, expected) => {
+    expect(crossPlatformBasename(inputPath)).toBe(expected);
   });
 
   it('deduplicates sample display names', () => {

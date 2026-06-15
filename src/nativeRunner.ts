@@ -39,7 +39,7 @@ export async function runNativeProcess(input: {
   env?: NodeJS.ProcessEnv;
   output?: vscode.OutputChannel;
 }): Promise<ProcessResult | undefined> {
-  if (process.platform !== 'win32') {
+  if (!isNativeRunnerPlatform(process.platform)) {
     return undefined;
   }
 
@@ -140,9 +140,14 @@ async function ensureNativeRunnerHelper(
   config: OITestConfig,
   output?: vscode.OutputChannel
 ): Promise<NativeRunnerHelper | undefined> {
-  const sourcePath = path.resolve(__dirname, '..', 'resources', 'runner', 'oijudge-runner-win.cpp');
-  const helperPath = path.join(getOITestDir(workspaceFolder), 'bin', 'oijudge-runner-win.exe');
-  const helperSignature = 'win-runner-output-limit-20260611';
+  const platformConfig = getNativeRunnerPlatformConfig(process.platform);
+  if (!platformConfig) {
+    helperUnavailableReason = `native runner is not supported on ${process.platform}`;
+    return undefined;
+  }
+  const sourcePath = path.resolve(__dirname, '..', 'resources', 'runner', platformConfig.sourceFile);
+  const helperPath = path.join(getOITestDir(workspaceFolder), 'bin', platformConfig.helperFile);
+  const helperSignature = platformConfig.signature;
   const signaturePath = `${helperPath}.stamp`;
   if (!(await exists(sourcePath))) {
     helperUnavailableReason = 'helper source file is missing';
@@ -161,24 +166,7 @@ async function ensureNativeRunnerHelper(
   }
 
   await fs.mkdir(path.dirname(helperPath), { recursive: true });
-  const baseArgs = [
-    '-std=c++11',
-    '-O2',
-    '-s',
-    '-o',
-    helperPath,
-    '-lpsapi',
-    '-lshell32'
-  ];
-  const staticArgs = [
-    sourcePath,
-    ...baseArgs.slice(0, 2),
-    '-static',
-    '-static-libgcc',
-    '-static-libstdc++',
-    ...baseArgs.slice(2)
-  ];
-  const dynamicArgs = [sourcePath, ...baseArgs];
+  const { staticArgs, dynamicArgs } = buildNativeRunnerCompileArgs(sourcePath, helperPath, platformConfig);
   let result = await runSpawn(compilerCommand, staticArgs, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
   if (result.code !== 0) {
     const staticError = result.stderr.trim() || result.stdout.trim() || `helper compiler exited with code ${result.code ?? 'null'}`;
@@ -195,6 +183,63 @@ async function ensureNativeRunnerHelper(
   output?.appendLine('Native runner: enabled');
   output?.appendLine(`Runner: ${helperPath}`);
   return { helperPath, compilerCommand };
+}
+
+type NativeRunnerPlatformConfig = {
+  sourceFile: string;
+  helperFile: string;
+  signature: string;
+  linkArgs: string[];
+};
+
+export function isNativeRunnerPlatform(platform: NodeJS.Platform = process.platform): boolean {
+  return getNativeRunnerPlatformConfig(platform) !== undefined;
+}
+
+export function buildNativeRunnerCompileArgs(
+  sourcePath: string,
+  helperPath: string,
+  platformConfig: NativeRunnerPlatformConfig
+): { staticArgs: string[]; dynamicArgs: string[] } {
+  const baseArgs = [
+    '-std=c++11',
+    '-O2',
+    '-s',
+    '-o',
+    helperPath,
+    ...platformConfig.linkArgs
+  ];
+  return {
+    staticArgs: [
+      sourcePath,
+      ...baseArgs.slice(0, 2),
+      '-static',
+      '-static-libgcc',
+      '-static-libstdc++',
+      ...baseArgs.slice(2)
+    ],
+    dynamicArgs: [sourcePath, ...baseArgs]
+  };
+}
+
+export function getNativeRunnerPlatformConfig(platform: NodeJS.Platform = process.platform): NativeRunnerPlatformConfig | undefined {
+  if (platform === 'win32') {
+    return {
+      sourceFile: 'oijudge-runner-win.cpp',
+      helperFile: 'oijudge-runner-win.exe',
+      signature: 'win-runner-output-limit-20260611',
+      linkArgs: ['-lpsapi', '-lshell32']
+    };
+  }
+  if (platform === 'linux' || platform === 'darwin') {
+    return {
+      sourceFile: 'oijudge-runner-posix.cpp',
+      helperFile: 'oijudge-runner-posix',
+      signature: 'posix-runner-output-limit-20260615',
+      linkArgs: []
+    };
+  }
+  return undefined;
 }
 
 function logNativeRunnerUnavailable(output?: vscode.OutputChannel): void {
