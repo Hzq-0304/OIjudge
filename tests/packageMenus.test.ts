@@ -2,10 +2,11 @@ import { readFileSync } from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 
+const extensionSource = readFileSync(path.resolve(__dirname, '..', 'src', 'extension.ts'), 'utf8');
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8')) as {
   activationEvents?: string[];
   contributes: {
-    commands: Array<{ command: string; icon?: string }>;
+    commands: Array<{ command: string; title?: string; icon?: string }>;
     views: Record<string, Array<{ id: string; name: string }>>;
     menus: {
       'view/title': Array<{ command: string; when: string; group: string }>;
@@ -15,7 +16,62 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'packa
   };
 };
 
+const legacyInternalCommands = [
+  'oijudger.openCheckerStderr',
+  'oijudger.openSampleStderr'
+];
+
+function registeredCommands(): string[] {
+  return Array.from(extensionSource.matchAll(/registerCommand\(\s*['"]([^'"]+)['"]/g), (match) => match[1]);
+}
+
+function menuCommands(): string[] {
+  return Object.values(packageJson.contributes.menus)
+    .flat()
+    .map((entry) => entry.command);
+}
+
 describe('package tree sample add menu', () => {
+  it('keeps package commands, menu references, and registered commands consistent', () => {
+    const contributed = new Set(packageJson.contributes.commands.map((entry) => entry.command));
+    const registered = new Set(registeredCommands());
+    const menus = new Set(menuCommands());
+
+    expect([...contributed].filter((command) => !registered.has(command))).toEqual([]);
+    expect([...menus].filter((command) => !contributed.has(command))).toEqual([]);
+    expect([...menus].filter((command) => !registered.has(command))).toEqual([]);
+    expect([...registered].filter((command) => !contributed.has(command)).sort()).toEqual(legacyInternalCommands);
+  });
+
+  it('keeps user-visible command titles present and consistently prefixed', () => {
+    for (const command of packageJson.contributes.commands) {
+      expect(command.title).toBeTruthy();
+      expect(command.title?.startsWith('OI Judge: ')).toBe(true);
+      expect(command.title).not.toContain('????');
+    }
+  });
+
+  it('keeps legacy stderr commands internal while exposing consolidated output entries', () => {
+    const contributed = packageJson.contributes.commands.map((entry) => entry.command);
+    const menus = menuCommands();
+    const registered = registeredCommands();
+
+    expect(registered).toEqual(expect.arrayContaining(legacyInternalCommands));
+    for (const command of legacyInternalCommands) {
+      expect(contributed).not.toContain(command);
+      expect(menus).not.toContain(command);
+    }
+    expect(contributed).toEqual(expect.arrayContaining([
+      'oijudger.openSampleOutput',
+      'oijudger.openSampleUserOutput',
+      'oijudger.openCheckerOutput'
+    ]));
+    expect(menus).toEqual(expect.arrayContaining([
+      'oijudger.openSampleUserOutput',
+      'oijudger.openCheckerOutput'
+    ]));
+  });
+
   it('contributes a samples group inline add action', () => {
     const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.addSampleFromSamplesGroup');
     const menu = packageJson.contributes.menus['view/item/context'].find(

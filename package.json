@@ -132,27 +132,27 @@
     "commands": [
       {
         "command": "oijudger.initProblem",
-        "title": "OI Judge: Init Problem",
+        "title": "OI Judge: 初始化题目/Init Problem",
         "icon": "$(repo-create)"
       },
       {
         "command": "oijudger.addSample",
-        "title": "OI Judge: Add Sample",
+        "title": "OI Judge: 添加样例/Add Sample",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.runAllSamples",
-        "title": "OI Judge: Run All Samples",
+        "title": "OI Judge: 运行全部样例/Run All Samples",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.setTimeLimit",
-        "title": "OI Judge: Set Time Limit",
+        "title": "OI Judge: 设置时间限制/Set Time Limit",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setMemoryLimit",
-        "title": "OI Judge: Set Memory Limit",
+        "title": "OI Judge: 设置内存限制/Set Memory Limit",
         "icon": "$(server)"
       },
       {
@@ -162,32 +162,32 @@
       },
       {
         "command": "oijudger.selectCompiler",
-        "title": "OI Judge: Select C++ Compiler",
+        "title": "OI Judge: 选择 C++ 编译器/Select C++ Compiler",
         "icon": "$(settings-gear)"
       },
       {
         "command": "oijudger.openLastReport",
-        "title": "OI Judge: Open Last Report",
+        "title": "OI Judge: 打开最近报告/Open Last Report",
         "icon": "$(preview)"
       },
       {
         "command": "oijudger.openResultPanel",
-        "title": "OI Judge: Open Result Panel",
+        "title": "OI Judge: 打开结果面板/Open Result Panel",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openSampleDetail",
-        "title": "OI Judge: Open Sample Detail",
+        "title": "OI Judge: 打开样例详情/Open Sample Detail",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearOutputs",
-        "title": "OI Judge: Clear Outputs",
+        "title": "OI Judge: 清空输出/Clear Outputs",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.refreshView",
-        "title": "OI Judge: Refresh View",
+        "title": "OI Judge: 刷新视图/Refresh View",
         "icon": "$(refresh)"
       },
       {
@@ -197,22 +197,22 @@
       },
       {
         "command": "oijudger.addProblemFromCurrentFile",
-        "title": "OI Judge: Add Problem From Current File",
+        "title": "OI Judge: 从当前文件添加题目/Add Problem From Current File",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.addProblemFromFile",
-        "title": "OI Judge: Add Problem From File",
+        "title": "OI Judge: 从文件添加题目/Add Problem From File",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.importLegacyProblem",
-        "title": "OI Judge: Import Legacy Single Problem",
+        "title": "OI Judge: 导入旧版单题/Import Legacy Single Problem",
         "icon": "$(repo-pull)"
       },
       {
         "command": "oijudger.addSampleFromSamplesGroup",
-        "title": "OI Judge: Add Sample",
+        "title": "OI Judge: 添加样例/Add Sample",
         "icon": "$(add)"
       },
       {
@@ -287,12 +287,12 @@
       },
       {
         "command": "oijudger.addProblemSample",
-        "title": "OI Judge: Add Problem Sample",
+        "title": "OI Judge: 添加题目样例/Add Problem Sample",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.addProblemSampleFromFiles",
-        "title": "OI Judge: Add Problem Sample From Files",
+        "title": "OI Judge: 从文件添加题目样例/Add Problem Sample From Files",
         "icon": "$(file-add)"
       },
       {
@@ -302,7 +302,7 @@
       },
       {
         "command": "oijudger.runProblemSamples",
-        "title": "OI Judge: Run Problem Samples",
+        "title": "OI Judge: 运行题目样例/Run Problem Samples",
         "icon": "$(run-all)"
       },
       {
@@ -312,17 +312,17 @@
       },
       {
         "command": "oijudger.setProblemTimeLimit",
-        "title": "OI Judge: Set Problem Time Limit",
+        "title": "OI Judge: 设置题目时间限制/Set Problem Time Limit",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setProblemMemoryLimit",
-        "title": "OI Judge: Set Problem Memory Limit",
+        "title": "OI Judge: 设置题目内存限制/Set Problem Memory Limit",
         "icon": "$(server)"
       },
       {
         "command": "oijudger.setProblemStackSize",
-        "title": "OI Judge: Set Problem Stack Size",
+        "title": "OI Judge: 设置题目栈空间/Set Problem Stack Size",
         "icon": "$(layers)"
       },
       {
@@ -342,12 +342,12 @@
       },
       {
         "command": "oijudger.setProblemStandard",
-        "title": "OI Judge: Set Problem C++ Standard",
+        "title": "OI Judge: 设置题目 C++ 标准/Set Problem C++ Standard",
         "icon": "$(settings)"
       },
       {
         "command": "oijudger.selectProblemCompiler",
-        "title": "OI Judge: Select Problem Compiler",
+        "title": "OI Judge: 选择题目编译器/Select Problem Compiler",
         "icon": "$(settings-gear)"
       },
       {
@@ -377,37 +377,37 @@
       },
       {
         "command": "oijudger.openProblemResultPanel",
-        "title": "OI Judge: Open Problem Result Panel",
+        "title": "OI Judge: 打开题目结果面板/Open Problem Result Panel",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openProblemSampleDetail",
-        "title": "OI Judge: Open Problem Sample Detail",
+        "title": "OI Judge: 打开题目样例详情/Open Problem Sample Detail",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleInput",
-        "title": "OI Judge: Open Sample Input",
+        "title": "OI Judge: 打开样例输入/Open Sample Input",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleAnswer",
-        "title": "OI Judge: Open Expected Output",
+        "title": "OI Judge: 打开期望输出/Open Expected Output",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleOutput",
-        "title": "OI Judge: Open Run Result",
+        "title": "OI Judge: 打开运行结果/Open Run Result",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleUserOutput",
-        "title": "OI Judge: Open Run Result",
+        "title": "OI Judge: 打开运行结果/Open Run Result",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleDiff",
-        "title": "OI Judge: Open Diff",
+        "title": "OI Judge: 打开差异/Open Diff",
         "icon": "$(diff)"
       },
       {
@@ -447,7 +447,7 @@
       },
       {
         "command": "oijudger.openCheckerOutput",
-        "title": "OI Judge: Open Checker Output",
+        "title": "OI Judge: 打开 Checker 输出/Open Checker Output",
         "icon": "$(output)"
       },
       {
@@ -522,17 +522,17 @@
       },
       {
         "command": "oijudger.addProblemGenerator",
-        "title": "OI Judge: Add Generator",
+        "title": "OI Judge: 添加 Generator/Add Generator",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.openProblemGenerator",
-        "title": "OI Judge: Open Generator",
+        "title": "OI Judge: 打开 Generator/Open Generator",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.removeProblemGenerator",
-        "title": "OI Judge: Remove Generator",
+        "title": "OI Judge: 移除 Generator/Remove Generator",
         "icon": "$(clear-all)"
       },
       {
@@ -557,12 +557,12 @@
       },
       {
         "command": "oijudger.openSubtaskGenerator",
-        "title": "OI Judge: Open Bound Generator",
+        "title": "OI Judge: 打开绑定的 Generator/Open Bound Generator",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearSubtaskGenerator",
-        "title": "OI Judge: Clear Generator Binding",
+        "title": "OI Judge: 清除 Generator 绑定/Clear Generator Binding",
         "icon": "$(clear-all)"
       },
       {

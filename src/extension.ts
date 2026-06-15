@@ -575,6 +575,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.openSampleUserOutput', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openSampleFileCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'output');
     }),
+    // Legacy compatibility command for old reports or external links. The current UI uses Run Result.
     vscode.commands.registerCommand('oijudger.openSampleStderr', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openSampleFileCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), 'stderr');
     }),
@@ -584,6 +585,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.openCheckerOutput', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
     }),
+    // Legacy compatibility command for old reports or external links. The current UI uses Checker Output.
     vscode.commands.registerCommand('oijudger.openCheckerStderr', async (problemArg?: unknown, sampleArg?: unknown) => {
       await openCheckerArtifactCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg));
     }),

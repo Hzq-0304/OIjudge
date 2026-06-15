@@ -13,6 +13,7 @@
 - Added stress test workflow with Generator + STD + Solution mode, standalone mode, saved failed cases, and Stress Records.
 - Added testcase export formats for Luogu `config.yml`, Polygon import plan, and LemonLime `contest.cdf`.
 - Added custom checker documentation for normal compare, testlib checker, plain checker, and merged checker output.
+- Cleaned up command/UI metadata by normalizing user-visible command titles and keeping legacy stderr commands internal.
 
 ## 0.4.0 - 2026-05-28
 
