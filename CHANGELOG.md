@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.0.5 - 2026-06-15
+
 - Default newly created sample answer files to `.out` while keeping existing `.ans` samples compatible.
 - Keep batch import compatible with `.ans` and prefer same-name `.out` files by default.
 - Store OI Judge workspace data in `.vscode/.OIJudge/` with `config.json`, and copy legacy `.oitest/` data forward without deleting it.
