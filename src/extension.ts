@@ -121,6 +121,7 @@ import {
   TestcaseExportFormat,
   TestcaseExportMode
 } from './testcaseExport';
+import { exportProblemPackage } from './problemPackageExport';
 import {
   runGeneratorStdStressTest,
   runStandaloneStressTest,
@@ -421,6 +422,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.exportTestcases', async (problemArg?: unknown) => {
       await exportTestcasesCommand(readProblemId(problemArg));
+    }),
+    vscode.commands.registerCommand('oijudger.exportProblemPackage', async (problemArg?: unknown) => {
+      await exportProblemPackageCommand(readProblemId(problemArg));
     }),
     vscode.commands.registerCommand('oijudger.runStressTest', async (problemArg?: unknown) => {
       await runStressTestCommand(readProblemId(problemArg), stressRecordsTreeProvider);
@@ -1346,6 +1350,80 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
       return;
     }
     throw error;
+  }
+}
+
+async function exportProblemPackageCommand(problemId: string | undefined): Promise<void> {
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const target = await vscode.window.showOpenDialog({
+    title: t('export.problemPackage.target.select'),
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: t('select')
+  });
+  const targetDir = target?.[0]?.fsPath;
+  if (!targetDir) {
+    return;
+  }
+
+  if (await targetContainsFiles(targetDir)) {
+    const overwrite = await vscode.window.showWarningMessage(
+      t('export.problemPackage.overwriteConfirm'),
+      { modal: true },
+      t('continueAction'),
+      t('cancel')
+    );
+    if (overwrite !== t('continueAction')) {
+      return;
+    }
+  }
+
+  output.clear();
+  output.show(true);
+  output.appendLine('Export Problem Package');
+  output.appendLine(`Problem: ${context.problem.name}`);
+  output.appendLine(`Target: ${targetDir}`);
+
+  const result = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: t('export.problemPackage.progress'),
+      cancellable: false
+    },
+    async () => exportProblemPackage(context.workspaceFolder, context.problem, targetDir)
+  );
+
+  output.appendLine('');
+  output.appendLine('Generated:');
+  for (const file of result.generatedFiles) {
+    output.appendLine(`  ${file}`);
+  }
+  output.appendLine('Copied:');
+  for (const file of result.copiedFiles) {
+    output.appendLine(`  ${file}`);
+  }
+  if (result.warnings.length > 0) {
+    output.appendLine('Warnings:');
+    for (const warning of result.warnings) {
+      output.appendLine(`  ${warning}`);
+    }
+  }
+
+  const open = await vscode.window.showInformationMessage(
+    t('export.problemPackage.done', {
+      copied: result.copiedFiles.length,
+      generated: result.generatedFiles.length,
+      warnings: result.warnings.length
+    }),
+    t('openFolder')
+  );
+  if (open === t('openFolder')) {
+    await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(result.targetDir));
   }
 }
 

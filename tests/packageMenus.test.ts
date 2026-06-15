@@ -244,6 +244,29 @@ describe('package tree sample add menu', () => {
     });
   });
 
+  it('contributes problem package export to command palette and problem nodes only', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.exportProblemPackage');
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const entries = contextMenus.filter((entry) => entry.command === 'oijudger.exportProblemPackage');
+
+    expect(command?.title).toContain('Export Problem Package');
+    expect(command?.title).toContain('导出完整题目包');
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.exportProblemPackage');
+    expect(entries.length).toBe(2);
+    expect(entries.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
+    expect(entries.some((entry) => entry.when.includes('samplesGroup'))).toBe(true);
+    expect(entries.some((entry) => entry.when.includes('oijudgerProblemNormal'))).toBe(true);
+    const sampleNodeValues = ['sample ||', 'sampleChecker', 'sampleWa', 'sampleMissing', 'sampleAnswerPending', 'sampleWithGeneratedOutput'];
+    const subtaskNodeValues = ['subtask ||', 'subtaskPassed', 'subtaskFailed'];
+    expect(entries.every((entry) => sampleNodeValues.every((value) => !entry.when.includes(value)))).toBe(true);
+    expect(entries.every((entry) => subtaskNodeValues.every((value) => !entry.when.includes(value)))).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.exportProblemPackage',
+      when: 'false'
+    });
+    expect(registeredCommands()).toContain('oijudger.exportProblemPackage');
+  });
+
   it('contributes stress test entry without requiring setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>

@@ -244,6 +244,13 @@ Testcase export:
 - LemonLime export can generate `contest.cdf`, `data/<problemName>/`, `source/`, and a short README.
 - When scores or bundled Subtasks are configured, export metadata carries sample scores and bundled Subtask grouping where the target format supports it.
 
+Problem Package Export:
+
+- `OI Judge: Export Problem Package` is separate from Testcase Export. Testcase Export focuses on testcase files and platform metadata.
+- Problem Package Export copies complete authoring material into a directory for backup, migration, sharing, and future import support.
+- The exported directory includes statement, source programs, STD, checker, generators, samples, Subtasks, scores, and an OI Judge config snapshot.
+- The first version exports a folder with `oijudge-package.json` and `README.txt`; it does not create a zip archive.
+
 Testlib Checker:
 
 - OI Judge supports testlib-style checkers for per-problem judging.
@@ -422,7 +429,7 @@ Commands:
 - Setter mode: `Select STD`, `Open STD`, `Clear STD`, `Auto Generate Output with STD`, `Generate Answer with STD`, `Generate All Sample Answers with STD`, `View Current Answer`, `View Generated Answer`, `Compare Generated Answer`, `Apply Generated Answer`, `Apply All Generated Answers`, `Delete Generated Answer`.
 - Generators: `Add Generator`, `Open Generator`, `Remove Generator`, `Select Generator`, `Open Generator`, `Clear Generator`, `Add Global Generator Input`, `Open Global Generator Input`, `Remove Global Generator Input`.
 - Subtasks and scoring: `Create Subtask`, `Rename Subtask`, `Delete Subtask`, `Move to Subtask`, `Run Subtask`, `Set Subtask Scoring Mode`, `Set Total Score`, `Set Testcase Score`, `Clear Testcase Score`, `Bind Generator`, `Bind Generator Input`, `Open Generator Input`, `Clear Generator Input`, `Generate Subtask Sample Input`.
-- Stress and export: `Run Stress Test`, `Refresh Stress Records`, `Open Stress File`, `Add to Samples`, `Rerun This Case`, `Reveal Session Folder`, `Export Testcases`, `Copy freopen Input Snippet`.
+- Stress and export: `Run Stress Test`, `Refresh Stress Records`, `Open Stress File`, `Add to Samples`, `Rerun This Case`, `Reveal Session Folder`, `Export Testcases`, `Export Problem Package`, `Copy freopen Input Snippet`.
 - Checker: `Set Checker`, `Set Plain Checker Protocol`, `Clear Checker`, `Open Checker`, `Import testlib.h`, `Open testlib.h`, `Open Checker Output`.
 
 The default compiler command is `g++`. You can edit `.vscode/.OIJudge` to adjust per-problem compiler flags.
@@ -670,6 +677,13 @@ int main() {
 - LemonLime 导出可以生成 `contest.cdf`、`data/<problemName>/`、`source/` 和简短说明。
 - 如果配置了分值或 bundle Subtask，导出元数据会在目标格式支持时携带样例分值和 bundle Subtask 分组信息。
 
+### 完整题目包导出
+
+- `OI Judge: Export Problem Package` 与 Testcase Export 不同。Testcase Export 主要导出测试点文件和平台配置。
+- Problem Package Export 会把完整出题资料复制到一个目录，便于备份、迁移、分享，以及后续实现导入。
+- 导出目录包含 statement、source、STD、checker、generator、samples、Subtasks、scores 和 OI Judge 配置快照。
+- 第一版导出为目录，包含 `oijudge-package.json` 和 `README.txt`，不生成 zip。
+
 ### Testlib Checker
 
 - OI Judge 支持按题目配置的 testlib 风格 Checker。
@@ -848,7 +862,7 @@ int main(int argc, char** argv) {
 - 出题人模式：`Select STD`、`Open STD`、`Clear STD`、`Auto Generate Output with STD`、`Generate Answer with STD`、`Generate All Sample Answers with STD`、`View Current Answer`、`View Generated Answer`、`Compare Generated Answer`、`Apply Generated Answer`、`Apply All Generated Answers`、`Delete Generated Answer`。
 - Generator：`Add Generator`、`Open Generator`、`Remove Generator`、`Select Generator`、`Open Generator`、`Clear Generator`、`Add Global Generator Input`、`Open Global Generator Input`、`Remove Global Generator Input`。
 - Subtask 与计分：`Create Subtask`、`Rename Subtask`、`Delete Subtask`、`Move to Subtask`、`Run Subtask`、`Set Subtask Scoring Mode`、`Set Total Score`、`Set Testcase Score`、`Clear Testcase Score`、`Bind Generator`、`Bind Generator Input`、`Open Generator Input`、`Clear Generator Input`、`Generate Subtask Sample Input`。
-- 对拍与导出：`Run Stress Test`、`Refresh Stress Records`、`Open Stress File`、`Add to Samples`、`Rerun This Case`、`Reveal Session Folder`、`Export Testcases`、`Copy freopen Input Snippet`。
+- 对拍与导出：`Run Stress Test`、`Refresh Stress Records`、`Open Stress File`、`Add to Samples`、`Rerun This Case`、`Reveal Session Folder`、`Export Testcases`、`Export Problem Package`、`Copy freopen Input Snippet`。
 - Checker：`Set Checker`、`Set Plain Checker Protocol`、`Clear Checker`、`Open Checker`、`Import testlib.h`、`Open testlib.h`、`Open Checker Output`。
 
 默认编译器命令是 `g++`。可以编辑 `.vscode/.OIJudge` 来调整每个题目的编译参数。

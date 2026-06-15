@@ -41,6 +41,7 @@
     "onCommand:oijudger.generateSampleInput",
     "onCommand:oijudger.setProblemTotalScore",
     "onCommand:oijudger.exportTestcases",
+    "onCommand:oijudger.exportProblemPackage",
     "onCommand:oijudger.createSubtask",
     "onCommand:oijudger.renameSubtask",
     "onCommand:oijudger.deleteSubtask",
@@ -229,6 +230,11 @@
         "command": "oijudger.exportTestcases",
         "title": "OI Judge: 导出测试点/Export Testcases",
         "icon": "$(export)"
+      },
+      {
+        "command": "oijudger.exportProblemPackage",
+        "title": "OI Judge: 导出完整题目包/Export Problem Package",
+        "icon": "$(package)"
       },
       {
         "command": "oijudger.runStressTest",
@@ -762,6 +768,11 @@
           "group": "7_export@1"
         },
         {
+          "command": "oijudger.exportProblemPackage",
+          "when": "view == oijudger.samplesView && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
+          "group": "7_export@2"
+        },
+        {
           "command": "oijudger.generateSampleInput",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == samplesGroup || viewItem == samplesGroupWithGeneratedOutputs)",
           "group": "inline@5"
@@ -1047,6 +1058,11 @@
           "group": "7_export@1"
         },
         {
+          "command": "oijudger.exportProblemPackage",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "7_export@2"
+        },
+        {
           "command": "oijudger.addProblemGenerator",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
           "group": "4_setter@5"
@@ -1126,6 +1142,10 @@
         },
         {
           "command": "oijudger.exportTestcases",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.exportProblemPackage",
           "when": "false"
         },
         {

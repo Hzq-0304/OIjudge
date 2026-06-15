@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增完整题目包导出功能 / Add full problem package export.
+
 ## 5.0.5 - 2026-06-15
 
 - Default newly created sample answer files to `.out` while keeping existing `.ans` samples compatible.
