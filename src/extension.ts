@@ -74,6 +74,7 @@ import {
   isProblemAutoGenerateOutputFromStdEnabled,
   importLegacyProblem,
   moveProblemSampleToSubtask,
+  moveProblemSamplesAfterExport,
   renameProblemSubtask,
   removeProblemGeneratorInput,
   removeProblemGenerator,
@@ -426,7 +427,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await setProblemTotalScoreCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.exportTestcases', async (problemArg?: unknown) => {
-      await exportTestcasesCommand(readProblemId(problemArg));
+      await exportTestcasesCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.exportProblemPackage', async (problemArg?: unknown) => {
       await exportProblemPackageCommand(readProblemId(problemArg));
@@ -1271,7 +1272,10 @@ async function setProblemTotalScoreCommand(
   sampleTreeProvider.refresh();
 }
 
-async function exportTestcasesCommand(problemId: string | undefined): Promise<void> {
+async function exportTestcasesCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
   const context = await getProblemContext(problemId, true);
   if (!context) {
     return;
@@ -1279,10 +1283,6 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
 
   const mode = await pickTestcaseExportMode();
   if (!mode) {
-    return;
-  }
-  if (mode === 'move') {
-    vscode.window.showWarningMessage(t('export.testcases.mode.moveUnsupported'));
     return;
   }
 
@@ -1319,16 +1319,46 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
     }
   }
 
+  if (mode === 'move') {
+    const confirm = await vscode.window.showWarningMessage(
+      t('export.testcases.mode.moveConfirm'),
+      { modal: true },
+      t('export.testcases.mode.move'),
+      t('cancel')
+    );
+    if (confirm !== t('export.testcases.mode.move')) {
+      return;
+    }
+  }
+
   output.clear();
   output.show(true);
   output.appendLine('Export Testcases');
-  output.appendLine(`Mode: Copy`);
+  output.appendLine(`Mode: ${mode === 'move' ? 'Move' : 'Copy'}`);
   output.appendLine(`Format: ${getTestcaseExportFormatLabel(format)}`);
   output.appendLine(`Target: ${targetDir}`);
   output.appendLine(`Generate platform config: ${format ? 'yes' : 'no'}`);
 
   try {
     const result = await exportTestcases(context.workspaceFolder, context.problem, targetDir, format);
+    let moveCleanupWarnings: string[] = [];
+    let movedCount = 0;
+    if (mode === 'move') {
+      const moved = await moveProblemSamplesAfterExport(
+        context.workspaceFolder,
+        context.problem.id,
+        context.problem.samples.map((sample) => sample.id)
+      );
+      movedCount = moved.samples.length;
+      moveCleanupWarnings = [
+        ...moved.cleanupErrors.map((warning) => `move.cleanup:${warning}`),
+        ...moved.missingSampleIds.map((sampleId) => `move.missingSample:${sampleId}`)
+      ];
+      result.warnings.push(...moveCleanupWarnings);
+      sampleTreeProvider.refresh();
+      await updateStatusBar(context.problem.id);
+    }
+
     output.appendLine('Generated:');
     for (const file of result.generatedFiles) {
       output.appendLine(`  ${file}`);
@@ -1343,13 +1373,19 @@ async function exportTestcasesCommand(problemId: string | undefined): Promise<vo
         output.appendLine(`  ${formatExportWarning(warning)}`);
       }
     }
-    vscode.window.showInformationMessage(t('export.testcases.done', { path: targetDir }));
+    vscode.window.showInformationMessage(
+      mode === 'move'
+        ? t('export.testcases.moved', { count: movedCount, path: targetDir })
+        : t('export.testcases.done', { path: targetDir })
+    );
     vscode.window.showInformationMessage(
       result.configGenerated
         ? getTestcaseExportGeneratedMessage(result.format)
         : t('export.testcases.configSkipped')
     );
-    if (result.warnings.length > 0) {
+    if (mode === 'move' && result.warnings.length > 0) {
+      vscode.window.showWarningMessage(t('export.testcases.movedWithWarnings', { count: result.warnings.length }));
+    } else if (result.warnings.length > 0) {
       vscode.window.showWarningMessage(t('export.testcases.doneWithWarnings', { count: result.warnings.length }));
     }
   } catch (error) {
@@ -1558,12 +1594,16 @@ function formatProblemPackageImportError(error: unknown): string {
   return t('import.problemPackage.failed', { error: message });
 }
 
+export function createTestcaseExportModeItems(): Array<vscode.QuickPickItem & { mode: TestcaseExportMode }> {
+  return [
+    { label: t('export.testcases.mode.copy'), mode: 'copy' as const },
+    { label: t('export.testcases.mode.move'), mode: 'move' as const }
+  ];
+}
+
 async function pickTestcaseExportMode(): Promise<TestcaseExportMode | undefined> {
   const picked = await vscode.window.showQuickPick(
-    [
-      { label: t('export.testcases.mode.copy'), mode: 'copy' as const },
-      { label: t('export.testcases.mode.move'), mode: 'move' as const }
-    ],
+    createTestcaseExportModeItems(),
     {
       title: t('export.testcases.mode.select'),
       placeHolder: t('export.testcases.mode.select')

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 补全导出测试点的移动模式 / Complete move mode for testcase export.
+
 ## 5.1.0 - 2026-06-16
 
 - 新增 Linux / macOS POSIX Native Runner / Add Linux / macOS POSIX Native Runner.

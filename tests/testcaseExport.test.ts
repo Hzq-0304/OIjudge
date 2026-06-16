@@ -3,7 +3,23 @@ import * as os from 'os';
 import * as path from 'path';
 import type * as vscode from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
-import { addProblemSample, createProblem, createProblemSubtask, moveProblemSampleToSubtask, setProblemSampleScore, setProblemSubtaskScoringMode } from '../src/problems';
+import {
+  addExternalProblemSample,
+  addProblemSample,
+  createProblem,
+  createProblemSubtask,
+  ensureProblemsConfig,
+  getProblem,
+  moveProblemSampleToSubtask,
+  moveProblemSamplesAfterExport,
+  setProblemSampleScore,
+  setProblemSubtaskResult,
+  setProblemSubtaskScoringMode,
+  setProblemTotalScore,
+  writeGeneratedAnswerForSample,
+  writeProblemsConfig
+} from '../src/problems';
+import { createTestcaseExportModeItems } from '../src/extension';
 import { exportTestcases, shouldGenerateTestcaseConfig } from '../src/testcaseExport';
 
 const workspaces: string[] = [];
@@ -150,6 +166,151 @@ describe('testcase export', () => {
     expect(result.warnings).toHaveLength(1);
     await expect(fs.access(path.join(targetDir, 'sample-1.in'))).resolves.toBeUndefined();
     await expect(fs.access(path.join(targetDir, 'sample-1.out'))).rejects.toThrow();
+  });
+
+  it('keeps copy export non-destructive for managed samples', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const inputPath = path.join(workspaceFolder.uri.fsPath, sample?.input ?? '');
+    const answerPath = path.join(workspaceFolder.uri.fsPath, sample?.answer ?? '');
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir);
+    const updated = await importProblem(workspaceFolder, problem.id);
+
+    expect(updated.samples.map((entry) => entry.id)).toEqual([sample?.id]);
+    await expect(fs.access(inputPath)).resolves.toBeUndefined();
+    await expect(fs.access(answerPath)).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'sample-1.in'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'sample-1.out'))).resolves.toBeUndefined();
+  });
+
+  it('moves managed samples after successful export and persists related config cleanup', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', 'answer\n', { decodeEscapes: false });
+    const subtask = await createProblemSubtask(workspaceFolder, problem.id, 'Bundle');
+    await moveProblemSampleToSubtask(workspaceFolder, problem.id, sample?.id ?? '', subtask?.id);
+    await setProblemSubtaskScoringMode(workspaceFolder, problem.id, subtask?.id ?? '', 'bundle');
+    await setProblemSubtaskResult(workspaceFolder, problem.id, subtask?.id ?? '', {
+      status: 'passed',
+      passed: 1,
+      total: 1,
+      updatedAt: '2026-06-16T00:00:00.000Z'
+    });
+    await setProblemTotalScore(workspaceFolder, problem.id, 150);
+    await setProblemSampleScore(workspaceFolder, problem.id, sample?.id ?? '', 50);
+    const pending = await writeGeneratedAnswerForSample(workspaceFolder, problem.id, sample?.index ?? 0, 'generated\n');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, sample?.input ?? '');
+    const answerPath = path.join(workspaceFolder.uri.fsPath, sample?.answer ?? '');
+    const generatedPath = pending.ok && pending.mode === 'pending' ? pending.generatedPath : undefined;
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir, 'luogu');
+    const moved = await moveProblemSamplesAfterExport(workspaceFolder, problem.id, [sample?.id ?? '']);
+    const updated = await importProblem(workspaceFolder, problem.id);
+
+    expect(moved.samples.map((entry) => entry.id)).toEqual([sample?.id]);
+    expect(moved.cleanupErrors).toEqual([]);
+    expect(updated.samples).toEqual([]);
+    expect(updated.score?.total).toBe(150);
+    expect(updated.subtasks?.[0].sampleIds).toEqual([]);
+    expect(updated.subtasks?.[0].scoringMode).toBe('bundle');
+    expect(updated.subtasks?.[0].lastResult).toBeUndefined();
+    expect(updated.setter?.generatedAnswers?.[sample?.id ?? '']).toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'sample-1.in'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'sample-1.out'))).resolves.toBeUndefined();
+    await expect(fs.access(inputPath)).rejects.toThrow();
+    await expect(fs.access(answerPath)).rejects.toThrow();
+    if (generatedPath) {
+      await expect(fs.access(generatedPath)).rejects.toThrow();
+    }
+    expect((await getProblem(workspaceFolder, problem.id))?.samples).toEqual([]);
+  });
+
+  it('moves external sample references without deleting external files', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const externalDir = path.join(workspaceFolder.uri.fsPath, 'external');
+    const inputPath = path.join(externalDir, 'case.in');
+    const answerPath = path.join(externalDir, 'case.out');
+    await fs.mkdir(externalDir, { recursive: true });
+    await fs.writeFile(inputPath, 'input\n', 'utf8');
+    await fs.writeFile(answerPath, 'answer\n', 'utf8');
+    const sample = await addExternalProblemSample(workspaceFolder, problem.id, inputPath, answerPath);
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir);
+    const moved = await moveProblemSamplesAfterExport(workspaceFolder, problem.id, [sample?.id ?? '']);
+    const updated = await importProblem(workspaceFolder, problem.id);
+
+    expect(moved.cleanupErrors).toEqual([]);
+    expect(updated.samples).toEqual([]);
+    await expect(fs.access(path.join(targetDir, 'case.in'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(targetDir, 'case.out'))).resolves.toBeUndefined();
+    await expect(fs.access(inputPath)).resolves.toBeUndefined();
+    await expect(fs.access(answerPath)).resolves.toBeUndefined();
+  });
+
+  it('does not remove samples or source files when export fails', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const second = await addProblemSample(workspaceFolder, problem.id, '2\n', '2\n', { decodeEscapes: false });
+    await setProblemTotalScore(workspaceFolder, problem.id, 10);
+    await setProblemSampleScore(workspaceFolder, problem.id, first?.id ?? '', 10);
+    await setProblemSampleScore(workspaceFolder, problem.id, second?.id ?? '', 10);
+    const firstInput = path.join(workspaceFolder.uri.fsPath, first?.input ?? '');
+    const secondInput = path.join(workspaceFolder.uri.fsPath, second?.input ?? '');
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    await expect(exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir, 'luogu'))
+      .rejects.toThrow('score.invalid');
+    const updated = await importProblem(workspaceFolder, problem.id);
+
+    expect(updated.samples.map((sample) => sample.id)).toEqual([first?.id, second?.id]);
+    await expect(fs.access(firstInput)).resolves.toBeUndefined();
+    await expect(fs.access(secondInput)).resolves.toBeUndefined();
+  });
+
+  it('skips unsafe generated answer cleanup paths during move', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const unsafeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'oijudge-external-generated-'));
+    workspaces.push(unsafeDir);
+    const unsafePath = path.join(unsafeDir, 'generated.out');
+    await fs.writeFile(unsafePath, 'do not delete\n', 'utf8');
+    const problems = await ensureProblemsConfig(workspaceFolder);
+    const stored = problems.problems.find((entry) => entry.id === problem.id);
+    if (!stored) {
+      throw new Error('Problem not found');
+    }
+    stored.setter = {
+      ...(stored.setter ?? {}),
+      generatedAnswers: {
+        ...(stored.setter?.generatedAnswers ?? {}),
+        [sample?.id ?? '']: unsafePath
+      }
+    };
+    await writeProblemsConfig(workspaceFolder, problems);
+    const targetDir = path.join(workspaceFolder.uri.fsPath, 'export');
+
+    await exportTestcases(workspaceFolder, await importProblem(workspaceFolder, problem.id), targetDir);
+    const moved = await moveProblemSamplesAfterExport(workspaceFolder, problem.id, [sample?.id ?? '']);
+
+    expect(moved.cleanupErrors.some((warning) => warning.includes('Skipped unsafe managed cleanup path'))).toBe(true);
+    await expect(fs.access(unsafePath)).resolves.toBeUndefined();
+    expect((await importProblem(workspaceFolder, problem.id)).setter?.generatedAnswers?.[sample?.id ?? '']).toBeUndefined();
+  });
+
+  it('keeps copy and move export mode items wired to the correct modes', () => {
+    const items = createTestcaseExportModeItems();
+
+    expect(items.map((item) => item.mode)).toEqual(['copy', 'move']);
+    expect(items[0].label).toBe('Copy');
+    expect(items[1].label).toBe('Move');
   });
 });
 

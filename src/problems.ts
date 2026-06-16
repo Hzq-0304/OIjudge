@@ -1444,6 +1444,71 @@ export async function deleteProblemSample(
   return { sample, cleanupErrors, reportCleared };
 }
 
+export async function moveProblemSamplesAfterExport(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  sampleIds: string[]
+): Promise<{ samples: SampleConfig[]; cleanupErrors: string[]; reportCleared: boolean; missingSampleIds: string[] }> {
+  const requested = [...new Set(sampleIds)];
+  const requestedIds = new Set(requested);
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problem = findProblem(problems, problemId);
+  if (!problem) {
+    return {
+      samples: [],
+      cleanupErrors: [],
+      reportCleared: false,
+      missingSampleIds: requested
+    };
+  }
+
+  const samples = problem.samples.filter((sample) => requestedIds.has(sample.id));
+  const foundIds = new Set(samples.map((sample) => sample.id));
+  const missingSampleIds = requested.filter((sampleId) => !foundIds.has(sampleId));
+  if (samples.length === 0) {
+    return {
+      samples: [],
+      cleanupErrors: [],
+      reportCleared: false,
+      missingSampleIds
+    };
+  }
+
+  const generatedPaths = new Map<string, string>();
+  for (const sample of samples) {
+    const generatedRel = problem.setter?.generatedAnswers?.[sample.id];
+    if (generatedRel) {
+      generatedPaths.set(sample.id, resolveProblemReferencePath(workspaceFolder, generatedRel));
+    }
+  }
+
+  problem.samples = problem.samples.filter((sample) => !requestedIds.has(sample.id));
+  for (const sample of samples) {
+    problem.setter = removeSetterDataCaseForSample(problem.setter, sample);
+    removeSampleFromSubtasks(problem, sample.id);
+  }
+  await writeProblemsConfig(workspaceFolder, problems);
+
+  const cleanupErrors: string[] = [];
+  for (const sample of samples) {
+    const generatedPath = generatedPaths.get(sample.id);
+    if (generatedPath) {
+      await removeManagedDataPath(workspaceFolder, generatedPath, cleanupErrors);
+    }
+    if (inferSampleSourceType(workspaceFolder, sample) === 'managed') {
+      await removeManagedSampleFiles(workspaceFolder, sample, cleanupErrors);
+    }
+    await removeSampleOutputs(workspaceFolder, problemId, sample, cleanupErrors);
+  }
+
+  let reportCleared = false;
+  for (const sample of samples) {
+    reportCleared = (await updateReportAfterSampleDeleted(workspaceFolder, problemId, sample)) || reportCleared;
+  }
+
+  return { samples, cleanupErrors, reportCleared, missingSampleIds };
+}
+
 export function getDefaultProblemSource(problem: ProblemConfig): string | undefined {
   return problem.defaultSource || problem.source || problem.sources?.[0]?.path;
 }
@@ -2018,6 +2083,20 @@ async function removeManagedSampleFiles(
     }
     await removePath(resolved, cleanupErrors);
   }
+}
+
+async function removeManagedDataPath(
+  workspaceFolder: vscode.WorkspaceFolder,
+  targetPath: string,
+  cleanupErrors: string[]
+): Promise<void> {
+  const dataRoot = getOITestDir(workspaceFolder);
+  const legacyRoot = getLegacyOITestDir(workspaceFolder);
+  if (!isUnderPath(targetPath, dataRoot) && !isUnderPath(targetPath, legacyRoot)) {
+    cleanupErrors.push(`Skipped unsafe managed cleanup path: ${targetPath}`);
+    return;
+  }
+  await removePath(targetPath, cleanupErrors);
 }
 
 async function removeSampleOutputs(
