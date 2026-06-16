@@ -13,6 +13,7 @@ import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErr
 import { inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
+import { formatVerdictAcronym } from './verdict';
 
 const maxSystemMessageLength = 12_000;
 
@@ -210,7 +211,7 @@ async function showReportPanel(
   panel.webview.html = renderPage(title, renderReportBody(workspaceFolder, report, problemId, problem));
 }
 
-function renderReportBody(
+export function renderReportBody(
   workspaceFolder: vscode.WorkspaceFolder,
   report: JudgeReport,
   problemId?: string,
@@ -403,13 +404,7 @@ function subtaskStatus(
 }
 
 function subtaskStatusText(status: 'AC' | 'PARTIAL' | 'WA'): string {
-  if (status === 'AC') {
-    return t('statusAC');
-  }
-  if (status === 'PARTIAL') {
-    return t('report.partialAccepted');
-  }
-  return t('statusWA');
+  return formatVerdictAcronym(status);
 }
 
 function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, problemId?: string): string {
@@ -976,9 +971,6 @@ function getOverallStatus(report: JudgeReport, earnedScore: number | undefined):
 
 function getOverallStatusText(report: JudgeReport, earnedScore: number | undefined): string {
   const status = getOverallStatus(report, earnedScore);
-  if (status === 'PARTIAL') {
-    return t('report.partialAccepted');
-  }
   return statusLabel(status);
 }
 
@@ -1166,38 +1158,7 @@ function formatTestcaseDuration(testcase: Pick<JudgeReportTestcaseViewModel, 'ti
 }
 
 function statusLabel(status: string): string {
-  switch (status) {
-    case 'AC':
-      return t('statusAC');
-    case 'WA':
-      return t('statusWA');
-    case 'TLE':
-      return t('statusTLE');
-    case 'OLE':
-      return t('statusOLE');
-    case 'RE':
-      return t('statusRE');
-    case 'CE':
-      return t('statusCE');
-    case 'MLE':
-      return t('statusMLE');
-    case 'ERR':
-      return t('statusERR');
-    case 'Checker Error':
-      return t('checkerError');
-    case 'Scored':
-      return t('statusScored');
-    case 'Skipped':
-      return t('statusSkipped');
-    case 'Missing':
-      return t('statusMissing');
-    case 'Output Missing':
-      return t('statusOutputMissing');
-    case 'Not Run':
-      return t('notRun');
-    default:
-      return status;
-  }
+  return formatVerdictAcronym(status);
 }
 
 function escapeHtml(value: string): string {

@@ -3,7 +3,8 @@
 ## Unreleased
 
 - 修复批量测试时样例结果不会实时显示的问题 / Fix sample verdicts not updating during batch runs.
-- 样例树现在显示 AC、WA、MLE 等明确 verdict 字母 / Show explicit verdict text such as AC, WA, and MLE in the sample tree.
+- 样例树状态图标改为显示 AC、WA、MLE 等字母 verdict / Show verdict acronyms such as AC, WA, and MLE in sample tree status icons.
+- 测试报告使用 AC、WA、MLE 等英文缩写 / Fix judge report to use verdict acronyms such as AC, WA, and MLE.
 - 运行样例时在样例树显示运行中图标 / Show running indicators in the sample tree while tests are running.
 - 补全导出测试点的移动模式 / Complete move mode for testcase export.
 

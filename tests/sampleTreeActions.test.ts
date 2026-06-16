@@ -17,6 +17,7 @@ import {
 } from '../src/problems';
 import { formatVerdictText, SampleTreeProvider, withSamplesRunning } from '../src/sampleTreeProvider';
 import { SampleConfig, SampleStatus } from '../src/types';
+import { formatVerdictAcronym } from '../src/verdict';
 
 const workspaces: string[] = [];
 const vscodeMock = vscode as unknown as {
@@ -391,12 +392,12 @@ describe('sample tree add entry', () => {
     provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
     const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
 
-    expect(iconId(passedItem)).toBe('pass-filled');
+    expect(iconFileName(passedItem)).toBe('ac.svg');
     expect(iconId(runningItem)).toBe('sync~spin');
-    expect(iconId(restoredItem)).toBe('pass-filled');
+    expect(iconFileName(restoredItem)).toBe('ac.svg');
   });
 
-  it('shows explicit AC, WA, and MLE verdict text in sample descriptions', async () => {
+  it('shows AC, WA, and MLE verdict SVG icons in the sample icon slot', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
@@ -416,12 +417,13 @@ describe('sample tree add entry', () => {
     });
     const provider = new SampleTreeProvider();
 
-    const descriptions = (await getSampleNodes(provider)).map((node) => provider.getTreeItem(node).description);
+    const items = (await getSampleNodes(provider)).map((node) => provider.getTreeItem(node));
 
-    expect(descriptions).toEqual(['AC  1ms  33/33', 'WA  1ms  0/33', 'MLE  1ms  0/34']);
+    expect(items.map(iconFileName)).toEqual(['ac.svg', 'wa.svg', 'mle.svg']);
+    expect(items.map((item) => item.description)).toEqual(['1ms  33/33', '1ms  0/33', '1ms  0/34']);
   });
 
-  it('shows RUNNING instead of stale verdict text while a sample is running', async () => {
+  it('keeps the spinner ahead of verdict SVG icons and restores the verdict icon afterward', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
@@ -442,11 +444,11 @@ describe('sample tree add entry', () => {
 
     expect(runningItem.description).toBe('RUNNING  0/100');
     expect(iconId(runningItem)).toBe('sync~spin');
-    expect(restoredItem.description).toBe('WA  1ms  0/100');
-    expect(iconId(restoredItem)).toBe('error');
+    expect(restoredItem.description).toBe('1ms  0/100');
+    expect(iconFileName(restoredItem)).toBe('wa.svg');
   });
 
-  it('maps all sample statuses to explicit verdict text', () => {
+  it('maps all sample statuses to explicit verdict acronyms', () => {
     expect([
       'AC',
       'WA',
@@ -462,7 +464,7 @@ describe('sample tree add entry', () => {
       'Missing',
       'Output Missing',
       'Not Run'
-    ].map((status) => formatVerdictText(status as Parameters<typeof formatVerdictText>[0]))).toEqual([
+    ].map((status) => formatVerdictAcronym(status))).toEqual([
       'AC',
       'WA',
       'TLE',
@@ -478,6 +480,7 @@ describe('sample tree add entry', () => {
       'OUTPUT',
       ''
     ]);
+    expect(formatVerdictText('MLE')).toBe('MLE');
   });
 
   it('withSamplesRunning marks all samples during a run and clears them afterward', async () => {
@@ -526,6 +529,11 @@ async function getSampleNodes(provider: SampleTreeProvider, problemIndex = 0): P
 
 function iconId(item: vscode.TreeItem): string | undefined {
   return (item.iconPath as { id?: string } | undefined)?.id;
+}
+
+function iconFileName(item: vscode.TreeItem): string | undefined {
+  const fsPath = (item.iconPath as { fsPath?: string } | undefined)?.fsPath;
+  return fsPath ? path.basename(fsPath) : undefined;
 }
 
 function reportSample(sample: SampleConfig | undefined, status: SampleStatus) {

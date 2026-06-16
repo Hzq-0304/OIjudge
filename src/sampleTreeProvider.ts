@@ -24,6 +24,7 @@ import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { isSetterModeEnabled } from './setterMode';
 import { CheckerType, JudgeMode, JudgeReport, ProblemConfig, SampleReport, SampleStatus, SubtaskConfig } from './types';
+import { formatVerdictAcronym, verdictIconName } from './verdict';
 
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'subtask' | 'action';
 type NodeGroup =
@@ -44,7 +45,7 @@ type TreeNode = {
   label: string;
   description?: string;
   tooltip?: string;
-  icon?: vscode.ThemeIcon;
+  icon?: vscode.ThemeIcon | vscode.Uri;
   command?: vscode.Command;
   collapsibleState?: vscode.TreeItemCollapsibleState;
   group?: NodeGroup;
@@ -685,7 +686,7 @@ async function createSampleNodes(
         : answerPending
           ? t('setter.sample.answerMissing')
           : formatSampleDescription(status, sampleReport, elapsed);
-    const description = scoreText ? `${baseDescription}  ${scoreText}` : baseDescription;
+    const description = joinDescriptionParts(baseDescription, scoreText);
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
       ? answerPending
@@ -716,15 +717,11 @@ async function createSampleNodes(
         ...(sampleReport?.checker?.output ? [`${t('checkerOutput')}: ${sampleReport.checker.output}`] : []),
         ...createRuntimeTooltipLines(sampleReport)
       ].join('\n'),
-      icon: running
-        ? new vscode.ThemeIcon('sync~spin')
-        : hasGeneratedAnswer
-        ? new vscode.ThemeIcon('diff')
-        : answerPending
-        ? new vscode.ThemeIcon('warning')
-        : status === 'Missing'
-        ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
-        : new vscode.ThemeIcon(statusIcon(status)),
+      icon: getSampleIcon(status, {
+        running,
+        hasGeneratedAnswer,
+        answerPending
+      }),
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'sampleActions',
       problemId: problem.id,
@@ -803,48 +800,38 @@ function formatSampleDescription(
   report: SampleReport | undefined,
   elapsed: string
 ): string {
-  const explanation = report?.status === 'RE' ? getRuntimeExplanation(report) : undefined;
-  if (status === 'Scored' && report?.checker?.scoreText !== undefined) {
-    return `SCORED ${report.checker.scoreText}`;
-  }
-  if (status === 'Checker Error' && report?.checker?.errorName) {
-    return `CHECKER ${report.checker.errorName}`;
-  }
-  const statusText = explanation ? `RE: ${explanation.englishName}` : formatVerdictText(status);
-  return elapsed ? `${statusText}  ${elapsed}` : statusText;
+  return report || status !== 'Not Run' ? elapsed : '';
 }
 
 export function formatVerdictText(status: SampleStatus | 'Not Run'): string {
-  switch (status) {
-    case 'AC':
-      return 'AC';
-    case 'WA':
-      return 'WA';
-    case 'TLE':
-      return 'TLE';
-    case 'OLE':
-      return 'OLE';
-    case 'MLE':
-      return 'MLE';
-    case 'RE':
-      return 'RE';
-    case 'CE':
-      return 'CE';
-    case 'ERR':
-      return 'UNKNOWN';
-    case 'Checker Error':
-      return 'CHECKER';
-    case 'Scored':
-      return 'SCORED';
-    case 'Skipped':
-      return 'SKIP';
-    case 'Missing':
-      return 'MISSING';
-    case 'Output Missing':
-      return 'OUTPUT';
-    case 'Not Run':
-      return '';
+  return formatVerdictAcronym(status);
+}
+
+function joinDescriptionParts(...parts: Array<string | undefined>): string | undefined {
+  const text = parts.filter((part): part is string => Boolean(part && part.trim())).join('  ');
+  return text || undefined;
+}
+
+function getSampleIcon(
+  status: SampleStatus | 'Not Run',
+  options: { running: boolean; hasGeneratedAnswer: boolean; answerPending: boolean }
+): vscode.ThemeIcon | vscode.Uri {
+  if (options.running) {
+    return new vscode.ThemeIcon('sync~spin');
   }
+  if (options.hasGeneratedAnswer) {
+    return new vscode.ThemeIcon('diff');
+  }
+  if (options.answerPending) {
+    return new vscode.ThemeIcon('warning');
+  }
+  const iconName = verdictIconName(status);
+  if (iconName) {
+    return vscode.Uri.file(path.join(__dirname, '..', 'resources', 'icons', 'verdict', `${iconName}.svg`));
+  }
+  return status === 'Missing'
+    ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
+    : new vscode.ThemeIcon(statusIcon(status));
 }
 
 function getRuntimeExplanation(report: SampleReport) {
