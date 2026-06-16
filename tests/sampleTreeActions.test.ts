@@ -392,9 +392,9 @@ describe('sample tree add entry', () => {
     provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
     const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
 
-    expect(iconFileName(passedItem)).toBe('ac.svg');
+    expect(verdictIconFileNames(passedItem)).toEqual({ light: 'ac.svg', dark: 'ac.svg' });
     expect(iconId(runningItem)).toBe('sync~spin');
-    expect(iconFileName(restoredItem)).toBe('ac.svg');
+    expect(verdictIconFileNames(restoredItem)).toEqual({ light: 'ac.svg', dark: 'ac.svg' });
   });
 
   it('shows AC, WA, and MLE verdict SVG icons in the sample icon slot', async () => {
@@ -419,7 +419,16 @@ describe('sample tree add entry', () => {
 
     const items = (await getSampleNodes(provider)).map((node) => provider.getTreeItem(node));
 
-    expect(items.map(iconFileName)).toEqual(['ac.svg', 'wa.svg', 'mle.svg']);
+    expect(items.map(verdictIconFileNames)).toEqual([
+      { light: 'ac.svg', dark: 'ac.svg' },
+      { light: 'wa.svg', dark: 'wa.svg' },
+      { light: 'mle.svg', dark: 'mle.svg' }
+    ]);
+    expect(items.map(verdictIconDirs)).toEqual([
+      { light: 'light', dark: 'dark' },
+      { light: 'light', dark: 'dark' },
+      { light: 'light', dark: 'dark' }
+    ]);
     expect(items.map((item) => item.description)).toEqual(['1ms  33/33', '1ms  0/33', '1ms  0/34']);
   });
 
@@ -445,7 +454,7 @@ describe('sample tree add entry', () => {
     expect(runningItem.description).toBe('RUNNING  0/100');
     expect(iconId(runningItem)).toBe('sync~spin');
     expect(restoredItem.description).toBe('1ms  0/100');
-    expect(iconFileName(restoredItem)).toBe('wa.svg');
+    expect(verdictIconFileNames(restoredItem)).toEqual({ light: 'wa.svg', dark: 'wa.svg' });
   });
 
   it('maps all sample statuses to explicit verdict acronyms', () => {
@@ -531,9 +540,20 @@ function iconId(item: vscode.TreeItem): string | undefined {
   return (item.iconPath as { id?: string } | undefined)?.id;
 }
 
-function iconFileName(item: vscode.TreeItem): string | undefined {
-  const fsPath = (item.iconPath as { fsPath?: string } | undefined)?.fsPath;
-  return fsPath ? path.basename(fsPath) : undefined;
+function verdictIconFileNames(item: vscode.TreeItem): { light?: string; dark?: string } {
+  const iconPath = item.iconPath as { light?: { fsPath?: string }; dark?: { fsPath?: string } } | undefined;
+  return {
+    light: iconPath?.light?.fsPath ? path.basename(iconPath.light.fsPath) : undefined,
+    dark: iconPath?.dark?.fsPath ? path.basename(iconPath.dark.fsPath) : undefined
+  };
+}
+
+function verdictIconDirs(item: vscode.TreeItem): { light?: string; dark?: string } {
+  const iconPath = item.iconPath as { light?: { fsPath?: string }; dark?: { fsPath?: string } } | undefined;
+  return {
+    light: iconPath?.light?.fsPath ? path.basename(path.dirname(iconPath.light.fsPath)) : undefined,
+    dark: iconPath?.dark?.fsPath ? path.basename(path.dirname(iconPath.dark.fsPath)) : undefined
+  };
 }
 
 function reportSample(sample: SampleConfig | undefined, status: SampleStatus) {

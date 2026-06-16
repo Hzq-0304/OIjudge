@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 修复深色主题下样例树 verdict 图标不可见的问题 / Fix verdict icons being unreadable in dark themes.
 - 修复批量测试时样例结果不会实时显示的问题 / Fix sample verdicts not updating during batch runs.
 - 样例树状态图标改为显示 AC、WA、MLE 等字母 verdict / Show verdict acronyms such as AC, WA, and MLE in sample tree status icons.
 - 测试报告使用 AC、WA、MLE 等英文缩写 / Fix judge report to use verdict acronyms such as AC, WA, and MLE.

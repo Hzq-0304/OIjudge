@@ -39,13 +39,14 @@ type NodeGroup =
   | 'setter'
   | 'actions'
   | 'sampleActions';
+type TreeIconPath = vscode.ThemeIcon | vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
 
 type TreeNode = {
   kind: NodeKind;
   label: string;
   description?: string;
   tooltip?: string;
-  icon?: vscode.ThemeIcon | vscode.Uri;
+  icon?: TreeIconPath;
   command?: vscode.Command;
   collapsibleState?: vscode.TreeItemCollapsibleState;
   group?: NodeGroup;
@@ -815,7 +816,7 @@ function joinDescriptionParts(...parts: Array<string | undefined>): string | und
 function getSampleIcon(
   status: SampleStatus | 'Not Run',
   options: { running: boolean; hasGeneratedAnswer: boolean; answerPending: boolean }
-): vscode.ThemeIcon | vscode.Uri {
+): TreeIconPath {
   if (options.running) {
     return new vscode.ThemeIcon('sync~spin');
   }
@@ -827,11 +828,19 @@ function getSampleIcon(
   }
   const iconName = verdictIconName(status);
   if (iconName) {
-    return vscode.Uri.file(path.join(__dirname, '..', 'resources', 'icons', 'verdict', `${iconName}.svg`));
+    return getVerdictIconPath(iconName);
   }
   return status === 'Missing'
     ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
     : new vscode.ThemeIcon(statusIcon(status));
+}
+
+function getVerdictIconPath(iconName: string): { light: vscode.Uri; dark: vscode.Uri } {
+  const basePath = path.join(__dirname, '..', 'resources', 'icons', 'verdict');
+  return {
+    light: vscode.Uri.file(path.join(basePath, 'light', `${iconName}.svg`)),
+    dark: vscode.Uri.file(path.join(basePath, 'dark', `${iconName}.svg`))
+  };
 }
 
 function getRuntimeExplanation(report: SampleReport) {
