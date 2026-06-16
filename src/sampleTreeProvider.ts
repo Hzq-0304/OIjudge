@@ -678,11 +678,13 @@ async function createSampleNodes(
       : scoreInfo
         ? `${scoreInfo.score} ${scoreInfo.manual ? t('score.manual') : t('score.auto')}`
         : undefined;
-    const baseDescription = hasGeneratedAnswer
-      ? t('setter.generatedOutput.pending')
-      : answerPending
-        ? t('setter.sample.answerMissing')
-        : formatSampleDescription(status, sampleReport, elapsed);
+    const baseDescription = running
+      ? 'RUNNING'
+      : hasGeneratedAnswer
+        ? t('setter.generatedOutput.pending')
+        : answerPending
+          ? t('setter.sample.answerMissing')
+          : formatSampleDescription(status, sampleReport, elapsed);
     const description = scoreText ? `${baseDescription}  ${scoreText}` : baseDescription;
     const sourceType = inferSampleSourceType(workspaceFolder, sample);
     const missingDetail = fileStatus.missingPaths.length > 0
@@ -803,13 +805,46 @@ function formatSampleDescription(
 ): string {
   const explanation = report?.status === 'RE' ? getRuntimeExplanation(report) : undefined;
   if (status === 'Scored' && report?.checker?.scoreText !== undefined) {
-    return report.checker.scoreText;
+    return `SCORED ${report.checker.scoreText}`;
   }
   if (status === 'Checker Error' && report?.checker?.errorName) {
-    return `${t('checkerError')}: ${report.checker.errorName}`;
+    return `CHECKER ${report.checker.errorName}`;
   }
-  const statusText = explanation ? `RE: ${explanation.englishName}` : statusLabel(status);
+  const statusText = explanation ? `RE: ${explanation.englishName}` : formatVerdictText(status);
   return elapsed ? `${statusText}  ${elapsed}` : statusText;
+}
+
+export function formatVerdictText(status: SampleStatus | 'Not Run'): string {
+  switch (status) {
+    case 'AC':
+      return 'AC';
+    case 'WA':
+      return 'WA';
+    case 'TLE':
+      return 'TLE';
+    case 'OLE':
+      return 'OLE';
+    case 'MLE':
+      return 'MLE';
+    case 'RE':
+      return 'RE';
+    case 'CE':
+      return 'CE';
+    case 'ERR':
+      return 'UNKNOWN';
+    case 'Checker Error':
+      return 'CHECKER';
+    case 'Scored':
+      return 'SCORED';
+    case 'Skipped':
+      return 'SKIP';
+    case 'Missing':
+      return 'MISSING';
+    case 'Output Missing':
+      return 'OUTPUT';
+    case 'Not Run':
+      return '';
+  }
 }
 
 function getRuntimeExplanation(report: SampleReport) {
@@ -1157,39 +1192,6 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
       return 'warning';
     case 'Not Run':
       return 'circle-outline';
-  }
-}
-
-function statusLabel(status: SampleStatus | 'Not Run'): string {
-  switch (status) {
-    case 'AC':
-      return t('statusAC');
-    case 'WA':
-      return t('statusWA');
-    case 'TLE':
-      return t('statusTLE');
-    case 'OLE':
-      return t('statusOLE');
-    case 'RE':
-      return t('statusRE');
-    case 'CE':
-      return t('statusCE');
-    case 'Scored':
-      return t('statusScored');
-    case 'Checker Error':
-      return t('checkerError');
-    case 'MLE':
-      return t('statusMLE');
-    case 'Skipped':
-      return t('statusSkipped');
-    case 'Missing':
-      return t('statusMissing');
-    case 'Output Missing':
-      return t('statusOutputMissing');
-    case 'ERR':
-      return t('statusERR');
-    case 'Not Run':
-      return t('notRun');
   }
 }
 

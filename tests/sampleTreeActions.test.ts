@@ -15,7 +15,8 @@ import {
   setProblemSubtaskResult,
   writeGeneratedAnswerForSample
 } from '../src/problems';
-import { SampleTreeProvider, withSamplesRunning } from '../src/sampleTreeProvider';
+import { formatVerdictText, SampleTreeProvider, withSamplesRunning } from '../src/sampleTreeProvider';
+import { SampleConfig, SampleStatus } from '../src/types';
 
 const workspaces: string[] = [];
 const vscodeMock = vscode as unknown as {
@@ -395,6 +396,90 @@ describe('sample tree add entry', () => {
     expect(iconId(restoredItem)).toBe('pass-filled');
   });
 
+  it('shows explicit AC, WA, and MLE verdict text in sample descriptions', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    const second = await addProblemSample(workspaceFolder, problem.id, '2\n', '2\n', { decodeEscapes: false });
+    const third = await addProblemSample(workspaceFolder, problem.id, '3\n', '3\n', { decodeEscapes: false });
+    await saveProblemReport(workspaceFolder, problem.id, {
+      source: 'main.cpp',
+      generatedAt: '2026-06-16T00:00:00.000Z',
+      limits: { timeMs: 1000, memoryMb: 256 },
+      summary: { accepted: 1, total: 3 },
+      samples: [
+        reportSample(first, 'AC'),
+        reportSample(second, 'WA'),
+        reportSample(third, 'MLE')
+      ],
+      results: []
+    });
+    const provider = new SampleTreeProvider();
+
+    const descriptions = (await getSampleNodes(provider)).map((node) => provider.getTreeItem(node).description);
+
+    expect(descriptions).toEqual(['AC  1ms  33/33', 'WA  1ms  0/33', 'MLE  1ms  0/34']);
+  });
+
+  it('shows RUNNING instead of stale verdict text while a sample is running', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    await saveProblemReport(workspaceFolder, problem.id, {
+      source: 'main.cpp',
+      generatedAt: '2026-06-16T00:00:00.000Z',
+      limits: { timeMs: 1000, memoryMb: 256 },
+      summary: { accepted: 0, total: 1 },
+      samples: [reportSample(sample, 'WA')],
+      results: []
+    });
+    const provider = new SampleTreeProvider();
+
+    provider.markSamplesRunning(problem.id, [sample?.id ?? '']);
+    const runningItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
+    provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
+    const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
+
+    expect(runningItem.description).toBe('RUNNING  0/100');
+    expect(iconId(runningItem)).toBe('sync~spin');
+    expect(restoredItem.description).toBe('WA  1ms  0/100');
+    expect(iconId(restoredItem)).toBe('error');
+  });
+
+  it('maps all sample statuses to explicit verdict text', () => {
+    expect([
+      'AC',
+      'WA',
+      'TLE',
+      'OLE',
+      'MLE',
+      'RE',
+      'CE',
+      'ERR',
+      'Checker Error',
+      'Scored',
+      'Skipped',
+      'Missing',
+      'Output Missing',
+      'Not Run'
+    ].map((status) => formatVerdictText(status as Parameters<typeof formatVerdictText>[0]))).toEqual([
+      'AC',
+      'WA',
+      'TLE',
+      'OLE',
+      'MLE',
+      'RE',
+      'CE',
+      'UNKNOWN',
+      'CHECKER',
+      'SCORED',
+      'SKIP',
+      'MISSING',
+      'OUTPUT',
+      ''
+    ]);
+  });
+
   it('withSamplesRunning marks all samples during a run and clears them afterward', async () => {
     const provider = new SampleTreeProvider();
     const seen: boolean[] = [];
@@ -441,4 +526,18 @@ async function getSampleNodes(provider: SampleTreeProvider, problemIndex = 0): P
 
 function iconId(item: vscode.TreeItem): string | undefined {
   return (item.iconPath as { id?: string } | undefined)?.id;
+}
+
+function reportSample(sample: SampleConfig | undefined, status: SampleStatus) {
+  return {
+    id: sample?.id ?? '',
+    index: sample?.index ?? 1,
+    name: sample?.name ?? 'Sample',
+    input: sample?.input ?? 'sample.in',
+    answer: sample?.answer ?? 'sample.out',
+    actualOutput: sample?.actualOutput ?? 'useroutput.txt',
+    status,
+    timeMs: 1,
+    elapsedMs: 1
+  };
 }

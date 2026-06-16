@@ -25,7 +25,7 @@ import {
   resolveSamplePath
 } from './sampleFiles';
 import { isSetterModeEnabled } from './setterMode';
-import { CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
+import { CheckerConfig, CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
 type RunClassification = 'OLE' | 'TLE' | 'MLE' | 'RE' | undefined;
@@ -41,6 +41,10 @@ type CheckerContext = {
   testlibPath?: string;
   timeLimitMs: number;
   plainOptions?: Partial<PlainCheckerParseOptions>;
+};
+
+export type RunAllSamplesOptions = {
+  onSampleComplete?: (report: JudgeReport, sample: SampleReport) => void | Promise<void>;
 };
 
 type SampleIoContext = {
@@ -63,7 +67,8 @@ export async function runAllSamples(
   workspaceFolder: vscode.WorkspaceFolder,
   sourcePath: string,
   config: OITestConfig,
-  output: vscode.OutputChannel
+  output: vscode.OutputChannel,
+  options: RunAllSamplesOptions = {}
 ): Promise<JudgeReport | undefined> {
   const totalStartedAt = process.hrtime.bigint();
   output.clear();
@@ -119,7 +124,7 @@ export async function runAllSamples(
 
   if (activeChecker && checkerCompile && !checkerCompile.ok) {
     for (const sample of config.samples) {
-      samples.push(createCheckerErrorSampleReport(
+      const sampleReport = createCheckerErrorSampleReport(
         workspaceFolder,
         sourcePath,
         compile.executablePath,
@@ -129,11 +134,13 @@ export async function runAllSamples(
         checkerCompile,
         getIoMode(config),
         getFileIoConfig(config)
-      ));
+      );
+      samples.push(sampleReport);
+      await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
     }
   } else {
     for (const sample of config.samples) {
-      samples.push(await judgeSample(
+      const sampleReport = await judgeSample(
         workspaceFolder,
         sourcePath,
         compile.executablePath,
@@ -149,10 +156,62 @@ export async function runAllSamples(
         compile.compilerCommand,
         checkerContext,
         Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id])
-      ));
+      );
+      samples.push(sampleReport);
+      await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
     }
   }
 
+  const report = createJudgeReport(sourcePath, config, compile, totalStartedAt, activeChecker, samples);
+
+  await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
+  await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+
+  output.appendLine('');
+  output.appendLine(`Summary: ${report.summary.accepted}/${report.samples.length} accepted`);
+  output.appendLine(`Score: ${report.score?.earned ?? 0}/${report.score?.total ?? 0}`);
+  output.appendLine(`Total judge time: ${formatMs(report.totalTimeMs ?? 0)} ms`);
+  output.appendLine(`Report: ${problemId ? getOiJudgeDataRelPath('problems', problemId, 'outputs', 'report.json') : getOiJudgeDataRelPath('outputs', 'report.json')}`);
+  if (samples.some((sample) => sample.status === 'Missing')) {
+    vscode.window.showWarningMessage(t('someSamplesMissing'));
+  }
+  if (process.platform === 'win32') {
+    output.appendLine(
+      'Note: On Windows, sample time includes process startup and pipe I/O overhead, so very small programs may still show tens of milliseconds.'
+    );
+    output.appendLine(
+      '说明：在 Windows 上，样例运行时间包含进程启动和管道 I/O 开销，因此极小程序也可能显示几十毫秒。'
+    );
+  }
+
+  return report;
+}
+
+async function notifySampleComplete(
+  options: RunAllSamplesOptions,
+  sourcePath: string,
+  config: OITestConfig,
+  compile: CompileResult,
+  totalStartedAt: bigint,
+  activeChecker: CheckerConfig | undefined,
+  samples: SampleReport[],
+  sample: SampleReport
+): Promise<void> {
+  if (!options.onSampleComplete) {
+    return;
+  }
+  await options.onSampleComplete(createJudgeReport(sourcePath, config, compile, totalStartedAt, activeChecker, samples), sample);
+}
+
+function createJudgeReport(
+  sourcePath: string,
+  config: OITestConfig,
+  compile: CompileResult,
+  totalStartedAt: bigint,
+  activeChecker: CheckerConfig | undefined,
+  sampleReports: SampleReport[]
+): JudgeReport {
+  const samples = sampleReports.map((sample) => ({ ...sample }));
   const accepted = samples.filter((sample) => sample.status === 'AC').length;
   const wrongAnswer = samples.filter((sample) => sample.status === 'WA').length;
   const scored = samples.filter((sample) => sample.status === 'Scored').length;
@@ -165,8 +224,8 @@ export async function runAllSamples(
     sample.score = earned;
     sample.scoreTotal = total;
   }
-  const totalTimeMs = elapsedMs(totalStartedAt);
-  const report: JudgeReport = {
+
+  return {
     version: 1,
     generatedAt: new Date().toISOString(),
     source: sourcePath,
@@ -176,8 +235,8 @@ export async function runAllSamples(
       timeMs: compile.timeMs,
       stack: compile.stack
     },
-    totalTimeMs,
-    judgeMode,
+    totalTimeMs: elapsedMs(totalStartedAt),
+    judgeMode: getJudgeMode(config),
     checkerType: activeChecker?.type === 'testlib' || activeChecker?.type === 'plain' ? activeChecker.type : undefined,
     ioMode: getIoMode(config),
     fileIo: getIoMode(config) === 'fileio' ? getFileIoConfig(config) : undefined,
@@ -198,28 +257,6 @@ export async function runAllSamples(
     results: samples,
     samples
   };
-
-  await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
-  await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-
-  output.appendLine('');
-  output.appendLine(`Summary: ${accepted}/${samples.length} accepted`);
-  output.appendLine(`Score: ${score.earnedScore}/${score.totalScore}`);
-  output.appendLine(`Total judge time: ${formatMs(totalTimeMs)} ms`);
-  output.appendLine(`Report: ${problemId ? getOiJudgeDataRelPath('problems', problemId, 'outputs', 'report.json') : getOiJudgeDataRelPath('outputs', 'report.json')}`);
-  if (samples.some((sample) => sample.status === 'Missing')) {
-    vscode.window.showWarningMessage(t('someSamplesMissing'));
-  }
-  if (process.platform === 'win32') {
-    output.appendLine(
-      'Note: On Windows, sample time includes process startup and pipe I/O overhead, so very small programs may still show tens of milliseconds.'
-    );
-    output.appendLine(
-      '说明：在 Windows 上，样例运行时间包含进程启动和管道 I/O 开销，因此极小程序也可能显示几十毫秒。'
-    );
-  }
-
-  return report;
 }
 
 function createCompileErrorJudgeReport(

@@ -1215,7 +1215,13 @@ async function runProblemSamplesCommand(
 
   const runningSampleIds = problem.samples.map((sample) => sample.id);
   await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
-    const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output);
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output, {
+      onSampleComplete: async (partialReport, sampleReport) => {
+        await saveProblemReport(context.workspaceFolder, problem.id, partialReport);
+        sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
+        sampleTreeProvider.refresh();
+      }
+    });
     if (report) {
       await saveProblemReport(context.workspaceFolder, problem.id, report);
       await openProblemReport(extensionContext, problem.id);
@@ -1261,7 +1267,13 @@ async function runProblemSampleCommand(
   await document?.save();
 
   await withSamplesRunning(sampleTreeProvider, problem.id, [sample.id], async () => {
-    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples: [sample] }, output);
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples: [sample] }, output, {
+      onSampleComplete: async (partialReport, sampleReport) => {
+        await saveMergedProblemSampleReport(context.workspaceFolder, problem.id, partialReport);
+        sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
+        sampleTreeProvider.refresh();
+      }
+    });
     if (report) {
       await saveMergedProblemSampleReport(context.workspaceFolder, problem.id, report);
     }
@@ -2343,7 +2355,13 @@ async function runSubtaskCommand(
   output.appendLine(`Subtask: ${context.subtask.name}`);
   const runningSampleIds = samples.map((sample) => sample.id);
   await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
-    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples }, output);
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples }, output, {
+      onSampleComplete: async (partialReport, sampleReport) => {
+        await saveProblemReport(context.workspaceFolder, problem.id, partialReport);
+        sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
+        sampleTreeProvider.refresh();
+      }
+    });
     const passed = report?.summary.accepted ?? 0;
     const total = report?.summary.total ?? samples.length;
     await setProblemSubtaskResult(context.workspaceFolder, problem.id, context.subtask.id, {
