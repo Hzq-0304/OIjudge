@@ -58,6 +58,7 @@
     "onCommand:oijudger.batchAddSamples",
     "onCommand:oijudger.runProblemSamples",
     "onCommand:oijudger.runSamplesWithProgram",
+    "onCommand:oijudger.runProblemSample",
     "onCommand:oijudger.setProblemTimeLimit",
     "onCommand:oijudger.setProblemMemoryLimit",
     "onCommand:oijudger.setProblemStackSize",
@@ -320,6 +321,11 @@
       {
         "command": "oijudger.runSamplesWithProgram",
         "title": "OI Judge: 选择程序评测/Run With Program",
+        "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.runProblemSample",
+        "title": "OI Judge: 运行此样例/Run This Sample",
         "icon": "$(run)"
       },
       {

@@ -5,15 +5,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import {
   addEmptyProblemSample,
+  addProblemSample,
   addProblemGeneratorInputs,
   addProblemInputSample,
   createProblem,
   createProblemSubtask,
   moveProblemSampleToSubtask,
+  saveProblemReport,
   setProblemSubtaskResult,
   writeGeneratedAnswerForSample
 } from '../src/problems';
-import { SampleTreeProvider } from '../src/sampleTreeProvider';
+import { SampleTreeProvider, withSamplesRunning } from '../src/sampleTreeProvider';
 
 const workspaces: string[] = [];
 const vscodeMock = vscode as unknown as {
@@ -147,6 +149,7 @@ describe('sample tree add entry', () => {
     const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
+    expect(sampleCommands).toContain('oijudger.runProblemSample');
     expect(sampleCommands).toContain('oijudger.setSampleScore');
     expect(sampleCommands).toContain('oijudger.clearSampleScore');
   });
@@ -303,6 +306,119 @@ describe('sample tree add entry', () => {
     expect(unassignedSample?.sampleId).toBe(first?.index);
     expect(subtaskSamples.map((node) => node.sampleId)).toEqual([second?.index]);
   });
+
+  it('shows and clears a spinner icon for a single running sample', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addEmptyProblemSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    const initialNode = (await getSampleNodes(provider))[0];
+    const initialItem = provider.getTreeItem(initialNode);
+    provider.markSamplesRunning(problem.id, [sample?.id ?? '']);
+    const runningNode = (await getSampleNodes(provider))[0];
+    const runningItem = provider.getTreeItem(runningNode);
+    provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
+    const clearedNode = (await getSampleNodes(provider))[0];
+    const clearedItem = provider.getTreeItem(clearedNode);
+
+    expect(provider.isSampleRunning(problem.id, sample?.id ?? '')).toBe(false);
+    expect(iconId(initialItem)).toBe('circle-outline');
+    expect(iconId(runningItem)).toBe('sync~spin');
+    expect(iconId(clearedItem)).toBe('circle-outline');
+    expect(clearedItem.contextValue).toBe(initialItem.contextValue);
+    expect(clearedItem.command).toEqual(initialItem.command);
+    expect(clearedItem.tooltip).toEqual(initialItem.tooltip);
+  });
+
+  it('shows spinner icons for multiple running samples', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addEmptyProblemSample(workspaceFolder, problem.id);
+    const second = await addEmptyProblemSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    provider.markSamplesRunning(problem.id, [first?.id ?? '', second?.id ?? '']);
+    const sampleItems = await Promise.all((await getSampleNodes(provider)).map((node) => provider.getTreeItem(node)));
+
+    expect(sampleItems.map(iconId)).toEqual(['sync~spin', 'sync~spin']);
+  });
+
+  it('keeps running keys scoped by problem id', async () => {
+    const workspaceFolder = await createWorkspace();
+    const firstProblem = await createProblem(workspaceFolder, 'A');
+    const secondProblem = await createProblem(workspaceFolder, 'B');
+    const firstSample = await addEmptyProblemSample(workspaceFolder, firstProblem.id);
+    await addEmptyProblemSample(workspaceFolder, secondProblem.id);
+    const provider = new SampleTreeProvider();
+
+    provider.markSamplesRunning(firstProblem.id, [firstSample?.id ?? '']);
+    const firstItem = provider.getTreeItem((await getSampleNodes(provider, 0))[0]);
+    const secondItem = provider.getTreeItem((await getSampleNodes(provider, 1))[0]);
+
+    expect(iconId(firstItem)).toBe('sync~spin');
+    expect(iconId(secondItem)).toBe('circle-outline');
+  });
+
+  it('gives running icons priority over verdict icons and restores verdict icons afterward', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
+    await saveProblemReport(workspaceFolder, problem.id, {
+      source: 'main.cpp',
+      generatedAt: '2026-06-16T00:00:00.000Z',
+      limits: { timeMs: 1000, memoryMb: 256 },
+      summary: { accepted: 1, total: 1 },
+      samples: [{
+        id: sample?.id,
+        index: sample?.index ?? 1,
+        name: sample?.name ?? 'Sample 1',
+        input: sample?.input ?? 'sample-1.in',
+        answer: sample?.answer ?? 'sample-1.out',
+        actualOutput: sample?.actualOutput ?? 'useroutput.txt',
+        status: 'AC',
+        timeMs: 1,
+        elapsedMs: 1
+      }],
+      results: []
+    });
+    const provider = new SampleTreeProvider();
+
+    const passedItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
+    provider.markSamplesRunning(problem.id, [sample?.id ?? '']);
+    const runningItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
+    provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
+    const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
+
+    expect(iconId(passedItem)).toBe('pass-filled');
+    expect(iconId(runningItem)).toBe('sync~spin');
+    expect(iconId(restoredItem)).toBe('pass-filled');
+  });
+
+  it('withSamplesRunning marks all samples during a run and clears them afterward', async () => {
+    const provider = new SampleTreeProvider();
+    const seen: boolean[] = [];
+
+    await withSamplesRunning(provider, 'A', ['sample-1', 'sample-2'], async () => {
+      seen.push(provider.isSampleRunning('A', 'sample-1'));
+      seen.push(provider.isSampleRunning('A', 'sample-2'));
+    });
+
+    expect(seen).toEqual([true, true]);
+    expect(provider.isSampleRunning('A', 'sample-1')).toBe(false);
+    expect(provider.isSampleRunning('A', 'sample-2')).toBe(false);
+  });
+
+  it('withSamplesRunning clears running samples when a run throws', async () => {
+    const provider = new SampleTreeProvider();
+
+    await expect(withSamplesRunning(provider, 'A', ['sample-1'], async () => {
+      expect(provider.isSampleRunning('A', 'sample-1')).toBe(true);
+      throw new Error('compile failed');
+    })).rejects.toThrow('compile failed');
+
+    expect(provider.isSampleRunning('A', 'sample-1')).toBe(false);
+  });
 });
 
 async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
@@ -313,4 +429,16 @@ async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
   } as vscode.WorkspaceFolder;
   (vscode.workspace as { workspaceFolders?: vscode.WorkspaceFolder[] }).workspaceFolders = [workspaceFolder];
   return workspaceFolder;
+}
+
+async function getSampleNodes(provider: SampleTreeProvider, problemIndex = 0): Promise<any[]> {
+  const rootNodes = await provider.getChildren();
+  const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+  const problemNode = (await provider.getChildren(problemsRoot))[problemIndex];
+  const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
+  return (await provider.getChildren(samplesGroup)).filter((node) => node.kind === 'sample');
+}
+
+function iconId(item: vscode.TreeItem): string | undefined {
+  return (item.iconPath as { id?: string } | undefined)?.id;
 }

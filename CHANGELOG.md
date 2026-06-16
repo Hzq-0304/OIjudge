@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 运行样例时在样例树显示运行中图标 / Show running indicators in the sample tree while tests are running.
 - 补全导出测试点的移动模式 / Complete move mode for testcase export.
 
 ## 5.1.0 - 2026-06-16

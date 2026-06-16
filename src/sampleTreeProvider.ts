@@ -65,6 +65,7 @@ const SAMPLE_TREE_MIME = 'application/vnd.code.tree.oijudger.samplesView';
 
 export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined | null | void>();
+  private readonly runningSampleKeys = new Set<string>();
 
   readonly onDidChangeTreeData = this.emitter.event;
   readonly dragMimeTypes = [SAMPLE_TREE_MIME];
@@ -72,6 +73,26 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
 
   refresh(): void {
     this.emitter.fire();
+  }
+
+  markSamplesRunning(problemId: string, sampleIds: string[]): void {
+    for (const sampleId of sampleIds) {
+      this.runningSampleKeys.add(createRunningSampleKey(problemId, sampleId));
+    }
+  }
+
+  clearSamplesRunning(problemId: string, sampleIds: string[]): void {
+    for (const sampleId of sampleIds) {
+      this.runningSampleKeys.delete(createRunningSampleKey(problemId, sampleId));
+    }
+  }
+
+  clearAllRunning(): void {
+    this.runningSampleKeys.clear();
+  }
+
+  isSampleRunning(problemId: string, sampleId: string): boolean {
+    return this.runningSampleKeys.has(createRunningSampleKey(problemId, sampleId));
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
@@ -125,11 +146,17 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
       case 'limits':
         return createLimitNodes(problem);
       case 'samples':
-        return createSampleContainerNodes(workspaceFolder, problem);
+        return createSampleContainerNodes(workspaceFolder, problem, (sampleId) => this.isSampleRunning(problem.id, sampleId));
       case 'generatorInputs':
         return createGlobalGeneratorInputNodes(workspaceFolder, problem);
       case 'subtask':
-        return createSampleNodes(workspaceFolder, problem, getSubtaskSamples(problem, element.subtaskId ?? ''));
+        return createSampleNodes(
+          workspaceFolder,
+          problem,
+          getSubtaskSamples(problem, element.subtaskId ?? ''),
+          {},
+          (sampleId) => this.isSampleRunning(problem.id, sampleId)
+        );
       case 'setter':
         return createSetterNodes(workspaceFolder, problem);
       case 'actions':
@@ -202,6 +229,26 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     }
     this.refresh();
   }
+}
+
+export async function withSamplesRunning<T>(
+  sampleTreeProvider: Pick<SampleTreeProvider, 'markSamplesRunning' | 'clearSamplesRunning' | 'refresh'>,
+  problemId: string,
+  sampleIds: string[],
+  run: () => Promise<T>
+): Promise<T> {
+  sampleTreeProvider.markSamplesRunning(problemId, sampleIds);
+  sampleTreeProvider.refresh();
+  try {
+    return await run();
+  } finally {
+    sampleTreeProvider.clearSamplesRunning(problemId, sampleIds);
+    sampleTreeProvider.refresh();
+  }
+}
+
+function createRunningSampleKey(problemId: string, sampleId: string): string {
+  return `${problemId}:${sampleId}`;
 }
 
 function createRootNodes(): TreeNode[] {
@@ -433,14 +480,16 @@ async function createProgramNodes(
 
 async function createSampleContainerNodes(
   workspaceFolder: vscode.WorkspaceFolder,
-  problem: ProblemConfig
+  problem: ProblemConfig,
+  isSampleRunning: (sampleId: string) => boolean
 ): Promise<TreeNode[]> {
   const globalInputNodes = isSetterModeEnabled() ? [createGlobalGeneratorInputsRootNode(problem)] : [];
   const unassignedSampleNodes = await createSampleNodes(
     workspaceFolder,
     problem,
     getUnassignedProblemSamples(problem),
-    { showEmpty: false }
+    { showEmpty: false },
+    isSampleRunning
   );
   const subtaskNodes = await Promise.all(
     (problem.subtasks ?? []).map((subtask) => createSubtaskNode(workspaceFolder, problem, subtask))
@@ -599,7 +648,8 @@ async function createSampleNodes(
   workspaceFolder: vscode.WorkspaceFolder,
   problem: ProblemConfig,
   samples: ProblemConfig['samples'],
-  options: { showEmpty?: boolean } = {}
+  options: { showEmpty?: boolean } = {},
+  isSampleRunning: (sampleId: string) => boolean = () => false
 ): Promise<TreeNode[]> {
   if (samples.length === 0) {
     return options.showEmpty === false ? [] : [createEmptySamplesNode()];
@@ -614,6 +664,7 @@ async function createSampleNodes(
     const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
     const generatedAnswer = await getSampleGeneratedAnswerStatus(workspaceFolder, problem, sample);
     const hasGeneratedAnswer = generatedAnswer.exists;
+    const running = isSampleRunning(sample.id);
     const answerPending = isSetterModeEnabled() && !fileStatus.inputMissing && fileStatus.answerMissing;
     const missing = fileStatus.inputMissing || (fileStatus.answerMissing && !answerPending);
     const status = missing ? 'Missing' : (sampleReport?.status ?? 'Not Run');
@@ -663,7 +714,9 @@ async function createSampleNodes(
         ...(sampleReport?.checker?.output ? [`${t('checkerOutput')}: ${sampleReport.checker.output}`] : []),
         ...createRuntimeTooltipLines(sampleReport)
       ].join('\n'),
-      icon: hasGeneratedAnswer
+      icon: running
+        ? new vscode.ThemeIcon('sync~spin')
+        : hasGeneratedAnswer
         ? new vscode.ThemeIcon('diff')
         : answerPending
         ? new vscode.ThemeIcon('warning')
@@ -782,6 +835,7 @@ function createSampleActionNodes(
   }
 
   const nodes = [
+    sampleActionNode(t('runSample'), 'oijudger.runProblemSample', 'run', problemId, sampleId),
     sampleActionNode(t('openSampleInput'), 'oijudger.openSampleInput', 'go-to-file', problemId, sampleId)
   ];
 

@@ -112,7 +112,7 @@ import {
   inferSampleSourceType,
   resolveSamplePath
 } from './sampleFiles';
-import { SampleTreeProvider } from './sampleTreeProvider';
+import { SampleTreeProvider, withSamplesRunning } from './sampleTreeProvider';
 import { calculateEffectiveSampleScores, getProblemTotalScore } from './scoring';
 import { isSetterModeEnabled, validateSetterSampleName } from './setterMode';
 import { importTestlibToManaged, resolveTestlibForChecker } from './testlibResolver';
@@ -144,7 +144,7 @@ import {
 } from './stressRecords';
 import { runProcess } from './runner';
 import { withCompilerPathEnv } from './compilerRuntime';
-import { CompileResult, FileIoConfig, IoMode, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
+import { CompileResult, FileIoConfig, IoMode, JudgeReport, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
 
 const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -497,6 +497,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.runSamplesWithProgram', async (problemArg?: unknown) => {
       await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true, context);
+    }),
+    vscode.commands.registerCommand('oijudger.runProblemSample', async (problemArg?: unknown, sampleArg?: unknown) => {
+      await runProblemSampleCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.setProblemTimeLimit', async (problemArg?: unknown) => {
       await setProblemLimitCommand(readProblemId(problemArg), 'timeMs', sampleTreeProvider);
@@ -1210,14 +1213,114 @@ async function runProblemSamplesCommand(
   const document = vscode.workspace.textDocuments.find((entry) => entry.uri.fsPath === sourcePath);
   await document?.save();
 
-  const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output);
-  if (report) {
-    await saveProblemReport(context.workspaceFolder, problem.id, report);
-    await openProblemReport(extensionContext, problem.id);
+  const runningSampleIds = problem.samples.map((sample) => sample.id);
+  await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output);
+    if (report) {
+      await saveProblemReport(context.workspaceFolder, problem.id, report);
+      await openProblemReport(extensionContext, problem.id);
+    }
+    activeProblemId = problem.id;
+    sampleTreeProvider.refresh();
+    await updateStatusBar(problem.id);
+  });
+}
+
+async function runProblemSampleCommand(
+  problemId: string | undefined,
+  sampleId: number | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getSampleContext(problemId, sampleId);
+  if (!context) {
+    return;
   }
-  activeProblemId = problem.id;
-  sampleTreeProvider.refresh();
-  await updateStatusBar(problem.id);
+
+  let problem = await ensureProblemCompiler(context.workspaceFolder, context.problem);
+  if (!problem) {
+    return;
+  }
+
+  const sourcePath = await resolveSourceForRun(context.workspaceFolder, problem);
+  if (!sourcePath) {
+    return;
+  }
+
+  if (!(await exists(sourcePath))) {
+    vscode.window.showErrorMessage(t('programMissing'));
+    return;
+  }
+
+  const sample = problem.samples.find((entry) => entry.id === context.sample.id);
+  if (!sample) {
+    vscode.window.showWarningMessage(t('sampleNotFound'));
+    return;
+  }
+
+  const document = vscode.workspace.textDocuments.find((entry) => entry.uri.fsPath === sourcePath);
+  await document?.save();
+
+  await withSamplesRunning(sampleTreeProvider, problem.id, [sample.id], async () => {
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples: [sample] }, output);
+    if (report) {
+      await saveMergedProblemSampleReport(context.workspaceFolder, problem.id, report);
+    }
+    activeProblemId = problem.id;
+    sampleTreeProvider.refresh();
+    await updateStatusBar(problem.id);
+  });
+}
+
+async function saveMergedProblemSampleReport(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  report: JudgeReport
+): Promise<void> {
+  const previous = await readProblemReport(workspaceFolder, problemId);
+  if (!previous) {
+    await saveProblemReport(workspaceFolder, problemId, report);
+    return;
+  }
+
+  const samples = mergeReportEntries(previous.samples ?? [], report.samples ?? []);
+  const results = mergeReportEntries(previous.results ?? previous.samples ?? [], report.results ?? report.samples ?? []);
+  await saveProblemReport(workspaceFolder, problemId, {
+    ...previous,
+    ...report,
+    samples,
+    results,
+    summary: {
+      accepted: samples.filter((sample) => sample.status === 'AC').length,
+      total: samples.length
+    }
+  });
+}
+
+async function readProblemReport(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<JudgeReport | undefined> {
+  const reportPath = getProblemReportPath(workspaceFolder, problemId);
+  if (!(await exists(reportPath))) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(await fs.readFile(reportPath, 'utf8')) as JudgeReport;
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeReportEntries<T extends { id?: string; index?: number; name?: string }>(previous: T[], next: T[]): T[] {
+  const byKey = new Map(previous.map((entry) => [getReportEntryKey(entry), entry]));
+  for (const entry of next) {
+    byKey.set(getReportEntryKey(entry), entry);
+  }
+  return [...byKey.values()].sort((left, right) => (left.index ?? Number.MAX_SAFE_INTEGER) - (right.index ?? Number.MAX_SAFE_INTEGER));
+}
+
+function getReportEntryKey(entry: { id?: string; index?: number; name?: string }): string {
+  return entry.id ?? (entry.index !== undefined ? `index:${entry.index}` : `name:${entry.name ?? ''}`);
 }
 
 async function createSubtaskCommand(
@@ -2238,26 +2341,29 @@ async function runSubtaskCommand(
 
   output.appendLine('');
   output.appendLine(`Subtask: ${context.subtask.name}`);
-  const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples }, output);
-  const passed = report?.summary.accepted ?? 0;
-  const total = report?.summary.total ?? samples.length;
-  await setProblemSubtaskResult(context.workspaceFolder, problem.id, context.subtask.id, {
-    status: total > 0 && passed === total ? 'passed' : 'failed',
-    passed,
-    total
-  });
-  if (report) {
-    await saveProblemReport(context.workspaceFolder, problem.id, report);
-  }
+  const runningSampleIds = samples.map((sample) => sample.id);
+  await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
+    const report = await runAllSamples(context.workspaceFolder, sourcePath, { ...problem, samples }, output);
+    const passed = report?.summary.accepted ?? 0;
+    const total = report?.summary.total ?? samples.length;
+    await setProblemSubtaskResult(context.workspaceFolder, problem.id, context.subtask.id, {
+      status: total > 0 && passed === total ? 'passed' : 'failed',
+      passed,
+      total
+    });
+    if (report) {
+      await saveProblemReport(context.workspaceFolder, problem.id, report);
+    }
 
-  activeProblemId = problem.id;
-  sampleTreeProvider.refresh();
-  await updateStatusBar(problem.id);
-  vscode.window.showInformationMessage(
-    passed === total
-      ? t('subtask.resultSummary', { passed, total })
-      : t('subtask.resultFailedSummary', { passed, total })
-  );
+    activeProblemId = problem.id;
+    sampleTreeProvider.refresh();
+    await updateStatusBar(problem.id);
+    vscode.window.showInformationMessage(
+      passed === total
+        ? t('subtask.resultSummary', { passed, total })
+        : t('subtask.resultFailedSummary', { passed, total })
+    );
+  });
 }
 
 async function generateSampleInputCommand(
