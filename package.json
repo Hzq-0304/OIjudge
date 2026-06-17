@@ -59,6 +59,7 @@
     "onCommand:oijudger.batchAddSamples",
     "onCommand:oijudger.runProblemSamples",
     "onCommand:oijudger.runSamplesWithProgram",
+    "onCommand:oijudger.testCurrentCode",
     "onCommand:oijudger.runProblemSample",
     "onCommand:oijudger.setProblemTimeLimit",
     "onCommand:oijudger.setProblemMemoryLimit",
@@ -328,6 +329,11 @@
         "command": "oijudger.runSamplesWithProgram",
         "title": "%commands.runSamplesWithProgram.title%",
         "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.testCurrentCode",
+        "title": "%commands.testCurrentCode.title%",
+        "icon": "$(play-circle)"
       },
       {
         "command": "oijudger.runProblemSample",
@@ -691,6 +697,14 @@
         }
       }
     },
+    "keybindings": [
+      {
+        "command": "oijudger.testCurrentCode",
+        "key": "ctrl+alt+shift+j",
+        "mac": "cmd+alt+shift+j",
+        "when": "editorTextFocus"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -699,24 +713,36 @@
           "group": "navigation@0"
         },
         {
-          "command": "oijudger.runSamplesWithProgram",
+          "command": "oijudger.testCurrentCode",
           "when": "view == oijudger.samplesView",
           "group": "navigation@1"
         },
         {
-          "command": "oijudger.addSampleFromSamplesGroup",
+          "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView",
           "group": "navigation@2"
         },
         {
-          "command": "oijudger.refreshView",
+          "command": "oijudger.addSampleFromSamplesGroup",
           "when": "view == oijudger.samplesView",
           "group": "navigation@3"
+        },
+        {
+          "command": "oijudger.refreshView",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@4"
         },
         {
           "command": "oijudger.refreshStressRecords",
           "when": "view == oijudger.stressRecordsView",
           "group": "navigation@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "oijudger.testCurrentCode",
+          "when": "resourceExtname == .cpp",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -919,6 +945,11 @@
           "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "3_run"
+        },
+        {
+          "command": "oijudger.testCurrentCode",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
+          "group": "3_run@1"
         },
         {
           "command": "oijudger.runProblemSamples",

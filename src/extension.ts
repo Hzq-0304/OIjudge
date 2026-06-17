@@ -149,6 +149,8 @@ import { CompileResult, FileIoConfig, IoMode, JudgeMode, JudgeReport, PlainCheck
 const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 let activeProblemId: string | undefined;
+let recentEditorFile: RecentEditorFile | undefined;
+let problemSamplesRunInProgress = false;
 
 type AddSampleMode = 'paste' | 'files';
 type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
@@ -174,6 +176,95 @@ const MAX_GENERATED_SAMPLE_INPUT_COUNT = 100;
 type AutoStdOutputContext =
   | { enabled: false; reason?: string }
   | { enabled: true; std: StdAnswerGenerationContext };
+export type RecentEditorFile = {
+  uri: vscode.Uri;
+  fsPath: string;
+  timestamp: number;
+};
+export type CurrentCodeDocumentResolution =
+  | { ok: true; document: vscode.TextDocument }
+  | { ok: false; reason: 'noEditor' | 'notLocal' | 'notOpen' | 'notCpp' };
+type RunProblemSamplesCommandOptions = {
+  sourcePathOverride?: string;
+  skipOpenDocumentSave?: boolean;
+};
+
+export function isStrictCppFilePath(filePath: string): boolean {
+  return path.extname(filePath).toLowerCase() === '.cpp';
+}
+
+export function createRecentEditorFileFromDocument(
+  document: Pick<vscode.TextDocument, 'uri'> | undefined,
+  timestamp = Date.now()
+): RecentEditorFile | undefined {
+  if (!document || document.uri.scheme !== 'file') {
+    return undefined;
+  }
+  return {
+    uri: document.uri,
+    fsPath: document.uri.fsPath,
+    timestamp
+  };
+}
+
+export function resolveCurrentCodeDocument(
+  activeEditor: Pick<vscode.TextEditor, 'document'> | undefined,
+  recentFile: RecentEditorFile | undefined,
+  openDocuments: readonly vscode.TextDocument[]
+): CurrentCodeDocumentResolution {
+  const activeDocument = activeEditor?.document;
+  const candidate = activeDocument
+    ? { uri: activeDocument.uri, fsPath: activeDocument.uri.fsPath }
+    : recentFile;
+  if (!candidate) {
+    return { ok: false, reason: 'noEditor' };
+  }
+  if (candidate.uri.scheme !== 'file') {
+    return { ok: false, reason: 'notLocal' };
+  }
+
+  const document = openDocuments.find((entry) =>
+    entry.uri.scheme === 'file' && isSameFsPath(entry.uri.fsPath, candidate.fsPath)
+  );
+  if (!document) {
+    return { ok: false, reason: 'notOpen' };
+  }
+  if (!isStrictCppFilePath(document.uri.fsPath)) {
+    return { ok: false, reason: 'notCpp' };
+  }
+  return { ok: true, document };
+}
+
+function isSameFsPath(left: string, right: string): boolean {
+  const leftPath = path.normalize(left);
+  const rightPath = path.normalize(right);
+  return process.platform === 'win32'
+    ? leftPath.toLowerCase() === rightPath.toLowerCase()
+    : leftPath === rightPath;
+}
+
+function rememberEditorFile(editor: vscode.TextEditor | undefined): void {
+  const file = createRecentEditorFileFromDocument(editor?.document);
+  if (file) {
+    recentEditorFile = file;
+  }
+}
+
+function getCurrentCodeResolutionMessageKey(
+  reason: Exclude<CurrentCodeDocumentResolution, { ok: true }>['reason']
+): Parameters<typeof t>[0] {
+  switch (reason) {
+    case 'notLocal':
+      return 'testCurrentCode.notLocal';
+    case 'notOpen':
+      return 'testCurrentCode.notOpen';
+    case 'notCpp':
+      return 'testCurrentCode.notCpp';
+    case 'noEditor':
+    default:
+      return 'testCurrentCode.noEditor';
+  }
+}
 
 export function createWorkspaceManagementItems(): WorkspaceManagementItem[] {
   return [
@@ -539,6 +630,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.runSamplesWithProgram', async (problemArg?: unknown) => {
       await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true, context);
     }),
+    vscode.commands.registerCommand('oijudger.testCurrentCode', async () => {
+      await testCurrentCodeCommand(sampleTreeProvider, context);
+    }),
     vscode.commands.registerCommand('oijudger.runProblemSample', async (problemArg?: unknown, sampleArg?: unknown) => {
       await runProblemSampleCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
     }),
@@ -736,8 +830,13 @@ export function activate(context: vscode.ExtensionContext): void {
     output
   );
 
+  rememberEditorFile(vscode.window.activeTextEditor);
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => sampleTreeProvider.refresh()),
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      rememberEditorFile(editor);
+      sampleTreeProvider.refresh();
+    }),
+    vscode.window.onDidChangeTextEditorSelection((event) => rememberEditorFile(event.textEditor)),
     vscode.workspace.onDidSaveTextDocument((document) => {
       if (
         document.uri.fsPath.endsWith('config.json') ||
@@ -1239,54 +1338,111 @@ async function runProblemSamplesCommand(
   problemId: string | undefined,
   sampleTreeProvider: SampleTreeProvider,
   forceProgramPicker: boolean,
+  extensionContext: vscode.ExtensionContext,
+  options: RunProblemSamplesCommandOptions = {}
+): Promise<void> {
+  if (problemSamplesRunInProgress) {
+    vscode.window.showErrorMessage(t('judgeAlreadyRunning'));
+    return;
+  }
+
+  problemSamplesRunInProgress = true;
+  try {
+    const context = await getProblemContext(problemId, true);
+    if (!context) {
+      return;
+    }
+
+    let problem = await ensureProblemCompiler(context.workspaceFolder, context.problem);
+    if (!problem) {
+      return;
+    }
+
+    if (problem.samples.length === 0) {
+      vscode.window.showWarningMessage(t('noSamples'));
+      return;
+    }
+
+    const sourcePath = options.sourcePathOverride
+      ?? (forceProgramPicker
+        ? await pickProgramForRun(context.workspaceFolder, problem, true)
+        : await resolveSourceForRun(context.workspaceFolder, problem));
+    if (!sourcePath) {
+      return;
+    }
+
+    if (!(await exists(sourcePath))) {
+      vscode.window.showErrorMessage(t('programMissing'));
+      return;
+    }
+
+    if (!options.skipOpenDocumentSave) {
+      const document = vscode.workspace.textDocuments.find((entry) => isSameFsPath(entry.uri.fsPath, sourcePath));
+      const saved = await document?.save();
+      if (saved === false) {
+        vscode.window.showErrorMessage(t('testCurrentCode.saveFailed'));
+        return;
+      }
+    }
+
+    const runningSampleIds = problem.samples.map((sample) => sample.id);
+    await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
+      const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output, {
+        onSampleComplete: async (partialReport, sampleReport) => {
+          await saveProblemReport(context.workspaceFolder, problem.id, partialReport);
+          sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
+          sampleTreeProvider.refresh();
+        }
+      });
+      if (report) {
+        await saveProblemReport(context.workspaceFolder, problem.id, report);
+        await openProblemReport(extensionContext, problem.id);
+      }
+      activeProblemId = problem.id;
+      sampleTreeProvider.refresh();
+      await updateStatusBar(problem.id);
+    });
+  } finally {
+    problemSamplesRunInProgress = false;
+  }
+}
+
+async function testCurrentCodeCommand(
+  sampleTreeProvider: SampleTreeProvider,
   extensionContext: vscode.ExtensionContext
 ): Promise<void> {
-  const context = await getProblemContext(problemId, true);
-  if (!context) {
+  if (problemSamplesRunInProgress) {
+    vscode.window.showErrorMessage(t('judgeAlreadyRunning'));
     return;
   }
 
-  let problem = await ensureProblemCompiler(context.workspaceFolder, context.problem);
-  if (!problem) {
+  const resolution = resolveCurrentCodeDocument(
+    vscode.window.activeTextEditor,
+    recentEditorFile,
+    vscode.workspace.textDocuments
+  );
+  if (!resolution.ok) {
+    vscode.window.showErrorMessage(t(getCurrentCodeResolutionMessageKey(resolution.reason)));
     return;
   }
 
-  if (problem.samples.length === 0) {
-    vscode.window.showWarningMessage(t('noSamples'));
-    return;
-  }
-
-  const sourcePath = forceProgramPicker
-    ? await pickProgramForRun(context.workspaceFolder, problem, true)
-    : await resolveSourceForRun(context.workspaceFolder, problem);
-  if (!sourcePath) {
-    return;
-  }
-
+  const sourcePath = resolution.document.uri.fsPath;
   if (!(await exists(sourcePath))) {
-    vscode.window.showErrorMessage(t('programMissing'));
+    vscode.window.showErrorMessage(t('testCurrentCode.missing'));
     return;
   }
 
-  const document = vscode.workspace.textDocuments.find((entry) => entry.uri.fsPath === sourcePath);
-  await document?.save();
-
-  const runningSampleIds = problem.samples.map((sample) => sample.id);
-  await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
-    const report = await runAllSamples(context.workspaceFolder, sourcePath, problem, output, {
-      onSampleComplete: async (partialReport, sampleReport) => {
-        await saveProblemReport(context.workspaceFolder, problem.id, partialReport);
-        sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
-        sampleTreeProvider.refresh();
-      }
-    });
-    if (report) {
-      await saveProblemReport(context.workspaceFolder, problem.id, report);
-      await openProblemReport(extensionContext, problem.id);
+  if (resolution.document.isDirty) {
+    const saved = await resolution.document.save();
+    if (!saved) {
+      vscode.window.showErrorMessage(t('testCurrentCode.saveFailed'));
+      return;
     }
-    activeProblemId = problem.id;
-    sampleTreeProvider.refresh();
-    await updateStatusBar(problem.id);
+  }
+
+  await runProblemSamplesCommand(activeProblemId, sampleTreeProvider, false, extensionContext, {
+    sourcePathOverride: sourcePath,
+    skipOpenDocumentSave: true
   });
 }
 

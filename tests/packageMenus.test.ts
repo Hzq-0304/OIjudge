@@ -13,8 +13,10 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'packa
     commands: Array<{ command: string; title?: string; icon?: string }>;
     views: Record<string, Array<{ id: string; name: string }>>;
     configuration?: unknown;
+    keybindings?: Array<{ command: string; key: string; mac?: string; when?: string }>;
     menus: {
       'view/title': Array<{ command: string; when: string; group: string }>;
+      'editor/title'?: Array<{ command: string; when: string; group: string }>;
       'view/item/context': Array<{ command: string; when: string; group: string }>;
       commandPalette: Array<{ command: string; when: string }>;
     };
@@ -344,19 +346,84 @@ describe('package tree sample add menu', () => {
         group: 'navigation@0'
       },
       {
-        command: 'oijudger.runSamplesWithProgram',
+        command: 'oijudger.testCurrentCode',
         when: 'view == oijudger.samplesView',
         group: 'navigation@1'
       },
       {
-        command: 'oijudger.addSampleFromSamplesGroup',
+        command: 'oijudger.runSamplesWithProgram',
         when: 'view == oijudger.samplesView',
         group: 'navigation@2'
       },
       {
-        command: 'oijudger.refreshView',
+        command: 'oijudger.addSampleFromSamplesGroup',
         when: 'view == oijudger.samplesView',
         group: 'navigation@3'
+      },
+      {
+        command: 'oijudger.refreshView',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@4'
+      }
+    ]);
+  });
+
+  it('contributes Test Current Code to editor, samples view, keybinding, and command palette', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.testCurrentCode');
+    const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
+      entry.command === 'oijudger.testCurrentCode'
+    );
+    const editorTitleMenus = packageJson.contributes.menus['editor/title']?.filter((entry) =>
+      entry.command === 'oijudger.testCurrentCode'
+    ) ?? [];
+    const contextMenus = packageJson.contributes.menus['view/item/context'].filter((entry) =>
+      entry.command === 'oijudger.testCurrentCode'
+    );
+    const keybindings = packageJson.contributes.keybindings?.filter((entry) =>
+      entry.command === 'oijudger.testCurrentCode'
+    ) ?? [];
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.testCurrentCode');
+    expect(command).toMatchObject({
+      icon: '$(play-circle)',
+      title: '%commands.testCurrentCode.title%'
+    });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Test Current Code');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 测试当前代码');
+    expect(registeredCommands()).toContain('oijudger.testCurrentCode');
+    expect(packageJson.contributes.menus.commandPalette).not.toContainEqual({
+      command: 'oijudger.testCurrentCode',
+      when: 'false'
+    });
+    expect(titleMenus).toEqual([
+      {
+        command: 'oijudger.testCurrentCode',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@1'
+      }
+    ]);
+    expect(editorTitleMenus).toEqual([
+      {
+        command: 'oijudger.testCurrentCode',
+        when: 'resourceExtname == .cpp',
+        group: 'navigation'
+      }
+    ]);
+    expect(contextMenus).toEqual([
+      {
+        command: 'oijudger.testCurrentCode',
+        when: 'view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)',
+        group: '3_run@1'
+      }
+    ]);
+    expect(contextMenus.every((entry) => !entry.when.includes('sample ||'))).toBe(true);
+    expect(contextMenus.every((entry) => !entry.when.includes('subtask ||'))).toBe(true);
+    expect(keybindings).toEqual([
+      {
+        command: 'oijudger.testCurrentCode',
+        key: 'ctrl+alt+shift+j',
+        mac: 'cmd+alt+shift+j',
+        when: 'editorTextFocus'
       }
     ]);
   });

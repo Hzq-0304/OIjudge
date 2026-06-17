@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增“测试当前代码”命令，可从当前聚焦的 `.cpp` 文件直接运行当前题目的全部测试点 / Add Test Current Code command to run all testcases for the active problem from the focused `.cpp` file.
+
 - 新增报告失败样例分组内置顶显示，便于优先查看未通过测试点 / Add failed-case-first ordering within each report group for easier debugging.
 
 - 优化测试报告测试点列表，使用无表头布局、判题全称和带标签的得分/时间/内存信息 / Improve report testcase list with headerless layout, full verdict names, and labeled score/time/memory fields.

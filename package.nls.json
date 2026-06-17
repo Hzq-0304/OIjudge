@@ -40,6 +40,7 @@
   "commands.batchAddSamples.title": "OI Judge: Batch Add Samples",
   "commands.runProblemSamples.title": "OI Judge: Run Problem Samples",
   "commands.runSamplesWithProgram.title": "OI Judge: Run With Program",
+  "commands.testCurrentCode.title": "OI Judge: Test Current Code",
   "commands.runProblemSample.title": "OI Judge: Run Sample",
   "commands.setProblemTimeLimit.title": "OI Judge: Set Problem Time Limit",
   "commands.setProblemMemoryLimit.title": "OI Judge: Set Problem Memory Limit",
