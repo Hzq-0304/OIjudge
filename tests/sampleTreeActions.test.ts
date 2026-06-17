@@ -48,6 +48,38 @@ describe('sample tree add entry', () => {
     expect(samplesGroup?.command).toBeUndefined();
   });
 
+  it('groups problem children into focused sections', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const problemChildren = await provider.getChildren(problemNode);
+
+    expect(problemChildren.map((node) => node.group)).toEqual([
+      'statement',
+      'programs',
+      'configuration',
+      'limits',
+      'samples',
+      'actions'
+    ]);
+    expect(problemChildren.every((node) => node.kind === 'group')).toBe(true);
+  });
+
+  it('consolidates workspace operations behind a single management entry', async () => {
+    await createWorkspace();
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const workspaceGroup = rootNodes.find((node) => node.group === 'workspaceActions');
+    const workspaceActions = await provider.getChildren(workspaceGroup);
+
+    expect(workspaceActions.map((node) => node.command?.command)).toEqual(['oijudger.manageWorkspace']);
+  });
+
   it('shows a passive empty sample hint without an add command', async () => {
     const workspaceFolder = await createWorkspace();
     await createProblem(workspaceFolder, 'A');
@@ -79,6 +111,62 @@ describe('sample tree add entry', () => {
     expect(actionCommands).not.toContain('oijudger.batchAddSamples');
   });
 
+  it('moves statement actions under the statement group', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const problemChildren = await provider.getChildren(problemNode);
+    const statementGroup = problemChildren.find((node) => node.group === 'statement');
+    const actionsGroup = problemChildren.find((node) => node.group === 'actions');
+    const statementCommands = (await provider.getChildren(statementGroup)).map((node) => node.command?.command);
+    const actionCommands = (await provider.getChildren(actionsGroup)).map((node) => node.command?.command);
+
+    expect(statementCommands).toContain('oijudger.bindStatement');
+    expect(actionCommands).not.toContain('oijudger.bindStatement');
+    expect(actionCommands).not.toContain('oijudger.openStatement');
+    expect(actionCommands).not.toContain('oijudger.unbindStatement');
+  });
+
+  it('moves program setup under the programs group', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const programsGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'programs');
+    const programCommands = (await provider.getChildren(programsGroup)).map((node) => node.command?.command);
+
+    expect(programCommands).toEqual(expect.arrayContaining([
+      'oijudger.setDefaultProgram',
+      'oijudger.selectProblemCompiler',
+      'oijudger.addProgramToProblem'
+    ]));
+  });
+
+  it('moves judge and IO setup under the configuration group', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const configurationGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'configuration');
+    const configurationCommands = (await provider.getChildren(configurationGroup)).map((node) => node.command?.command);
+
+    expect(configurationCommands).toEqual(expect.arrayContaining([
+      'oijudger.setProblemStandard',
+      'oijudger.setJudgeMode',
+      'oijudger.setIoMode'
+    ]));
+  });
+
   it('shows setter STD answer and generator actions when setter mode is enabled', async () => {
     vscodeMock.__setConfiguration('setterMode.enabled', true);
     const workspaceFolder = await createWorkspace();
@@ -94,21 +182,32 @@ describe('sample tree add entry', () => {
     const samplesGroup = problemChildren.find((node) => node.group === 'samples');
     const sampleNode = (await provider.getChildren(samplesGroup)).find((node) => node.kind === 'sample');
 
-    const setterCommands = (await provider.getChildren(setterGroup)).map((node) => node.command?.command);
+    const setterSections = await provider.getChildren(setterGroup);
+    const stdGroup = setterSections.find((node) => node.group === 'setterStd');
+    const generatorGroup = setterSections.find((node) => node.group === 'setterGenerator');
+    const testcasesGroup = setterSections.find((node) => node.group === 'setterTestcases');
+    const stdCommands = (await provider.getChildren(stdGroup)).map((node) => node.command?.command);
+    const generatorCommands = (await provider.getChildren(generatorGroup)).map((node) => node.command?.command);
+    const testcaseCommands = (await provider.getChildren(testcasesGroup)).map((node) => node.command?.command);
     const sampleCommands = (await provider.getChildren(sampleNode)).map((node) => node.command?.command);
 
-    expect(setterCommands).toContain('oijudger.toggleAutoGenerateOutputFromStd');
-    expect(setterCommands).toContain('oijudger.addSetterInputSample');
-    expect(setterCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
-    expect(setterCommands).toContain('oijudger.exportTestcases');
-    expect(setterCommands).toContain('oijudger.addProblemGenerator');
-    expect(setterCommands).toContain('oijudger.openProblemGenerator');
-    expect(setterCommands).toContain('oijudger.removeProblemGenerator');
+    expect(setterSections.map((node) => node.group)).toEqual([
+      'setterStd',
+      'setterGenerator',
+      'setterTestcases'
+    ]);
+    expect(stdCommands).toContain('oijudger.generateAllSampleAnswersWithStd');
+    expect(generatorCommands).toContain('oijudger.toggleAutoGenerateOutputFromStd');
+    expect(generatorCommands).toContain('oijudger.addProblemGenerator');
+    expect(generatorCommands).toContain('oijudger.openProblemGenerator');
+    expect(generatorCommands).toContain('oijudger.removeProblemGenerator');
+    expect(testcaseCommands).toContain('oijudger.addSetterInputSample');
+    expect(testcaseCommands).toContain('oijudger.exportTestcases');
     expect(sampleCommands).toContain('oijudger.generateSampleAnswerWithStd');
     expect(sampleCommands).toContain('oijudger.setSampleName');
   });
 
-  it('shows the auto STD output state in the setter tool group', async () => {
+  it('shows the auto STD output state in configuration and generator groups', async () => {
     vscodeMock.__setConfiguration('setterMode.enabled', true);
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
@@ -117,10 +216,18 @@ describe('sample tree add entry', () => {
     const rootNodes = await provider.getChildren();
     const problemsRoot = rootNodes.find((node) => node.group === 'problems');
     const problemNode = (await provider.getChildren(problemsRoot))[0];
-    const setterGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'setter');
-    const setterNodes = await provider.getChildren(setterGroup);
-    const autoOutputNode = setterNodes.find((node) => node.command?.command === 'oijudger.toggleAutoGenerateOutputFromStd');
+    const problemChildren = await provider.getChildren(problemNode);
+    const configurationGroup = problemChildren.find((node) => node.group === 'configuration');
+    const setterGroup = problemChildren.find((node) => node.group === 'setter');
+    const generatorGroup = (await provider.getChildren(setterGroup)).find((node) => node.group === 'setterGenerator');
+    const configurationAutoOutputNode = (await provider.getChildren(configurationGroup)).find((node) =>
+      node.command?.command === 'oijudger.toggleAutoGenerateOutputFromStd'
+    );
+    const autoOutputNode = (await provider.getChildren(generatorGroup)).find((node) =>
+      node.command?.command === 'oijudger.toggleAutoGenerateOutputFromStd'
+    );
 
+    expect(configurationAutoOutputNode?.label).toBe('Auto STD Output: On');
     expect(autoOutputNode?.label).toBe('Auto STD Output: On');
     expect(autoOutputNode?.command?.arguments).toEqual([problem.id]);
   });

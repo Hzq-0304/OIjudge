@@ -266,6 +266,46 @@ describe('package tree sample add menu', () => {
     });
   });
 
+  it('keeps the samples view toolbar focused on high-frequency actions', () => {
+    const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
+      entry.when === 'view == oijudger.samplesView'
+    );
+
+    expect(titleMenus).toEqual([
+      {
+        command: 'oijudger.runProblemSamples',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@0'
+      },
+      {
+        command: 'oijudger.runSamplesWithProgram',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@1'
+      },
+      {
+        command: 'oijudger.addSampleFromSamplesGroup',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@2'
+      },
+      {
+        command: 'oijudger.refreshView',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@3'
+      }
+    ]);
+  });
+
+  it('contributes a workspace management command for consolidated workspace actions', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.manageWorkspace');
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.manageWorkspace');
+    expect(command).toMatchObject({
+      icon: '$(tools)',
+      title: 'OI Judge: 管理工作区/Manage Workspace'
+    });
+    expect(registeredCommands()).toContain('oijudger.manageWorkspace');
+  });
+
   it('contributes problem package export to command palette and problem nodes only', () => {
     const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.exportProblemPackage');
     const contextMenus = packageJson.contributes.menus['view/item/context'];
@@ -301,11 +341,7 @@ describe('package tree sample add menu', () => {
     expect(command?.title).toContain('导入完整题目包');
     expect(command?.icon).toBe('$(cloud-download)');
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.importProblemPackage');
-    expect(titleMenus).toContainEqual({
-      command: 'oijudger.importProblemPackage',
-      when: 'view == oijudger.samplesView',
-      group: 'navigation@4'
-    });
+    expect(titleMenus).toEqual([]);
     expect(entries).toEqual([
       {
         command: 'oijudger.importProblemPackage',
@@ -333,11 +369,7 @@ describe('package tree sample add menu', () => {
 
     expect(commands).toContain('oijudger.runStressTest');
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.runStressTest');
-    expect(titleMenus).toContainEqual({
-      command: 'oijudger.runStressTest',
-      when: 'view == oijudger.samplesView',
-      group: 'navigation@4'
-    });
+    expect(titleMenus).toEqual([]);
     expect(contextMenus.length).toBeGreaterThan(0);
     expect(contextMenus.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
     expect(contextMenus.some((entry) => entry.when.includes('oijudgerProblemNormal'))).toBe(true);

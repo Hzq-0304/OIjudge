@@ -162,10 +162,27 @@ type GeneratorInputChoice = {
   path: string;
   source: 'global' | 'subtask';
 };
+export type WorkspaceManagementCommand =
+  | 'oijudger.createProblem'
+  | 'oijudger.addProblemFromCurrentFile'
+  | 'oijudger.addProblemFromFile'
+  | 'oijudger.refreshView'
+  | 'oijudger.importLegacyProblem';
+export type WorkspaceManagementItem = vscode.QuickPickItem & { command: WorkspaceManagementCommand };
 const MAX_GENERATED_SAMPLE_INPUT_COUNT = 100;
 type AutoStdOutputContext =
   | { enabled: false; reason?: string }
   | { enabled: true; std: StdAnswerGenerationContext };
+
+export function createWorkspaceManagementItems(): WorkspaceManagementItem[] {
+  return [
+    { label: t('createProblem'), command: 'oijudger.createProblem' },
+    { label: t('addProblemFromCurrentFile'), command: 'oijudger.addProblemFromCurrentFile' },
+    { label: t('addProblemFromFile'), command: 'oijudger.addProblemFromFile' },
+    { label: t('refreshView'), command: 'oijudger.refreshView' },
+    { label: t('importLegacyProblem'), command: 'oijudger.importLegacyProblem' }
+  ];
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
@@ -353,6 +370,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.refreshView', () => {
       sampleTreeProvider.refresh();
       void updateStatusBar();
+    }),
+    vscode.commands.registerCommand('oijudger.manageWorkspace', async () => {
+      await manageWorkspaceCommand();
     }),
     vscode.commands.registerCommand('oijudger.createProblem', async () => {
       await createProblemCommand(sampleTreeProvider);
@@ -718,6 +738,23 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // Nothing to clean up.
+}
+
+async function manageWorkspaceCommand(): Promise<void> {
+  if (!getWorkspaceFolder()) {
+    vscode.window.showWarningMessage(t('openWorkspaceFolder'));
+    return;
+  }
+
+  const picked = await vscode.window.showQuickPick(createWorkspaceManagementItems(), {
+    title: t('manageWorkspace'),
+    placeHolder: t('manageWorkspace')
+  });
+  if (!picked) {
+    return;
+  }
+
+  await vscode.commands.executeCommand(picked.command);
 }
 
 async function pickAddSampleMode(): Promise<AddSampleMode | undefined> {

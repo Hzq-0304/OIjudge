@@ -32,11 +32,15 @@ type NodeGroup =
   | 'workspaceActions'
   | 'statement'
   | 'programs'
+  | 'configuration'
   | 'limits'
   | 'samples'
   | 'generatorInputs'
   | 'subtask'
   | 'setter'
+  | 'setterStd'
+  | 'setterGenerator'
+  | 'setterTestcases'
   | 'actions'
   | 'sampleActions';
 
@@ -144,6 +148,8 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         return createStatementNodes(workspaceFolder, problem);
       case 'programs':
         return createProgramNodes(workspaceFolder, problem);
+      case 'configuration':
+        return createConfigurationNodes(workspaceFolder, problem);
       case 'limits':
         return createLimitNodes(problem);
       case 'samples':
@@ -160,6 +166,12 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         );
       case 'setter':
         return createSetterNodes(workspaceFolder, problem);
+      case 'setterStd':
+        return createSetterStdNodes(workspaceFolder, problem);
+      case 'setterGenerator':
+        return createSetterGeneratorNodes(workspaceFolder, problem);
+      case 'setterTestcases':
+        return createSetterTestcaseNodes(problem);
       case 'actions':
         return createProblemActionNodes(problem);
       case 'sampleActions':
@@ -263,7 +275,7 @@ function createRootNodes(): TreeNode[] {
     },
     {
       kind: 'group',
-      label: t('workspaceActions'),
+      label: t('workspace'),
       icon: new vscode.ThemeIcon('tools'),
       collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
       group: 'workspaceActions'
@@ -321,32 +333,14 @@ async function createProblemChildren(workspaceFolder: vscode.WorkspaceFolder, pr
       group: 'programs',
       problemId: problem.id
     },
-    clickableInfoNode(
-      t('defaultProgramLine', { program: getDefaultProblemSource(problem) ? path.basename(getDefaultProblemSource(problem) ?? '') : t('noProgramSet') }),
-      'file-code',
-      t('clickChangeDefaultProgram'),
-      'oijudger.setDefaultProgram',
-      problem.id
-    ),
-    clickableInfoNode(
-      t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }),
-      'terminal',
-      t('clickSelectCompiler'),
-      'oijudger.selectProblemCompiler',
-      problem.id
-    ),
-    clickableInfoNode(
-      t('standardLine', { standard: problem.standard }),
-      'settings',
-      t('clickSetCppStandard'),
-      'oijudger.setProblemStandard',
-      problem.id
-    ),
-    createJudgeModeNode(problem),
-    createIoModeNode(problem),
-    ...createFileIoNodes(problem),
-    ...(isSetterModeEnabled() ? [createStdInfoNode(workspaceFolder, problem)] : []),
-    ...(getProblemJudgeMode(problem) === 'checker' ? [createCheckerInfoNode(workspaceFolder, problem)] : []),
+    {
+      kind: 'group',
+      label: t('configuration'),
+      icon: new vscode.ThemeIcon('settings-gear'),
+      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+      group: 'configuration',
+      problemId: problem.id
+    },
     {
       kind: 'group',
       label: t('limits'),
@@ -429,7 +423,7 @@ async function createStatementNodes(
 ): Promise<TreeNode[]> {
   if (!problem.statement) {
     return [
-      actionNode(`${t('statement')}: ${t('noStatementBound')}`, 'oijudger.bindStatement', 'link', problem.id)
+      actionNode(t('bindStatement'), 'oijudger.bindStatement', 'link', problem.id)
     ];
   }
 
@@ -448,7 +442,9 @@ async function createStatementNodes(
         title: t('openStatement'),
         arguments: [problem.id]
       }
-    }
+    },
+    actionNode(t('bindStatement'), 'oijudger.bindStatement', 'link', problem.id),
+    actionNode(t('unbindStatement'), 'oijudger.unbindStatement', 'debug-disconnect', problem.id)
   ];
 }
 
@@ -457,18 +453,12 @@ async function createProgramNodes(
   problem: ProblemConfig
 ): Promise<TreeNode[]> {
   const sources = problem.sources ?? [];
-  if (sources.length === 0) {
-    return [
-      actionNode(`${t('programs')}: ${t('noPrograms')}`, 'oijudger.addProgramToProblem', 'file-add', problem.id)
-    ];
-  }
-
   const defaultSource = getDefaultProblemSource(problem);
-  return Promise.all(sources.map(async (source) => {
+  const programNodes = await Promise.all(sources.map(async (source) => {
     const sourcePath = resolveProblemReferencePath(workspaceFolder, source.path);
     const missing = !(await exists(sourcePath));
     return {
-      kind: 'info',
+      kind: 'info' as const,
       label: source.name ?? path.basename(sourcePath),
       description: missing ? t('statusMissing') : (source.path === defaultSource ? t('defaultProgram') : undefined),
       tooltip: sourcePath,
@@ -477,6 +467,61 @@ async function createProgramNodes(
         : new vscode.ThemeIcon('file-code')
     };
   }));
+
+  const configurationNodes = [
+    clickableInfoNode(
+      t('defaultProgramLine', { program: defaultSource ? path.basename(defaultSource) : t('noProgramSet') }),
+      'file-code',
+      t('clickChangeDefaultProgram'),
+      'oijudger.setDefaultProgram',
+      problem.id
+    ),
+    clickableInfoNode(
+      t('compilerLine', { compiler: path.basename(problem.compiler.command || 'g++') }),
+      'terminal',
+      t('clickSelectCompiler'),
+      'oijudger.selectProblemCompiler',
+      problem.id
+    ),
+    actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id)
+  ];
+
+  if (sources.length === 0) {
+    return [
+      ...configurationNodes,
+      infoNode(t('noPrograms'), 'info')
+    ];
+  }
+
+  return [...configurationNodes, ...programNodes];
+}
+
+function createConfigurationNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
+  return [
+    clickableInfoNode(
+      t('standardLine', { standard: problem.standard }),
+      'settings',
+      t('clickSetCppStandard'),
+      'oijudger.setProblemStandard',
+      problem.id
+    ),
+    createJudgeModeNode(problem),
+    createIoModeNode(problem),
+    ...createFileIoNodes(problem),
+    ...(isSetterModeEnabled()
+      ? [
+        createStdInfoNode(workspaceFolder, problem),
+        createGeneratorInfoNode(workspaceFolder, problem),
+        createAutoOutputNode(problem)
+      ]
+      : []),
+    ...(getProblemJudgeMode(problem) === 'checker'
+      ? [
+        createCheckerInfoNode(workspaceFolder, problem),
+        ...createCheckerActionNodes(problem)
+      ]
+      : [])
+  ];
 }
 
 async function createSampleContainerNodes(
@@ -905,25 +950,7 @@ function createSampleActionNodes(
 }
 
 function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
-  const checkerActions = getProblemJudgeMode(problem) === 'checker'
-    ? [
-      actionNode(t('setChecker'), 'oijudger.setChecker', 'verified', problem.id),
-      ...(problem.checker?.type === 'plain' ? [
-        actionNode(t('setPlainCheckerProtocol'), 'oijudger.setPlainCheckerProtocol', 'settings', problem.id)
-      ] : []),
-      actionNode(t('clearChecker'), 'oijudger.clearChecker', 'clear-all', problem.id),
-      actionNode(t('openChecker'), 'oijudger.openChecker', 'go-to-file', problem.id),
-      actionNode(t('importTestlib'), 'oijudger.importTestlib', 'cloud-download', problem.id),
-      actionNode(t('openTestlib'), 'oijudger.openTestlib', 'book', problem.id)
-    ]
-    : [];
-
   return [
-    ...checkerActions,
-    actionNode(t('bindStatement'), 'oijudger.bindStatement', 'link', problem.id),
-    actionNode(t('openStatement'), 'oijudger.openStatement', 'book', problem.id),
-    actionNode(t('unbindStatement'), 'oijudger.unbindStatement', 'debug-disconnect', problem.id),
-    actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id),
     actionNode(t('runDefaultProgram'), 'oijudger.runProblemSamples', 'run-all', problem.id),
     actionNode(t('runWithProgram'), 'oijudger.runSamplesWithProgram', 'run', problem.id),
     actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)
@@ -932,27 +959,64 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
 
 function createSetterNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
   return [
-    createGeneratorInfoNode(workspaceFolder, problem),
-    actionNode(
-      isProblemAutoGenerateOutputFromStdEnabled(problem)
-        ? t('generator.autoOutput.on')
-        : t('generator.autoOutput.off'),
-      'oijudger.toggleAutoGenerateOutputFromStd',
-      'sync',
-      problem.id
-    ),
-    actionNode(t('setter.sample.addInput'), 'oijudger.addSetterInputSample', 'file-add', problem.id),
-    actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id),
-    actionNode(t('export.testcases'), 'oijudger.exportTestcases', 'export', problem.id),
+    setterGroupNode(t('setter.std'), 'file-code', 'setterStd', problem.id),
+    setterGroupNode(t('setter.generator'), 'wand', 'setterGenerator', problem.id, createGeneratorInfoNode(workspaceFolder, problem).tooltip),
+    setterGroupNode(t('setter.testcases'), 'list-tree', 'setterTestcases', problem.id)
+  ];
+}
+
+function createSetterStdNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
+  return [
+    createStdInfoNode(workspaceFolder, problem),
     actionNode(t('selectStd'), 'oijudger.selectStdProgram', 'file-code', problem.id),
     actionNode(t('openStd'), 'oijudger.openStdProgram', 'go-to-file', problem.id),
     actionNode(t('clearStd'), 'oijudger.clearStdProgram', 'clear-all', problem.id),
+    actionNode(t('generateAllAnswersWithStd'), 'oijudger.generateAllSampleAnswersWithStd', 'run-all', problem.id)
+  ];
+}
+
+function createSetterGeneratorNodes(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode[] {
+  return [
+    createGeneratorInfoNode(workspaceFolder, problem),
+    createAutoOutputNode(problem),
     actionNode(t('generator.add'), 'oijudger.addProblemGenerator', 'file-code', problem.id),
     actionNode(t('generator.open'), 'oijudger.openProblemGenerator', 'go-to-file', problem.id),
     actionNode(t('generator.remove'), 'oijudger.removeProblemGenerator', 'clear-all', problem.id),
-    infoNode(t('generatorGenerationNotImplemented'), 'info'),
-    actionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problem.id)
+    actionNode(t('generator.generateInput'), 'oijudger.generateSampleInput', 'wand', problem.id)
   ];
+}
+
+function createSetterTestcaseNodes(problem: ProblemConfig): TreeNode[] {
+  return [
+    actionNode(t('setter.sample.addInput'), 'oijudger.addSetterInputSample', 'file-add', problem.id),
+    actionNode(t('setSampleName'), 'oijudger.setSampleName', 'tag', problem.id),
+    actionNode(t('generatorInput.global.add'), 'oijudger.addProblemGeneratorInput', 'symbol-parameter', problem.id),
+    actionNode(t('export.testcases'), 'oijudger.exportTestcases', 'export', problem.id)
+  ];
+}
+
+function createCheckerActionNodes(problem: ProblemConfig): TreeNode[] {
+  return [
+    actionNode(t('setChecker'), 'oijudger.setChecker', 'verified', problem.id),
+    ...(problem.checker?.type === 'plain' ? [
+      actionNode(t('setPlainCheckerProtocol'), 'oijudger.setPlainCheckerProtocol', 'settings', problem.id)
+    ] : []),
+    actionNode(t('clearChecker'), 'oijudger.clearChecker', 'clear-all', problem.id),
+    actionNode(t('openChecker'), 'oijudger.openChecker', 'go-to-file', problem.id),
+    actionNode(t('importTestlib'), 'oijudger.importTestlib', 'cloud-download', problem.id),
+    actionNode(t('openTestlib'), 'oijudger.openTestlib', 'book', problem.id)
+  ];
+}
+
+function createAutoOutputNode(problem: ProblemConfig): TreeNode {
+  return actionNode(
+    isProblemAutoGenerateOutputFromStdEnabled(problem)
+      ? t('generator.autoOutput.on')
+      : t('generator.autoOutput.off'),
+    'oijudger.toggleAutoGenerateOutputFromStd',
+    'sync',
+    problem.id
+  );
 }
 
 function createGeneratorInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem: ProblemConfig): TreeNode {
@@ -1056,12 +1120,26 @@ function createJudgeModeNode(problem: ProblemConfig): TreeNode {
 
 function createWorkspaceActionNodes(): TreeNode[] {
   return [
-    actionNode(t('createProblem'), 'oijudger.createProblem', 'new-folder'),
-    actionNode(t('addProblemFromCurrentFile'), 'oijudger.addProblemFromCurrentFile', 'file-code'),
-    actionNode(t('addProblemFromFile'), 'oijudger.addProblemFromFile', 'file-add'),
-    actionNode(t('refreshView'), 'oijudger.refreshView', 'refresh'),
-    actionNode(t('importLegacyProblem'), 'oijudger.importLegacyProblem', 'repo-pull')
+    actionNode(t('manageWorkspace'), 'oijudger.manageWorkspace', 'tools')
   ];
+}
+
+function setterGroupNode(
+  label: string,
+  icon: string,
+  group: Extract<NodeGroup, 'setterStd' | 'setterGenerator' | 'setterTestcases'>,
+  problemId: string,
+  tooltip?: string
+): TreeNode {
+  return {
+    kind: 'group',
+    label,
+    tooltip,
+    icon: new vscode.ThemeIcon(icon),
+    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+    group,
+    problemId
+  };
 }
 
 function infoNode(label: string, icon: string): TreeNode {

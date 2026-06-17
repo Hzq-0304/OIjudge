@@ -33,6 +33,7 @@
     "onCommand:oijudger.openSampleDetail",
     "onCommand:oijudger.clearOutputs",
     "onCommand:oijudger.refreshView",
+    "onCommand:oijudger.manageWorkspace",
     "onCommand:oijudger.createProblem",
     "onCommand:oijudger.addProblemFromCurrentFile",
     "onCommand:oijudger.addProblemFromFile",
@@ -192,6 +193,11 @@
         "command": "oijudger.refreshView",
         "title": "OI Judge: 刷新视图/Refresh View",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "oijudger.manageWorkspace",
+        "title": "OI Judge: 管理工作区/Manage Workspace",
+        "icon": "$(tools)"
       },
       {
         "command": "oijudger.createProblem",
@@ -688,39 +694,24 @@
     "menus": {
       "view/title": [
         {
-          "command": "oijudger.createProblem",
+          "command": "oijudger.runProblemSamples",
           "when": "view == oijudger.samplesView",
           "group": "navigation@0"
         },
         {
-          "command": "oijudger.addProblemFromCurrentFile",
+          "command": "oijudger.runSamplesWithProgram",
           "when": "view == oijudger.samplesView",
           "group": "navigation@1"
         },
         {
-          "command": "oijudger.addProblemFromFile",
+          "command": "oijudger.addSampleFromSamplesGroup",
           "when": "view == oijudger.samplesView",
           "group": "navigation@2"
         },
         {
-          "command": "oijudger.importLegacyProblem",
-          "when": "view == oijudger.samplesView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "oijudger.importProblemPackage",
-          "when": "view == oijudger.samplesView",
-          "group": "navigation@4"
-        },
-        {
           "command": "oijudger.refreshView",
           "when": "view == oijudger.samplesView",
-          "group": "navigation@4"
-        },
-        {
-          "command": "oijudger.runStressTest",
-          "when": "view == oijudger.samplesView",
-          "group": "navigation@4"
+          "group": "navigation@3"
         },
         {
           "command": "oijudger.refreshStressRecords",
