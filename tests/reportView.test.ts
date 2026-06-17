@@ -67,16 +67,55 @@ describe('report verdict display', () => {
 
   it('includes CSS and JS hooks for smooth testcase expansion', () => {
     const html = renderPage('Report', renderReportBody(workspace(), report()));
+    const expandDuration = cssDurationMs(html, '--oj-expand-duration');
+    const driftDuration = cssDurationMs(html, '--oj-content-drift-duration');
 
     expect(html).toContain('case-detail-panel');
-    expect(html).toContain('--oj-expand-duration: 500ms;');
+    expect(expandDuration).toBeGreaterThanOrEqual(600);
+    expect(html).toContain('--oj-expand-duration: 650ms;');
     expect(html).toContain('--oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);');
+    expect(driftDuration).toBeGreaterThan(expandDuration);
+    expect(html).toContain('--oj-content-drift-duration: 900ms;');
+    expect(html).toContain('--oj-content-drift-easing: cubic-bezier(0.16, 1, 0.3, 1);');
     expect(html).toContain('transition:');
+    expect(html).toContain('transition: height var(--oj-expand-duration) var(--oj-expand-easing);');
     expect(html).toContain('prefers-reduced-motion: reduce');
-    expect(html).toContain("panel.classList.toggle('expanded', expanded)");
-    expect(html).toContain('panel.style.maxHeight');
-    expect(html).toContain('requestAnimationFrame(() => setPanelHeight(subtaskPanel));');
+    expect(html).toContain('panel.style.height = panel.scrollHeight +');
+    expect(html).toContain("panel.style.height = 'auto';");
+    expect(html).toContain("event.propertyName !== 'height'");
+    expect(html).toContain('requestAnimationFrame(() => syncPanelHeight(subtaskPanel));');
+    expect(html).not.toContain('style.maxHeight');
     expect(html).not.toContain('style.display');
+  });
+
+  it('drifts expanded content with a tiny top offset without blur, scale, or opacity animation', () => {
+    const html = renderPage('Report', renderReportBody(workspace(), report(), 'A', problemWithSubtask()));
+    const driftOffset = cssPxValue(html, 'top');
+
+    expect(html).toContain('.case-detail-inner,');
+    expect(html).toContain('.subtask-children-inner');
+    expect(Math.abs(driftOffset)).toBeLessThanOrEqual(4);
+    expect(html).toContain('top: -3px;');
+    expect(html).toContain('transition: top var(--oj-content-drift-duration) var(--oj-content-drift-easing);');
+    expect(html).toContain('.case-detail-panel.expanded .case-detail-inner');
+    expect(html).toContain('.subtask-children-panel.expanded .subtask-children-inner');
+    expect(html).toContain('top: 0;');
+    expect(html).not.toContain('scale(');
+    expect(html).not.toContain('filter:');
+    expect(html).not.toContain('blur(');
+    expect(html).not.toContain('opacity var(--oj-expand-duration)');
+    expect(html).not.toContain('transform var(--oj-expand-duration)');
+  });
+
+  it('disables report expansion motion for reduced motion preferences', () => {
+    const html = renderPage('Report', renderReportBody(workspace(), report(), 'A', problemWithSubtask()));
+
+    expect(html).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(html).toContain('.case-detail-panel,');
+    expect(html).toContain('.subtask-children-panel,');
+    expect(html).toContain('.case-detail-inner,');
+    expect(html).toContain('.subtask-children-inner,');
+    expect(html).toContain('transition: none;');
   });
 
   it('uses soft report detail actions instead of default solid VS Code buttons', () => {
@@ -114,7 +153,7 @@ describe('report verdict display', () => {
     expect(html).toContain('subtask-children-inner');
     expect(html).toContain('class="testcaseGroup subtask-row"');
     expect(html).toContain('class="subtask-summary"');
-    expect(html).toContain('max-height var(--oj-expand-duration) var(--oj-expand-easing)');
+    expect(html).toContain('height var(--oj-expand-duration) var(--oj-expand-easing)');
     expect(html).toContain('border: 1px solid var(--oj-border-subtle);');
     expect(html).toContain('background: var(--oj-indent-guide);');
     expect(html).toContain('opacity: 0.72;');
@@ -182,6 +221,20 @@ function problemWithSubtask(): ProblemConfig {
     standard: 'c++17',
     judgeMode: 'trimTrailingWhitespace'
   };
+}
+
+function cssDurationMs(html: string, variableName: string): number {
+  const escapedName = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`${escapedName}:\\s*(\\d+)ms;`));
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
+}
+
+function cssPxValue(html: string, propertyName: string): number {
+  const escapedName = propertyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`${escapedName}:\\s*(-?\\d+)px;`));
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
 }
 
 function sample(id: string, index: number, status: SampleStatus) {

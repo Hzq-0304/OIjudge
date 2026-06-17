@@ -419,7 +419,7 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
       <span class="metricCell">${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
       <span class="metricCell"></span>
     </button>
-    <div class="subtask-children-panel${section.defaultOpen ? ' expanded' : ''}" data-subtask-children>
+    <div class="subtask-children-panel${section.defaultOpen ? ' expanded' : ''}" data-subtask-children aria-hidden="${section.defaultOpen ? 'false' : 'true'}">
       <div class="subtask-children-inner testcaseGroupBody">
         ${section.testcases.map((testcase) => renderTestcaseRow(testcase, problemId, true)).join('')}
       </div>
@@ -438,7 +438,7 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
       <span class="metricCell">${escapeHtml(formatTestcaseDuration(testcase))}</span>
       <span class="metricCell">${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
     </button>
-    <div class="case-detail-panel${expanded}" data-case-detail>
+    <div class="case-detail-panel${expanded}" data-case-detail aria-hidden="${testcase.defaultOpen ? 'false' : 'true'}">
       <div class="case-detail-inner">
         ${details}
       </div>
@@ -748,8 +748,10 @@ export function renderPage(title: string, body: string): string {
       --oj-soft-button-active-bg: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
       --oj-soft-button-border: var(--vscode-panel-border);
       --oj-indent-guide: var(--vscode-panel-border);
-      --oj-expand-duration: 500ms;
+      --oj-expand-duration: 650ms;
       --oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);
+      --oj-content-drift-duration: 900ms;
+      --oj-content-drift-easing: cubic-bezier(0.16, 1, 0.3, 1);
       --oj-muted: var(--vscode-descriptionForeground);
       --oj-text: var(--vscode-foreground);
       --oj-ac: var(--vscode-testing-iconPassed, #3fb950);
@@ -955,24 +957,24 @@ export function renderPage(title: string, body: string): string {
     .scoreCell.score-partial { color: var(--oj-score-failed); }
     .case-detail-panel,
     .subtask-children-panel {
-      max-height: 0;
-      opacity: 0;
+      height: 0;
       overflow: hidden;
-      transform: translateY(-4px);
-      transition:
-        max-height var(--oj-expand-duration) var(--oj-expand-easing),
-        opacity var(--oj-expand-duration) var(--oj-expand-easing),
-        transform var(--oj-expand-duration) var(--oj-expand-easing);
-    }
-    .case-detail-panel.expanded,
-    .subtask-children-panel.expanded {
-      opacity: 1;
-      transform: translateY(0);
+      transition: height var(--oj-expand-duration) var(--oj-expand-easing);
     }
     .case-detail-inner {
       background: var(--oj-detail-bg);
       border-top: 1px solid var(--oj-border-subtle);
       padding: 2px 12px 10px 42px;
+    }
+    .case-detail-inner,
+    .subtask-children-inner {
+      position: relative;
+      top: -3px;
+      transition: top var(--oj-content-drift-duration) var(--oj-content-drift-easing);
+    }
+    .case-detail-panel.expanded .case-detail-inner,
+    .subtask-children-panel.expanded .subtask-children-inner {
+      top: 0;
     }
     .subtask-children-inner {
       padding: 4px 0 6px;
@@ -1063,8 +1065,11 @@ export function renderPage(title: string, body: string): string {
     @media (prefers-reduced-motion: reduce) {
       .case-detail-panel,
       .subtask-children-panel,
+      .case-detail-inner,
+      .subtask-children-inner,
       .testcaseName::before {
         transition: none;
+        top: 0;
         transform: none;
       }
     }
@@ -1081,22 +1086,77 @@ export function renderPage(title: string, body: string): string {
   ${body}
   <script>
     const vscode = acquireVsCodeApi();
-    const setPanelHeight = (panel) => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const preparePanel = (panel) => {
       if (!panel) {
         return;
       }
-      panel.style.maxHeight = panel.classList.contains('expanded') ? panel.scrollHeight + 'px' : '0px';
+      panel.style.height = panel.classList.contains('expanded') ? 'auto' : '0px';
+      panel.setAttribute('aria-hidden', panel.classList.contains('expanded') ? 'false' : 'true');
+    };
+    const syncPanelHeight = (panel) => {
+      if (!panel) {
+        return;
+      }
+      if (panel.classList.contains('expanded') && panel.style.height !== 'auto') {
+        panel.style.height = panel.scrollHeight + 'px';
+      }
+    };
+    const expandPanel = (panel) => {
+      if (!panel) {
+        return;
+      }
+      panel.classList.add('expanded');
+      panel.setAttribute('aria-hidden', 'false');
+      if (prefersReducedMotion.matches) {
+        panel.style.height = 'auto';
+        return;
+      }
+      panel.style.height = panel.getBoundingClientRect().height + 'px';
+      panel.offsetHeight;
+      requestAnimationFrame(() => {
+        panel.style.height = panel.scrollHeight + 'px';
+      });
+    };
+    const collapsePanel = (panel) => {
+      if (!panel) {
+        return;
+      }
+      panel.setAttribute('aria-hidden', 'true');
+      if (prefersReducedMotion.matches) {
+        panel.classList.remove('expanded');
+        panel.style.height = '0px';
+        return;
+      }
+      panel.style.height = panel.scrollHeight + 'px';
+      panel.offsetHeight;
+      requestAnimationFrame(() => {
+        panel.classList.remove('expanded');
+        panel.style.height = '0px';
+      });
     };
     const togglePanel = (panel, expanded) => {
-      if (!panel) {
-        return;
+      if (expanded) {
+        expandPanel(panel);
+      } else {
+        collapsePanel(panel);
       }
-      panel.classList.toggle('expanded', expanded);
-      setPanelHeight(panel);
     };
-    document.querySelectorAll('[data-case-detail], [data-subtask-children]').forEach(setPanelHeight);
+    document.querySelectorAll('[data-case-detail], [data-subtask-children]').forEach((panel) => {
+      preparePanel(panel);
+      panel.addEventListener('transitionend', (event) => {
+        if (event.propertyName !== 'height') {
+          return;
+        }
+        if (panel.classList.contains('expanded')) {
+          panel.style.height = 'auto';
+        }
+      });
+    });
     window.addEventListener('resize', () => {
-      document.querySelectorAll('[data-case-detail].expanded, [data-subtask-children].expanded').forEach(setPanelHeight);
+      document.querySelectorAll('[data-case-detail].expanded, [data-subtask-children].expanded').forEach((panel) => {
+        panel.style.height = 'auto';
+      });
     });
     document.addEventListener('click', (event) => {
       const summary = event.target.closest('.case-summary');
@@ -1107,7 +1167,7 @@ export function renderPage(title: string, body: string): string {
         const expanded = summary.getAttribute('aria-expanded') === 'true';
         summary.setAttribute('aria-expanded', String(!expanded));
         togglePanel(panel, !expanded);
-        requestAnimationFrame(() => setPanelHeight(subtaskPanel));
+        requestAnimationFrame(() => syncPanelHeight(subtaskPanel));
         return;
       }
       const subtaskSummary = event.target.closest('.subtask-summary');

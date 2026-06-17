@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 放慢测试报告展开动画，使详情和 Subtask 展开更自然 / Slow down report expansion animations for smoother case details and subtask expansion.
+
+- 修复测试报告展开动画中文字模糊和结束跳变的问题，并优化 Subtask 展开动画 / Fix blurry text and end-of-animation jumps in report expansion and improve subtask expansion animation.
 - 优化测试报告展开细节，去除内层详情卡片并为 Subtask 添加平滑展开动画 / Polish report expansion details by flattening case details and animating subtask expansion.
 - 继续打磨测试报告视觉细节，弱化按钮、边框和失败色 / Further polish judge report visuals with softer buttons, borders, and failure colors.
 - 为 VS Code 扩展 manifest 增加中英文 package.nls 本地化 / Add English and Simplified Chinese package.nls localization for the VS Code extension manifest.
