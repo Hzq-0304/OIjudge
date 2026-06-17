@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 优化测试报告展开细节，去除内层详情卡片并为 Subtask 添加平滑展开动画 / Polish report expansion details by flattening case details and animating subtask expansion.
 - 继续打磨测试报告视觉细节，弱化按钮、边框和失败色 / Further polish judge report visuals with softer buttons, borders, and failure colors.
 - 为 VS Code 扩展 manifest 增加中英文 package.nls 本地化 / Add English and Simplified Chinese package.nls localization for the VS Code extension manifest.
 - 优化测试报告视觉层级、展开动画和 Subtask 分组样式 / Improve judge report visual hierarchy, expand animation, and Subtask grouping.

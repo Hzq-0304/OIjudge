@@ -38,15 +38,19 @@ describe('report verdict display', () => {
     expect(html).not.toContain('metricCell verdict-mle');
   });
 
-  it('renders animated detail panels with card-style detail blocks', () => {
+  it('renders flattened animated detail panels without an inner detail card', () => {
     const html = renderReportBody(workspace(), report());
 
     expect(html).toContain('class="case-detail-panel');
     expect(html).toContain('class="case-detail-inner"');
-    expect(html).toContain('class="detailBlock detail-card"');
+    expect(html).toContain('class="detailBlock detail-section"');
+    expect(html).toContain('class="detail-section-title"');
     expect(html).toContain('class="detail-code"');
     expect(html).toContain('class="detail-action" data-command="input"');
     expect(html).toContain('class="detail-action" data-command="diff"');
+    expect(html).toMatch(/class="case-detail-inner">\s*<section class="detailBlock detail-section"/);
+    expect(html).not.toContain('detail-card');
+    expect(html).not.toContain('testcaseDetails');
   });
 
   it('renders subtasks as grouped rows and indents child testcases', () => {
@@ -54,6 +58,8 @@ describe('report verdict display', () => {
 
     expect(html).toContain('class="testcaseGroup subtask-row"');
     expect(html).toContain('class="subtask-summary"');
+    expect(html).toContain('class="subtask-children-panel expanded"');
+    expect(html).toContain('class="subtask-children-inner testcaseGroupBody"');
     expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
     expect(html).toContain('class="testcaseRow nested-case"');
     expect(html).not.toContain('subtask-row status-wa');
@@ -63,10 +69,13 @@ describe('report verdict display', () => {
     const html = renderPage('Report', renderReportBody(workspace(), report()));
 
     expect(html).toContain('case-detail-panel');
+    expect(html).toContain('--oj-expand-duration: 500ms;');
+    expect(html).toContain('--oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);');
     expect(html).toContain('transition:');
     expect(html).toContain('prefers-reduced-motion: reduce');
-    expect(html).toContain("panel?.classList.toggle('expanded'");
+    expect(html).toContain("panel.classList.toggle('expanded', expanded)");
     expect(html).toContain('panel.style.maxHeight');
+    expect(html).toContain('requestAnimationFrame(() => setPanelHeight(subtaskPanel));');
     expect(html).not.toContain('style.display');
   });
 
@@ -101,8 +110,11 @@ describe('report verdict display', () => {
 
     expect(html).toContain('--oj-border-subtle');
     expect(html).toContain('--oj-indent-guide');
+    expect(html).toContain('subtask-children-panel');
+    expect(html).toContain('subtask-children-inner');
     expect(html).toContain('class="testcaseGroup subtask-row"');
     expect(html).toContain('class="subtask-summary"');
+    expect(html).toContain('max-height var(--oj-expand-duration) var(--oj-expand-easing)');
     expect(html).toContain('border: 1px solid var(--oj-border-subtle);');
     expect(html).toContain('background: var(--oj-indent-guide);');
     expect(html).toContain('opacity: 0.72;');

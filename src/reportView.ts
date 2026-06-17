@@ -411,18 +411,20 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
   if (section.kind === 'testcase') {
     return renderTestcaseRow(section.testcase, problemId);
   }
-  return `<details class="testcaseGroup subtask-row" open>
-    <summary class="subtask-summary">
+  return `<div class="testcaseGroup subtask-row" data-subtask-row>
+    <button type="button" class="subtask-summary" aria-expanded="${section.defaultOpen ? 'true' : 'false'}">
       <span class="testcaseName">${escapeHtml(section.name)}</span>
       <span class="statusPill verdict-pill ${verdictClass(section.status)}">${escapeHtml(section.statusText)}</span>
       <span class="scoreCell ${scoreClass(section.scoreEarned, section.scoreTotal, section.status)}">${section.scoreEarned}/${section.scoreTotal}</span>
       <span class="metricCell">${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
       <span class="metricCell"></span>
-    </summary>
-    <div class="testcaseGroupBody">
-      ${section.testcases.map((testcase) => renderTestcaseRow(testcase, problemId, true)).join('')}
+    </button>
+    <div class="subtask-children-panel${section.defaultOpen ? ' expanded' : ''}" data-subtask-children>
+      <div class="subtask-children-inner testcaseGroupBody">
+        ${section.testcases.map((testcase) => renderTestcaseRow(testcase, problemId, true)).join('')}
+      </div>
     </div>
-  </details>`;
+  </div>`;
 }
 
 function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: string, nested = false): string {
@@ -445,18 +447,17 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
 }
 
 function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
-  return `<div class="testcaseDetails">
-    ${renderDetailBlock(t('report.systemInfo'), testcase.systemMessage) || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
+  return `${renderDetailBlock(t('report.systemInfo'), testcase.systemMessage) || renderDetailBlock(t('report.systemInfo'), t('report.noDetails'))}
     ${renderReportActionButtons(testcase.sampleIndex, problemId, testcase.status)}
-  </div>`;
+  `;
 }
 
 function renderDetailBlock(title: string, content: string | undefined): string {
   if (!content || !content.trim()) {
     return '';
   }
-  return `<section class="detailBlock detail-card">
-    <h3 class="detail-title">${escapeHtml(title)}</h3>
+  return `<section class="detailBlock detail-section">
+    <h3 class="detail-section-title">${escapeHtml(title)}</h3>
     <pre class="detail-code">${escapeHtml(content.trimEnd())}</pre>
   </section>`;
 }
@@ -747,6 +748,8 @@ export function renderPage(title: string, body: string): string {
       --oj-soft-button-active-bg: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
       --oj-soft-button-border: var(--vscode-panel-border);
       --oj-indent-guide: var(--vscode-panel-border);
+      --oj-expand-duration: 500ms;
+      --oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);
       --oj-muted: var(--vscode-descriptionForeground);
       --oj-text: var(--vscode-foreground);
       --oj-ac: var(--vscode-testing-iconPassed, #3fb950);
@@ -873,21 +876,23 @@ export function renderPage(title: string, body: string): string {
       border-top: 1px solid var(--oj-border-subtle);
       margin: 4px 6px;
     }
-    .subtask-row > summary {
+    .subtask-summary {
       background: var(--oj-detail-bg);
       border: 1px solid var(--oj-border-subtle);
       border-radius: 7px;
+      color: var(--oj-text);
       cursor: pointer;
+      font: inherit;
       font-weight: 600;
-      list-style: none;
+      text-align: left;
+      width: 100%;
     }
-    .subtask-row > summary:hover {
+    .subtask-summary:hover {
       background: var(--oj-row-hover-bg);
     }
     .subtask-summary {
       padding: 9px 12px;
     }
-    .subtask-row > summary::-webkit-details-marker { display: none; }
     .testcaseName::before {
       content: '▸';
       color: var(--oj-muted);
@@ -896,7 +901,7 @@ export function renderPage(title: string, body: string): string {
       transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
     }
     .case-summary[aria-expanded="true"] .testcaseName::before,
-    .subtask-row[open] > summary .testcaseName::before {
+    .subtask-summary[aria-expanded="true"] .testcaseName::before {
       transform: rotate(90deg);
     }
     .nested-case .testcaseName {
@@ -948,43 +953,41 @@ export function renderPage(title: string, body: string): string {
     .verdict-not-run { color: var(--oj-muted); }
     .scoreCell.score-failed,
     .scoreCell.score-partial { color: var(--oj-score-failed); }
-    .case-detail-panel {
+    .case-detail-panel,
+    .subtask-children-panel {
       max-height: 0;
       opacity: 0;
       overflow: hidden;
       transform: translateY(-4px);
       transition:
-        max-height 200ms cubic-bezier(0.2, 0, 0, 1),
-        opacity 180ms ease-out,
-        transform 180ms ease-out;
+        max-height var(--oj-expand-duration) var(--oj-expand-easing),
+        opacity var(--oj-expand-duration) var(--oj-expand-easing),
+        transform var(--oj-expand-duration) var(--oj-expand-easing);
     }
-    .case-detail-panel.expanded {
+    .case-detail-panel.expanded,
+    .subtask-children-panel.expanded {
       opacity: 1;
       transform: translateY(0);
     }
     .case-detail-inner {
+      background: var(--oj-detail-bg);
+      border-top: 1px solid var(--oj-border-subtle);
       padding: 2px 12px 10px 42px;
     }
-    .testcaseDetails {
-      background: var(--oj-detail-bg);
-      border: 1px solid var(--oj-border-subtle);
-      border-radius: 6px;
-      padding: 10px;
+    .subtask-children-inner {
+      padding: 4px 0 6px;
     }
     .testcaseGroupBody {
       border-top: 0;
-      margin: 4px 8px 8px;
+      margin: 0 2px 4px;
     }
     .detailBlock {
       margin-bottom: 10px;
     }
-    .detail-card {
-      background: transparent;
-      border: 0;
-      border-radius: 0;
-      padding: 0;
+    .detail-section {
+      padding-top: 8px;
     }
-    .detail-title {
+    .detail-section-title {
       color: var(--oj-muted);
       font-size: 12px;
       font-weight: 600;
@@ -1059,8 +1062,10 @@ export function renderPage(title: string, body: string): string {
     }
     @media (prefers-reduced-motion: reduce) {
       .case-detail-panel,
+      .subtask-children-panel,
       .testcaseName::before {
-        transition-duration: 1ms;
+        transition: none;
+        transform: none;
       }
     }
     @media (max-width: 780px) {
@@ -1082,19 +1087,36 @@ export function renderPage(title: string, body: string): string {
       }
       panel.style.maxHeight = panel.classList.contains('expanded') ? panel.scrollHeight + 'px' : '0px';
     };
-    document.querySelectorAll('[data-case-detail]').forEach(setPanelHeight);
+    const togglePanel = (panel, expanded) => {
+      if (!panel) {
+        return;
+      }
+      panel.classList.toggle('expanded', expanded);
+      setPanelHeight(panel);
+    };
+    document.querySelectorAll('[data-case-detail], [data-subtask-children]').forEach(setPanelHeight);
     window.addEventListener('resize', () => {
-      document.querySelectorAll('[data-case-detail].expanded').forEach(setPanelHeight);
+      document.querySelectorAll('[data-case-detail].expanded, [data-subtask-children].expanded').forEach(setPanelHeight);
     });
     document.addEventListener('click', (event) => {
       const summary = event.target.closest('.case-summary');
       if (summary) {
         const row = summary.closest('[data-case-row]');
         const panel = row?.querySelector('[data-case-detail]');
+        const subtaskPanel = row?.closest('[data-subtask-children]');
         const expanded = summary.getAttribute('aria-expanded') === 'true';
         summary.setAttribute('aria-expanded', String(!expanded));
-        panel?.classList.toggle('expanded', !expanded);
-        setPanelHeight(panel);
+        togglePanel(panel, !expanded);
+        requestAnimationFrame(() => setPanelHeight(subtaskPanel));
+        return;
+      }
+      const subtaskSummary = event.target.closest('.subtask-summary');
+      if (subtaskSummary) {
+        const row = subtaskSummary.closest('[data-subtask-row]');
+        const panel = row?.querySelector('[data-subtask-children]');
+        const expanded = subtaskSummary.getAttribute('aria-expanded') === 'true';
+        subtaskSummary.setAttribute('aria-expanded', String(!expanded));
+        togglePanel(panel, !expanded);
         return;
       }
       const button = event.target.closest('button[data-command][data-sample]');
