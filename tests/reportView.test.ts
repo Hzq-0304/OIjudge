@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import * as vscodeModule from 'vscode';
 import { afterEach, describe, expect, it } from 'vitest';
-import { renderPage, renderReportBody } from '../src/reportView';
+import { renderPage, renderReportBody, sortCasesForReportDisplay } from '../src/reportView';
 import { JudgeReport, ProblemConfig, SampleStatus } from '../src/types';
 
 describe('report verdict display', () => {
@@ -87,6 +87,91 @@ describe('report verdict display', () => {
 
     expect(html).toContain('Time Limit Exceeded');
     expect(html).not.toContain('statusPill verdict-pill verdict-tle">TLE</span>');
+  });
+
+  it('sorts report cases failed first without mutating the input array', () => {
+    const cases = [
+      { id: 'a', status: 'AC' },
+      { id: 'b', status: 'TLE' },
+      { id: 'c', status: 'WA' },
+      { id: 'd', status: 'Skipped' },
+      { id: 'e', status: 'AC' }
+    ];
+
+    const sorted = sortCasesForReportDisplay(cases);
+
+    expect(sorted.map((entry) => entry.id)).toEqual(['b', 'c', 'd', 'a', 'e']);
+    expect(cases.map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('renders failed top-level testcases first while keeping testcase numbers and summary unchanged', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 3, total: 5 },
+      samples: [
+        sample('sample-1', 1, 'AC'),
+        sample('sample-2', 2, 'AC'),
+        sample('sample-3', 3, 'WA'),
+        sample('sample-4', 4, 'AC'),
+        sample('sample-5', 5, 'TLE')
+      ]
+    });
+
+    expect(renderedCaseOrder(html)).toEqual([3, 5, 1, 2, 4]);
+    expect(html).toContain('<div><span>Accepted</span><strong>3/5</strong></div>');
+    expect(html).toContain('Failed cases are shown first within each group. The report still reflects the full run.');
+  });
+
+  it('does not show failed-first hint when every testcase is accepted', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 2, total: 2 },
+      samples: [
+        sample('sample-1', 1, 'AC'),
+        sample('sample-2', 2, 'AC')
+      ]
+    });
+
+    expect(renderedCaseOrder(html)).toEqual([1, 2]);
+    expect(html).not.toContain('Failed cases are shown first within each group.');
+  });
+
+  it('sorts failed subtask children only within their own subtask', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 4, total: 6 },
+      samples: [
+        sample('sample-1', 1, 'AC'),
+        sample('sample-2', 2, 'WA'),
+        sample('sample-3', 3, 'AC'),
+        sample('sample-4', 4, 'AC'),
+        sample('sample-5', 5, 'TLE'),
+        sample('sample-6', 6, 'AC')
+      ]
+    }, 'A', problemWithTwoSubtasks());
+
+    expect(html.indexOf('Subtask 1')).toBeLessThan(html.indexOf('Subtask 2'));
+    expect(subtaskCaseOrder(html, 'Subtask 1')).toEqual([2, 1, 3]);
+    expect(subtaskCaseOrder(html, 'Subtask 2')).toEqual([5, 4, 6]);
+    expect(renderedCaseOrder(html)).toEqual([2, 1, 3, 5, 4, 6]);
+  });
+
+  it('keeps root and subtask testcase ordering boundaries separate when sorting failed cases', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 3, total: 5 },
+      samples: [
+        sample('sample-1', 1, 'AC'),
+        sample('sample-2', 2, 'WA'),
+        sample('sample-3', 3, 'AC'),
+        sample('sample-4', 4, 'TLE'),
+        sample('sample-5', 5, 'AC')
+      ]
+    }, 'A', problemWithMixedSubtask());
+
+    expect(renderedCaseOrder(html)).toEqual([4, 1, 2, 3, 5]);
+    expect(html.indexOf('Testcase #4')).toBeLessThan(html.indexOf('Subtask 1'));
+    expect(subtaskCaseOrder(html, 'Subtask 1')).toEqual([2, 3, 5]);
   });
 
   it('renders flattened animated detail panels without an inner detail card', () => {
@@ -288,6 +373,73 @@ function problemWithSubtask(): ProblemConfig {
     standard: 'c++17',
     judgeMode: 'trimTrailingWhitespace'
   };
+}
+
+function problemWithTwoSubtasks(): ProblemConfig {
+  return {
+    id: 'A',
+    name: 'A',
+    compiler: { command: 'g++', args: [] },
+    limits: { timeMs: 1000, memoryMb: 256 },
+    samples: [1, 2, 3, 4, 5, 6].map((index) => ({
+      id: `sample-${index}`,
+      index,
+      name: `Sample ${index}`,
+      input: `${index}.in`,
+      answer: `${index}.out`
+    })),
+    subtasks: [
+      {
+        id: 'subtask-1',
+        name: 'Subtask 1',
+        sampleIds: ['sample-1', 'sample-2', 'sample-3'],
+        scoringMode: 'bundle'
+      },
+      {
+        id: 'subtask-2',
+        name: 'Subtask 2',
+        sampleIds: ['sample-4', 'sample-5', 'sample-6'],
+        scoringMode: 'bundle'
+      }
+    ],
+    standard: 'c++17',
+    judgeMode: 'trimTrailingWhitespace'
+  };
+}
+
+function problemWithMixedSubtask(): ProblemConfig {
+  return {
+    id: 'A',
+    name: 'A',
+    compiler: { command: 'g++', args: [] },
+    limits: { timeMs: 1000, memoryMb: 256 },
+    samples: [1, 2, 3, 4, 5].map((index) => ({
+      id: `sample-${index}`,
+      index,
+      name: `Sample ${index}`,
+      input: `${index}.in`,
+      answer: `${index}.out`
+    })),
+    subtasks: [{
+      id: 'subtask-1',
+      name: 'Subtask 1',
+      sampleIds: ['sample-2', 'sample-3', 'sample-5'],
+      scoringMode: 'bundle'
+    }],
+    standard: 'c++17',
+    judgeMode: 'trimTrailingWhitespace'
+  };
+}
+
+function renderedCaseOrder(html: string): number[] {
+  return [...html.matchAll(/Testcase #(\d+)/g)].map((match) => Number(match[1]));
+}
+
+function subtaskCaseOrder(html: string, subtaskName: string): number[] {
+  const start = html.indexOf(subtaskName);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const next = html.indexOf('class="testcaseGroup subtask-row"', start + subtaskName.length);
+  return renderedCaseOrder(next >= 0 ? html.slice(start, next) : html.slice(start));
 }
 
 function cssDurationMs(html: string, variableName: string): number {

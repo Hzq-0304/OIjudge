@@ -36,6 +36,7 @@ type JudgeReportViewModel = {
   judgeMode: string;
   ioMode: string;
   generatedAt: string;
+  hasFailedCases: boolean;
   testcaseSections: JudgeReportTestcaseSectionViewModel[];
 };
 
@@ -248,6 +249,7 @@ export function renderReportBody(
     </section>
     <section>
       <h2>${escapeHtml(t('report.testcase'))}</h2>
+      ${viewModel.hasFailedCases ? `<p class="reportHint">${escapeHtml(t('report.failedCasesFirstHint'))}</p>` : ''}
       <div class="testcaseTable" role="table" aria-label="${escapeHtml(t('report.testcase'))}">
         <div class="testcaseHeader visually-hidden" role="row">
           <span>${escapeHtml(t('report.testcase'))}</span>
@@ -331,8 +333,29 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
     judgeMode: formatJudgeMode(report),
     ioMode: formatIoMode(report),
     generatedAt: new Date(report.generatedAt).toLocaleString(),
+    hasFailedCases: testcases.some((testcase) => getReportCaseSortRank(testcase) < 2),
     testcaseSections
   };
+}
+
+export function sortCasesForReportDisplay<T extends { status: string }>(cases: readonly T[]): T[] {
+  return cases
+    .map((testcase, index) => ({ testcase, index }))
+    .sort((left, right) => {
+      const rankDelta = getReportCaseSortRank(left.testcase) - getReportCaseSortRank(right.testcase);
+      return rankDelta !== 0 ? rankDelta : left.index - right.index;
+    })
+    .map((entry) => entry.testcase);
+}
+
+function getReportCaseSortRank(testcase: { status: string }): number {
+  if (testcase.status === 'AC' || testcase.status === 'Accepted') {
+    return 2;
+  }
+  if (testcase.status === 'Skipped') {
+    return 1;
+  }
+  return 0;
 }
 
 function buildTestcaseSections(
@@ -341,7 +364,7 @@ function buildTestcaseSections(
   score: ReturnType<typeof calculateJudgeScore> | undefined
 ): JudgeReportTestcaseSectionViewModel[] {
   if (!problem?.subtasks?.length) {
-    return testcases.map((testcase) => ({ kind: 'testcase', testcase }));
+    return sortCasesForReportDisplay(testcases).map((testcase) => ({ kind: 'testcase', testcase }));
   }
 
   const grouped = new Map<string, JudgeReportTestcaseViewModel[]>();
@@ -357,7 +380,7 @@ function buildTestcaseSections(
   }
 
   const sections: JudgeReportTestcaseSectionViewModel[] = [];
-  for (const testcase of rootTestcases) {
+  for (const testcase of sortCasesForReportDisplay(rootTestcases)) {
     sections.push({ kind: 'testcase', testcase });
   }
 
@@ -381,7 +404,7 @@ function buildTestcaseSections(
       passedCount,
       totalCount,
       defaultOpen: true,
-      testcases: subtaskTestcases
+      testcases: sortCasesForReportDisplay(subtaskTestcases)
     });
   }
 
@@ -836,6 +859,11 @@ export function renderPage(title: string, body: string): string {
       margin-bottom: 4px;
     }
     .summary strong { font-size: 16px; }
+    .reportHint {
+      color: var(--oj-row-muted);
+      font-size: 12px;
+      margin: -6px 0 8px;
+    }
     .testcaseTable {
       border: 1px solid var(--oj-border);
       border-radius: 10px;
