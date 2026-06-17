@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 为每个测试点增加单独运行按钮 / Add inline run button for each testcase.
 - 改进样例树 verdict 显示：AC 显示通过图标，非 AC 显示清晰文字 / Improve sample tree verdict display with check icon for AC and text for non-AC results.
 - 样例树 verdict 改为清晰文本显示 / Fix sample tree verdicts to use readable text instead of tiny icons.
 - 修复深色主题下样例树 verdict 图标不可见的问题 / Fix verdict icons being unreadable in dark themes.

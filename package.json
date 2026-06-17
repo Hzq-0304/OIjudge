@@ -325,8 +325,8 @@
       },
       {
         "command": "oijudger.runProblemSample",
-        "title": "OI Judge: 运行此样例/Run This Sample",
-        "icon": "$(run)"
+        "title": "OI Judge: 运行该测试点/Run Sample",
+        "icon": "$(play)"
       },
       {
         "command": "oijudger.setProblemTimeLimit",
@@ -935,29 +935,34 @@
           "group": "3_run"
         },
         {
-          "command": "oijudger.openSampleInput",
+          "command": "oijudger.runProblemSample",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "inline@1"
         },
         {
+          "command": "oijudger.openSampleInput",
+          "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
+          "group": "inline@2"
+        },
+        {
           "command": "oijudger.openSampleAnswer",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleWithGeneratedOutput)",
-          "group": "inline@2"
+          "group": "inline@3"
         },
         {
           "command": "oijudger.openSampleUserOutput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker)",
-          "group": "inline@3"
+          "group": "inline@4"
         },
         {
           "command": "oijudger.openSampleDiff",
           "when": "view == oijudger.samplesView && (viewItem == sampleWa || viewItem == sampleWaChecker)",
-          "group": "inline@5"
+          "group": "inline@6"
         },
         {
           "command": "oijudger.deleteSample",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
-          "group": "inline@9"
+          "group": "inline@10"
         },
         {
           "command": "oijudger.moveSampleToSubtask",
@@ -1012,7 +1017,7 @@
         {
           "command": "oijudger.openCheckerOutput",
           "when": "view == oijudger.samplesView && (viewItem == sampleChecker || viewItem == sampleWaChecker)",
-          "group": "inline@6"
+          "group": "inline@7"
         },
         {
           "command": "oijudger.generateSampleAnswerWithStd",
@@ -1037,12 +1042,12 @@
         {
           "command": "oijudger.applyGeneratedSampleAnswer",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
-          "group": "inline@7"
+          "group": "inline@8"
         },
         {
           "command": "oijudger.deleteGeneratedSampleAnswer",
           "when": "view == oijudger.samplesView && oijudger.setterModeEnabled && viewItem == sampleWithGeneratedOutput",
-          "group": "inline@8"
+          "group": "inline@9"
         },
         {
           "command": "oijudger.setSampleName",
@@ -1137,7 +1142,7 @@
         {
           "command": "oijudger.copyTestcaseFreopenInput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
-          "group": "inline@4"
+          "group": "inline@5"
         },
         {
           "command": "oijudger.copyTestcaseFreopenInput",

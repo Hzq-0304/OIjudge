@@ -869,7 +869,7 @@ function createSampleActionNodes(
   }
 
   const nodes = [
-    sampleActionNode(t('runSample'), 'oijudger.runProblemSample', 'run', problemId, sampleId),
+    sampleActionNode(t('runSample'), 'oijudger.runProblemSample', 'play', problemId, sampleId),
     sampleActionNode(t('openSampleInput'), 'oijudger.openSampleInput', 'go-to-file', problemId, sampleId)
   ];
 

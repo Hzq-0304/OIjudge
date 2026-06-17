@@ -20,6 +20,7 @@ const legacyInternalCommands = [
   'oijudger.openCheckerStderr',
   'oijudger.openSampleStderr'
 ];
+const sampleNodeWhen = 'view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)';
 
 function registeredCommands(): string[] {
   return Array.from(extensionSource.matchAll(/registerCommand\(\s*['"]([^'"]+)['"]/g), (match) => match[1]);
@@ -92,6 +93,27 @@ describe('package tree sample add menu', () => {
     );
 
     expect(problemAddEntries).toEqual([]);
+  });
+
+  it('contributes an inline run action only for sample nodes', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.runProblemSample');
+    const menu = packageJson.contributes.menus['view/item/context'].find((entry) =>
+      entry.command === 'oijudger.runProblemSample' && entry.group === 'inline@1'
+    );
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.runProblemSample');
+    expect(command).toMatchObject({
+      icon: '$(play)',
+      title: 'OI Judge: 运行该测试点/Run Sample'
+    });
+    expect(menu).toMatchObject({
+      when: sampleNodeWhen,
+      group: 'inline@1'
+    });
+    expect(menu?.when).not.toContain('oijudgerProblem');
+    expect(menu?.when).not.toContain('subtask');
+    expect(menu?.when).not.toContain('generator');
+    expect(menu?.when).not.toContain('setter');
   });
 
   it('contributes setter STD answer generation and generator menus behind setter mode', () => {
@@ -373,7 +395,7 @@ describe('package tree sample add menu', () => {
     expect(contextMenus.length).toBeGreaterThan(0);
     expect(contextMenus.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
     expect(contextMenus.every((entry) => entry.when.includes('viewItem == sample'))).toBe(true);
-    expect(contextMenus.some((entry) => entry.group === 'inline@4')).toBe(true);
+    expect(contextMenus.some((entry) => entry.group === 'inline@5')).toBe(true);
     expect(packageJson.contributes.menus.commandPalette).toContainEqual({
       command,
       when: 'false'
