@@ -218,10 +218,10 @@ export function renderReportBody(
   problem?: ProblemConfig
 ): string {
   const viewModel = buildJudgeReportViewModel(report, problem);
-  return `<section class="reportHero status-surface ${statusClass(viewModel.status)}">
+  return `<section class="reportHero status-surface">
       <div>
         <span class="eyebrow">${escapeHtml(t('report.result'))}</span>
-        <strong>${escapeHtml(viewModel.statusText)}</strong>
+        <strong class="status ${statusClass(viewModel.status)}">${escapeHtml(viewModel.statusText)}</strong>
       </div>
       <div class="summaryGrid">
         <div><span>${escapeHtml(t('report.score'))}</span><strong>${viewModel.earnedScore}/${viewModel.totalScore}</strong></div>
@@ -411,12 +411,13 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
   if (section.kind === 'testcase') {
     return renderTestcaseRow(section.testcase, problemId);
   }
-  return `<details class="testcaseGroup subtask ${statusClass(section.status)}" open>
-    <summary>
+  return `<details class="testcaseGroup subtask-row" open>
+    <summary class="subtask-summary">
       <span class="testcaseName">${escapeHtml(section.name)}</span>
-      <span class="statusPill ${statusClass(section.status)}">${escapeHtml(section.statusText)}</span>
-      <span>${section.scoreEarned}/${section.scoreTotal}</span>
-      <span>${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
+      <span class="statusPill verdict-pill ${verdictClass(section.status)}">${escapeHtml(section.statusText)}</span>
+      <span class="scoreCell ${scoreClass(section.scoreEarned, section.scoreTotal, section.status)}">${section.scoreEarned}/${section.scoreTotal}</span>
+      <span class="metricCell">${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
+      <span class="metricCell"></span>
     </summary>
     <div class="testcaseGroupBody">
       ${section.testcases.map((testcase) => renderTestcaseRow(testcase, problemId, true)).join('')}
@@ -426,16 +427,21 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
 
 function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: string, nested = false): string {
   const details = renderTestcaseDetails(testcase, problemId);
-  return `<details class="testcaseRow ${nested ? 'nested' : ''} ${statusClass(testcase.status)}"${testcase.defaultOpen ? ' open' : ''}>
-    <summary>
+  const expanded = testcase.defaultOpen ? ' expanded' : '';
+  return `<div class="testcaseRow${nested ? ' nested-case' : ''}" data-case-row>
+    <button type="button" class="case-summary" aria-expanded="${testcase.defaultOpen ? 'true' : 'false'}">
       <span class="testcaseName">${escapeHtml(t('report.testcaseNumber', { index: testcase.index }))}</span>
-      <span class="statusPill ${statusClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
-      <span>${testcase.scoreEarned}/${testcase.scoreTotal}</span>
-      <span>${escapeHtml(formatTestcaseDuration(testcase))}</span>
-      <span>${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
-    </summary>
-    ${details}
-  </details>`;
+      <span class="statusPill verdict-pill ${verdictClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
+      <span class="scoreCell ${scoreClass(testcase.scoreEarned, testcase.scoreTotal, testcase.status)}">${testcase.scoreEarned}/${testcase.scoreTotal}</span>
+      <span class="metricCell">${escapeHtml(formatTestcaseDuration(testcase))}</span>
+      <span class="metricCell">${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
+    </button>
+    <div class="case-detail-panel${expanded}" data-case-detail>
+      <div class="case-detail-inner">
+        ${details}
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
@@ -449,9 +455,9 @@ function renderDetailBlock(title: string, content: string | undefined): string {
   if (!content || !content.trim()) {
     return '';
   }
-  return `<section class="detailBlock">
-    <h3>${escapeHtml(title)}</h3>
-    <pre>${escapeHtml(content.trimEnd())}</pre>
+  return `<section class="detailBlock detail-card">
+    <h3 class="detail-title">${escapeHtml(title)}</h3>
+    <pre class="detail-code">${escapeHtml(content.trimEnd())}</pre>
   </section>`;
 }
 
@@ -721,7 +727,7 @@ function getReportSampleIndex(sample: SampleReport): number | undefined {
   return nameMatch ? Number(nameMatch[1]) : undefined;
 }
 
-function renderPage(title: string, body: string): string {
+export function renderPage(title: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -730,6 +736,17 @@ function renderPage(title: string, body: string): string {
   <title>${escapeHtml(title)}</title>
   <style>
     body {
+      --oj-card-bg: var(--vscode-editorWidget-background);
+      --oj-row-bg: var(--vscode-editor-background);
+      --oj-row-hover-bg: var(--vscode-list-hoverBackground);
+      --oj-border: var(--vscode-panel-border);
+      --oj-muted: var(--vscode-descriptionForeground);
+      --oj-text: var(--vscode-foreground);
+      --oj-ac: var(--vscode-testing-iconPassed, #3fb950);
+      --oj-wa: var(--vscode-testing-iconFailed, #f85149);
+      --oj-tle: #d29922;
+      --oj-mle: #bc8cff;
+      --oj-re: #f0883e;
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
       font-family: var(--vscode-font-family);
@@ -790,58 +807,91 @@ function renderPage(title: string, body: string): string {
     }
     .summary strong { font-size: 16px; }
     .testcaseTable {
-      border: 1px solid var(--vscode-panel-border);
+      border: 1px solid var(--oj-border);
       border-radius: 10px;
       min-width: 720px;
       overflow: hidden;
-      background: var(--vscode-sideBar-background);
+      background: var(--oj-row-bg);
     }
     .testcaseHeader,
-    .testcaseRow summary {
+    .case-summary,
+    .subtask-summary {
       align-items: center;
       display: grid;
       grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px;
       gap: 12px;
-      padding: 10px 14px;
+      padding: 11px 14px;
     }
     .testcaseHeader > span,
-    .testcaseRow summary > span {
+    .case-summary > span,
+    .subtask-summary > span {
       min-width: 0;
     }
     .testcaseHeader {
-      background: var(--vscode-editorWidget-background);
-      color: var(--vscode-descriptionForeground);
+      background: var(--oj-card-bg);
+      color: var(--oj-muted);
       font-size: 12px;
       font-weight: 600;
-      letter-spacing: 0.02em;
+      letter-spacing: 0;
       text-transform: uppercase;
     }
     .testcaseRow {
-      border-top: 1px solid var(--vscode-panel-border);
+      border-top: 1px solid var(--oj-border);
     }
-    .testcaseGroup.subtask > summary {
-      background: color-mix(in srgb, var(--vscode-list-inactiveSelectionBackground) 16%, transparent);
-      font-weight: 700;
-    }
-    .testcaseRow summary {
+    .case-summary {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      color: var(--oj-text);
       cursor: pointer;
+      font: inherit;
+      list-style: none;
+      text-align: left;
+      width: 100%;
+    }
+    .case-summary:hover {
+      background: var(--oj-row-hover-bg);
+    }
+    .subtask-row {
+      border-top: 1px solid var(--oj-border);
+      margin: 6px 8px;
+    }
+    .subtask-row > summary {
+      background: var(--oj-card-bg);
+      border: 1px solid var(--oj-border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 650;
       list-style: none;
     }
-    .testcaseRow summary::-webkit-details-marker { display: none; }
+    .subtask-row > summary:hover {
+      background: var(--oj-row-hover-bg);
+    }
+    .subtask-row > summary::-webkit-details-marker { display: none; }
     .testcaseName::before {
       content: '▸';
-      color: var(--vscode-descriptionForeground);
+      color: var(--oj-muted);
       display: inline-block;
       margin-right: 8px;
-      transition: transform 120ms ease;
+      transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
     }
-    .testcaseRow[open] .testcaseName::before { transform: rotate(90deg); }
-    .testcaseRow.nested .testcaseName {
-      padding-left: 18px;
+    .case-summary[aria-expanded="true"] .testcaseName::before,
+    .subtask-row[open] > summary .testcaseName::before {
+      transform: rotate(90deg);
     }
-    .testcaseRow[open] summary {
-      background: var(--vscode-list-hoverBackground);
-      background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 18%, transparent);
+    .nested-case .testcaseName {
+      padding-left: 30px;
+      position: relative;
+    }
+    .nested-case .testcaseName::after {
+      background: var(--oj-border);
+      content: '';
+      height: 18px;
+      left: 16px;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
     }
     .statusPill {
       border-radius: 999px;
@@ -849,15 +899,72 @@ function renderPage(title: string, body: string): string {
       font-weight: 700;
       width: fit-content;
     }
+    .scoreCell,
+    .metricCell {
+      color: var(--oj-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .scoreCell {
+      font-weight: 650;
+    }
+    .score-passed { color: var(--oj-ac); }
+    .score-failed,
+    .score-partial { color: currentColor; }
+    .score-muted { color: var(--oj-muted); }
+    .verdict-ac { color: var(--oj-ac); }
+    .verdict-wa,
+    .verdict-ce,
+    .verdict-err,
+    .verdict-missing,
+    .verdict-checker-error,
+    .verdict-output-missing { color: var(--oj-wa); }
+    .verdict-tle,
+    .verdict-ole { color: var(--oj-tle); }
+    .verdict-mle { color: var(--oj-mle); }
+    .verdict-re { color: var(--oj-re); }
+    .verdict-partial,
+    .verdict-scored { color: var(--vscode-testing-iconQueued, #d29922); }
+    .verdict-not-run { color: var(--oj-muted); }
+    .case-detail-panel {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transform: translateY(-4px);
+      transition:
+        max-height 200ms cubic-bezier(0.2, 0, 0, 1),
+        opacity 180ms ease-out,
+        transform 180ms ease-out;
+    }
+    .case-detail-panel.expanded {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .case-detail-inner {
+      padding: 0 14px 14px 42px;
+    }
     .testcaseDetails {
-      border-top: 1px solid var(--vscode-panel-border);
-      padding: 12px 14px 14px 42px;
+      border-top: 1px solid var(--oj-border);
+      padding-top: 12px;
     }
     .testcaseGroupBody {
-      border-top: 1px solid var(--vscode-panel-border);
+      border-top: 0;
+      margin: 4px 8px 8px;
     }
     .detailBlock {
       margin-bottom: 12px;
+    }
+    .detail-card {
+      background: var(--oj-card-bg);
+      border: 1px solid var(--oj-border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .detail-title {
+      color: var(--oj-muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin: 0 0 8px;
+      text-transform: uppercase;
     }
     dl {
       display: grid;
@@ -870,7 +977,7 @@ function renderPage(title: string, body: string): string {
       overflow-wrap: anywhere;
     }
     .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-    button {
+    .buttons button {
       background: var(--vscode-button-background);
       border: 0;
       border-radius: 3px;
@@ -878,8 +985,8 @@ function renderPage(title: string, body: string): string {
       cursor: pointer;
       padding: 4px 10px;
     }
-    button:hover { background: var(--vscode-button-hoverBackground); }
-    button:disabled {
+    .buttons button:hover { background: var(--vscode-button-hoverBackground); }
+    .buttons button:disabled {
       cursor: default;
       opacity: 0.55;
     }
@@ -902,10 +1009,18 @@ function renderPage(title: string, body: string): string {
     }
     pre {
       background: var(--vscode-textCodeBlock-background);
-      border-radius: 4px;
+      border-radius: 6px;
+      margin: 0;
       overflow-x: auto;
       padding: 10px;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .case-detail-panel,
+      .testcaseName::before {
+        transition-duration: 1ms;
+      }
     }
     @media (max-width: 780px) {
       .reportHero { grid-template-columns: 1fr; }
@@ -920,7 +1035,27 @@ function renderPage(title: string, body: string): string {
   ${body}
   <script>
     const vscode = acquireVsCodeApi();
+    const setPanelHeight = (panel) => {
+      if (!panel) {
+        return;
+      }
+      panel.style.maxHeight = panel.classList.contains('expanded') ? panel.scrollHeight + 'px' : '0px';
+    };
+    document.querySelectorAll('[data-case-detail]').forEach(setPanelHeight);
+    window.addEventListener('resize', () => {
+      document.querySelectorAll('[data-case-detail].expanded').forEach(setPanelHeight);
+    });
     document.addEventListener('click', (event) => {
+      const summary = event.target.closest('.case-summary');
+      if (summary) {
+        const row = summary.closest('[data-case-row]');
+        const panel = row?.querySelector('[data-case-detail]');
+        const expanded = summary.getAttribute('aria-expanded') === 'true';
+        summary.setAttribute('aria-expanded', String(!expanded));
+        panel?.classList.toggle('expanded', !expanded);
+        setPanelHeight(panel);
+        return;
+      }
       const button = event.target.closest('button[data-command][data-sample]');
       if (!button || button.disabled) {
         return;
@@ -937,6 +1072,23 @@ function renderPage(title: string, body: string): string {
 
 function statusClass(status: string): string {
   return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function verdictClass(status: string): string {
+  return `verdict-${status.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function scoreClass(earned: number, total: number, status: string): string {
+  if (status === 'AC' || (status === 'Scored' && total > 0 && earned >= total)) {
+    return 'score-passed';
+  }
+  if (earned > 0 && earned < total) {
+    return `score-partial ${verdictClass(status)}`;
+  }
+  if (status === 'Not Run') {
+    return 'score-muted';
+  }
+  return `score-failed ${verdictClass(status)}`;
 }
 
 function getOverallStatus(report: JudgeReport, earnedScore: number | undefined): string {
