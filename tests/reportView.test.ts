@@ -9,33 +9,84 @@ describe('report verdict display', () => {
     (vscodeModule.env as { language: string }).language = 'en';
   });
 
-  it('shows verdict acronyms in the report summary and testcase table in Chinese UI', () => {
+  it('keeps the report summary acronym and shows testcase verdict full names in Chinese UI', () => {
     (vscodeModule.env as { language: string }).language = 'zh-cn';
     const html = renderReportBody(workspace(), report());
 
     expect(html).toContain('<strong class="status status-mle">MLE</strong>');
-    expect(html).toContain('statusPill verdict-pill verdict-mle">MLE</span>');
-    expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
-    expect(html).toContain('statusPill verdict-pill verdict-ac">AC</span>');
+    expect(html).toContain('Memory Limit Exceeded');
+    expect(html).toContain('Wrong Answer');
+    expect(html).toContain('Accepted');
+    expect(html).not.toContain('statusPill verdict-pill verdict-mle">MLE</span>');
+    expect(html).not.toContain('statusPill verdict-pill verdict-wa">WA</span>');
+    expect(html).not.toContain('statusPill verdict-pill verdict-ac">AC</span>');
     expect(html).not.toContain('内存超限');
     expect(html).not.toContain('答案错误');
     expect(html).not.toContain('statusPill verdict-pill verdict-ac">通过</span>');
     expect(html).not.toContain('<strong>通过</strong>');
   });
 
+  it('renders testcase rows as labeled items without a visible table header', () => {
+    const html = renderReportBody(workspace(), report());
+
+    expect(html).toContain('class="testcaseHeader visually-hidden"');
+    expect(html).toContain('<span class="infoLabel">Score:</span> 0</span>');
+    expect(html).toContain('<span class="infoLabel">Time:</span> 2 ms</span>');
+    expect(html).toContain('<span class="infoLabel">Memory:</span> 3.40 MB</span>');
+    expect(html).not.toContain('scoreCell score-failed verdict-wa">0/0');
+    expect(html).not.toContain('scoreCell score-failed verdict-mle">0/0');
+    expect(html).not.toContain('<span class="metricCell">2 ms</span>');
+    expect(html).not.toContain('<span class="metricCell">-</span>');
+  });
+
+  it('does not add extra verdict symbols before full status names', () => {
+    const html = renderReportBody(workspace(), report());
+
+    expect(html).not.toContain('class="statusIcon"');
+    expect(html).not.toContain('&#10003;');
+    expect(html).not.toContain('&times;');
+    expect(html).toContain('<span class="statusPill verdict-pill verdict-wa">Wrong Answer</span>');
+    expect(html).toContain('<span class="statusPill verdict-pill verdict-ac">Accepted</span>');
+  });
+
+  it('does not show earned slash total as the main testcase score', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 0, total: 1 },
+      samples: [{ ...sample('sample-2', 2, 'WA'), score: 0, scoreTotal: 5 }]
+    });
+
+    expect(html).toContain('<span class="infoLabel">Score:</span> 0</span>');
+    expect(html).not.toContain('>0/5</span>');
+    expect(html).not.toContain('Score:</span> 0/5');
+  });
+
   it('keeps failed verdict color on status and score cells instead of the whole row', () => {
     const html = renderReportBody(workspace(), report());
 
-    expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
-    expect(html).toContain('statusPill verdict-pill verdict-mle">MLE</span>');
-    expect(html).toContain('scoreCell score-failed verdict-wa">0/0');
-    expect(html).toContain('scoreCell score-failed verdict-mle">0/0');
-    expect(html).toContain('<span class="metricCell">2 ms</span>');
-    expect(html).toContain('<span class="metricCell">-</span>');
+    expect(html).toContain('statusPill verdict-pill verdict-wa');
+    expect(html).toContain('Wrong Answer');
+    expect(html).toContain('statusPill verdict-pill verdict-mle');
+    expect(html).toContain('Memory Limit Exceeded');
+    expect(html).toContain('scoreCell score-failed verdict-wa');
+    expect(html).toContain('scoreCell score-failed verdict-mle');
+    expect(html).toContain('infoCell metricCell"><span class="infoLabel">Time:</span> 2 ms</span>');
+    expect(html).toContain('infoCell metricCell"><span class="infoLabel">Memory:</span> 3.40 MB</span>');
     expect(html).not.toContain('testcaseRow  status-wa');
     expect(html).not.toContain('testcaseRow  status-mle');
     expect(html).not.toContain('metricCell verdict-wa');
     expect(html).not.toContain('metricCell verdict-mle');
+  });
+
+  it('uses full names for additional verdicts such as TLE', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 0, total: 1 },
+      samples: [sample('sample-4', 4, 'TLE')]
+    });
+
+    expect(html).toContain('Time Limit Exceeded');
+    expect(html).not.toContain('statusPill verdict-pill verdict-tle">TLE</span>');
   });
 
   it('renders flattened animated detail panels without an inner detail card', () => {
@@ -60,7 +111,8 @@ describe('report verdict display', () => {
     expect(html).toContain('class="subtask-summary"');
     expect(html).toContain('class="subtask-children-panel expanded"');
     expect(html).toContain('class="subtask-children-inner testcaseGroupBody"');
-    expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
+    expect(html).toContain('statusPill verdict-pill verdict-wa');
+    expect(html).toContain('Wrong Answer');
     expect(html).toContain('class="testcaseRow nested-case"');
     expect(html).not.toContain('subtask-row status-wa');
   });
@@ -146,9 +198,10 @@ describe('report verdict display', () => {
     expect(html).toContain('--oj-score-failed');
     expect(html).toContain('.scoreCell.score-failed');
     expect(html).toContain('color: var(--oj-score-failed);');
-    expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
-    expect(html).toContain('scoreCell score-failed verdict-wa">0/0');
-    expect(html).toContain('<span class="metricCell">2 ms</span>');
+    expect(html).toContain('statusPill verdict-pill verdict-wa');
+    expect(html).toContain('Wrong Answer');
+    expect(html).toContain('scoreCell score-failed verdict-wa');
+    expect(html).toContain('infoCell metricCell"><span class="infoLabel">Time:</span> 2 ms</span>');
     expect(html).not.toContain('metricCell verdict-wa');
     expect(html).not.toContain('metricCell score-failed');
     expect(html).not.toContain('testcaseRow status-wa');
@@ -159,10 +212,14 @@ describe('report verdict display', () => {
 
     expect(html).toContain('--oj-border-subtle');
     expect(html).toContain('--oj-indent-guide');
+    expect(html).toContain('--oj-row-text');
+    expect(html).toContain('--oj-row-muted');
     expect(html).toContain('subtask-children-panel');
     expect(html).toContain('subtask-children-inner');
     expect(html).toContain('class="testcaseGroup subtask-row"');
     expect(html).toContain('class="subtask-summary"');
+    expect(html).toContain('<span class="infoLabel">Score:</span> 0/66</span>');
+    expect(html).toContain('<span class="infoLabel">Accepted:</span> 0/2</span>');
     expect(html).toContain('height var(--oj-expand-duration) var(--oj-expand-easing)');
     expect(html).toContain('border: 1px solid var(--oj-border-subtle);');
     expect(html).toContain('background: var(--oj-indent-guide);');
@@ -264,6 +321,7 @@ function sample(id: string, index: number, status: SampleStatus) {
     actualOutput: `${index}.txt`,
     status,
     timeMs: index,
-    elapsedMs: index
+    elapsedMs: index,
+    memoryKiB: index === 2 ? 3482 : undefined
   };
 }

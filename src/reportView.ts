@@ -13,7 +13,7 @@ import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErr
 import { inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
-import { formatVerdictAcronym } from './verdict';
+import { formatVerdictAcronym, formatVerdictFullName } from './verdict';
 
 const maxSystemMessageLength = 12_000;
 
@@ -249,7 +249,7 @@ export function renderReportBody(
     <section>
       <h2>${escapeHtml(t('report.testcase'))}</h2>
       <div class="testcaseTable" role="table" aria-label="${escapeHtml(t('report.testcase'))}">
-        <div class="testcaseHeader" role="row">
+        <div class="testcaseHeader visually-hidden" role="row">
           <span>${escapeHtml(t('report.testcase'))}</span>
           <span>${escapeHtml(t('status'))}</span>
           <span>${escapeHtml(t('report.score'))}</span>
@@ -300,7 +300,7 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       index: sample.index,
       name: sample.name || t('report.testcaseNumber', { index: sample.index }),
       status: sample.status,
-      statusText: statusLabel(sample.status),
+      statusText: formatVerdictFullName(sample.status),
       scoreEarned,
       scoreTotal,
       timeMs: sample.timeMs ?? sample.elapsedMs,
@@ -404,7 +404,7 @@ function subtaskStatus(
 }
 
 function subtaskStatusText(status: 'AC' | 'PARTIAL' | 'WA'): string {
-  return formatVerdictAcronym(status);
+  return formatVerdictFullName(status);
 }
 
 function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, problemId?: string): string {
@@ -414,10 +414,9 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
   return `<div class="testcaseGroup subtask-row" data-subtask-row>
     <button type="button" class="subtask-summary" aria-expanded="${section.defaultOpen ? 'true' : 'false'}">
       <span class="testcaseName">${escapeHtml(section.name)}</span>
-      <span class="statusPill verdict-pill ${verdictClass(section.status)}">${escapeHtml(section.statusText)}</span>
-      <span class="scoreCell ${scoreClass(section.scoreEarned, section.scoreTotal, section.status)}">${section.scoreEarned}/${section.scoreTotal}</span>
-      <span class="metricCell">${escapeHtml(`passed ${section.passedCount}/${section.totalCount}`)}</span>
-      <span class="metricCell"></span>
+      ${renderVerdictStatus(section.status, section.statusText)}
+      <span class="infoCell scoreCell ${scoreClass(section.scoreEarned, section.scoreTotal, section.status)}"><span class="infoLabel">${escapeHtml(t('report.score'))}:</span> ${section.scoreEarned}/${section.scoreTotal}</span>
+      <span class="infoCell metricCell"><span class="infoLabel">${escapeHtml(t('report.accepted'))}:</span> ${section.passedCount}/${section.totalCount}</span>
     </button>
     <div class="subtask-children-panel${section.defaultOpen ? ' expanded' : ''}" data-subtask-children aria-hidden="${section.defaultOpen ? 'false' : 'true'}">
       <div class="subtask-children-inner testcaseGroupBody">
@@ -433,10 +432,10 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
   return `<div class="testcaseRow${nested ? ' nested-case' : ''}" data-case-row>
     <button type="button" class="case-summary" aria-expanded="${testcase.defaultOpen ? 'true' : 'false'}">
       <span class="testcaseName">${escapeHtml(t('report.testcaseNumber', { index: testcase.index }))}</span>
-      <span class="statusPill verdict-pill ${verdictClass(testcase.status)}">${escapeHtml(testcase.statusText)}</span>
-      <span class="scoreCell ${scoreClass(testcase.scoreEarned, testcase.scoreTotal, testcase.status)}">${testcase.scoreEarned}/${testcase.scoreTotal}</span>
-      <span class="metricCell">${escapeHtml(formatTestcaseDuration(testcase))}</span>
-      <span class="metricCell">${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
+      ${renderVerdictStatus(testcase.status, testcase.statusText)}
+      <span class="infoCell scoreCell ${scoreClass(testcase.scoreEarned, testcase.scoreTotal, testcase.status)}"><span class="infoLabel">${escapeHtml(t('report.score'))}:</span> ${testcase.scoreEarned}</span>
+      <span class="infoCell metricCell"><span class="infoLabel">${escapeHtml(t('time'))}:</span> ${escapeHtml(formatTestcaseDuration(testcase))}</span>
+      <span class="infoCell metricCell"><span class="infoLabel">${escapeHtml(t('memory'))}:</span> ${escapeHtml(formatMemory(testcase.memoryKiB))}</span>
     </button>
     <div class="case-detail-panel${expanded}" data-case-detail aria-hidden="${testcase.defaultOpen ? 'false' : 'true'}">
       <div class="case-detail-inner">
@@ -444,6 +443,10 @@ function renderTestcaseRow(testcase: JudgeReportTestcaseViewModel, problemId?: s
       </div>
     </div>
   </div>`;
+}
+
+function renderVerdictStatus(status: string, statusText: string): string {
+  return `<span class="statusPill verdict-pill ${verdictClass(status)}">${escapeHtml(statusText)}</span>`;
 }
 
 function renderTestcaseDetails(testcase: JudgeReportTestcaseViewModel, problemId?: string): string {
@@ -748,6 +751,8 @@ export function renderPage(title: string, body: string): string {
       --oj-soft-button-active-bg: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
       --oj-soft-button-border: var(--vscode-panel-border);
       --oj-indent-guide: var(--vscode-panel-border);
+      --oj-row-text: var(--vscode-foreground);
+      --oj-row-muted: var(--vscode-descriptionForeground);
       --oj-expand-duration: 650ms;
       --oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);
       --oj-content-drift-duration: 900ms;
@@ -761,15 +766,17 @@ export function renderPage(title: string, body: string): string {
       --oj-tle: #d29922;
       --oj-mle: #bc8cff;
       --oj-re: #f0883e;
-      --oj-border-subtle: color-mix(in srgb, var(--vscode-panel-border) 58%, transparent);
+      --oj-border-subtle: color-mix(in srgb, var(--vscode-panel-border) 36%, transparent);
       --oj-detail-bg: color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-editorWidget-background) 6%);
       --oj-soft-button-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 88%, var(--vscode-foreground) 12%);
       --oj-soft-button-hover-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 80%, var(--vscode-foreground) 20%);
       --oj-soft-button-active-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 74%, var(--vscode-foreground) 26%);
       --oj-soft-button-border: color-mix(in srgb, var(--vscode-panel-border) 68%, transparent);
       --oj-indent-guide: color-mix(in srgb, var(--vscode-panel-border) 42%, transparent);
-      --oj-wa: color-mix(in srgb, var(--vscode-errorForeground, var(--vscode-testing-iconFailed, #ff7b72)) 82%, var(--vscode-foreground) 18%);
-      --oj-score-failed: color-mix(in srgb, var(--oj-wa) 68%, var(--vscode-descriptionForeground) 32%);
+      --oj-row-text: color-mix(in srgb, var(--vscode-foreground) 84%, var(--vscode-descriptionForeground) 16%);
+      --oj-row-muted: color-mix(in srgb, var(--vscode-descriptionForeground) 86%, var(--vscode-editor-background) 14%);
+      --oj-wa: color-mix(in srgb, var(--vscode-errorForeground, var(--vscode-testing-iconFailed, #ff7b72)) 72%, var(--vscode-foreground) 28%);
+      --oj-score-failed: color-mix(in srgb, var(--oj-wa) 54%, var(--vscode-descriptionForeground) 46%);
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
       font-family: var(--vscode-font-family);
@@ -836,12 +843,24 @@ export function renderPage(title: string, body: string): string {
       overflow: hidden;
       background: var(--oj-row-bg);
     }
+    .visually-hidden {
+      border: 0;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      white-space: nowrap;
+      width: 1px;
+    }
     .testcaseHeader,
     .case-summary,
     .subtask-summary {
       align-items: center;
       display: grid;
-      grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 90px 90px 110px;
+      grid-template-columns: minmax(120px, 1.15fr) minmax(150px, max-content) minmax(82px, max-content) minmax(96px, max-content) minmax(112px, max-content);
       gap: 12px;
       padding: 11px 14px;
     }
@@ -923,14 +942,30 @@ export function renderPage(title: string, body: string): string {
       width: 1px;
     }
     .statusPill {
-      border-radius: 999px;
+      align-items: center;
       display: inline-flex;
+      gap: 6px;
       font-weight: 700;
+      min-width: 0;
+      white-space: nowrap;
       width: fit-content;
+    }
+    .testcaseName {
+      color: var(--oj-row-text);
+      font-weight: 520;
+      min-width: 0;
+    }
+    .infoCell {
+      color: var(--oj-row-muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .infoLabel {
+      color: var(--oj-row-muted);
+      font-weight: 500;
     }
     .scoreCell,
     .metricCell {
-      color: var(--oj-muted);
       font-variant-numeric: tabular-nums;
     }
     .scoreCell {
