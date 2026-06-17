@@ -719,11 +719,7 @@ async function createSampleNodes(
     const earnedScore = sampleReport && scoreInfo
       ? sampleReport.score ?? (sampleReport.status === 'AC' ? scoreInfo.score : 0)
       : undefined;
-    const scoreText = earnedScore !== undefined && scoreInfo
-      ? t('score.sampleDisplay', { earned: earnedScore, total: scoreInfo.score })
-      : scoreInfo
-        ? `${scoreInfo.score} ${scoreInfo.manual ? t('score.manual') : t('score.auto')}`
-        : undefined;
+    const scoreText = formatSampleScoreText(scoreInfo, earnedScore, running);
     const label = formatSampleLabel(sample.name, status, running);
     const baseDescription = running
       ? undefined
@@ -847,6 +843,21 @@ function formatSampleDescription(
   elapsed: string
 ): string {
   return report || status !== 'Not Run' ? elapsed : '';
+}
+
+function formatSampleScoreText(
+  scoreInfo: { score: number; manual: boolean } | undefined,
+  earnedScore: number | undefined,
+  running: boolean
+): string | undefined {
+  if (!scoreInfo) {
+    return running ? t('sampleRunning') : undefined;
+  }
+  if (earnedScore !== undefined) {
+    const scoreText = t('score.sampleDisplay', { earned: earnedScore, total: scoreInfo.score });
+    return running ? `${scoreText} ${t('sampleRunning')}` : scoreText;
+  }
+  return `${scoreInfo.score} ${running ? t('sampleRunning') : scoreInfo.manual ? t('score.manual') : t('score.auto')}`;
 }
 
 export function formatVerdictText(status: SampleStatus | 'Not Run'): string {

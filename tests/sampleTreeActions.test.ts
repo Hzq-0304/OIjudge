@@ -434,14 +434,17 @@ describe('sample tree add entry', () => {
     expect(provider.isSampleRunning(problem.id, sample?.id ?? '')).toBe(false);
     expect(iconId(initialItem)).toBe('circle-outline');
     expect(runningItem.label).toBe(`RUN ${sample?.name}`);
+    expect(runningItem.description).toBe('100 Running');
+    expect(runningItem.description).not.toContain('Auto');
     expect(iconId(runningItem)).toBe('sync~spin');
     expect(iconId(clearedItem)).toBe('circle-outline');
+    expect(clearedItem.description).toBe('100 Auto');
     expect(clearedItem.contextValue).toBe(initialItem.contextValue);
     expect(clearedItem.command).toEqual(initialItem.command);
     expect(clearedItem.tooltip).toEqual(initialItem.tooltip);
   });
 
-  it('shows spinner icons for multiple running samples', async () => {
+  it('shows spinner icons and running descriptions for multiple running samples', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const first = await addEmptyProblemSample(workspaceFolder, problem.id);
@@ -452,6 +455,37 @@ describe('sample tree add entry', () => {
     const sampleItems = await Promise.all((await getSampleNodes(provider)).map((node) => provider.getTreeItem(node)));
 
     expect(sampleItems.map(iconId)).toEqual(['sync~spin', 'sync~spin']);
+    expect(sampleItems.map((item) => item.description)).toEqual(['50 Running', '50 Running']);
+    expect(sampleItems.every((item) => !String(item.description).includes('Auto'))).toBe(true);
+  });
+
+  it('only marks the selected running sample description', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addEmptyProblemSample(workspaceFolder, problem.id);
+    await addEmptyProblemSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    provider.markSamplesRunning(problem.id, [first?.id ?? '']);
+    const sampleItems = await Promise.all((await getSampleNodes(provider)).map((node) => provider.getTreeItem(node)));
+
+    expect(sampleItems.map(iconId)).toEqual(['sync~spin', 'circle-outline']);
+    expect(sampleItems.map((item) => item.description)).toEqual(['50 Running', '50 Auto']);
+  });
+
+  it('uses the Chinese running description instead of auto when the UI language is Chinese', async () => {
+    vscodeMock.__setConfiguration('language', 'zh');
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const first = await addEmptyProblemSample(workspaceFolder, problem.id);
+    const second = await addEmptyProblemSample(workspaceFolder, problem.id);
+    const provider = new SampleTreeProvider();
+
+    provider.markSamplesRunning(problem.id, [first?.id ?? '', second?.id ?? '']);
+    const sampleItems = await Promise.all((await getSampleNodes(provider)).map((node) => provider.getTreeItem(node)));
+
+    expect(sampleItems.map((item) => item.description)).toEqual(['50 评测中', '50 评测中']);
+    expect(sampleItems.every((item) => !String(item.description).includes('自动'))).toBe(true);
   });
 
   it('keeps running keys scoped by problem id', async () => {
@@ -504,8 +538,10 @@ describe('sample tree add entry', () => {
     expect(iconId(passedItem)).toBe('check');
     expect(iconColorId(passedItem)).toBe('testing.iconPassed');
     expect(runningItem.label).toBe(`RUN ${sample?.name}`);
+    expect(runningItem.description).toBe('100/100 Running');
     expect(iconId(runningItem)).toBe('sync~spin');
     expect(restoredItem.label).toBe(sample?.name);
+    expect(restoredItem.description).toBe('1ms  100/100');
     expect(iconId(restoredItem)).toBe('check');
   });
 
@@ -564,7 +600,7 @@ describe('sample tree add entry', () => {
     const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
 
     expect(runningItem.label).toBe(`RUN ${sample?.name}`);
-    expect(runningItem.description).toBe('0/100');
+    expect(runningItem.description).toBe('0/100 Running');
     expect(iconId(runningItem)).toBe('sync~spin');
     expect(restoredItem.label).toBe(`WA ${sample?.name}`);
     expect(restoredItem.description).toBe('1ms  0/100');
