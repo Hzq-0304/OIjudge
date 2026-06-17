@@ -752,6 +752,7 @@ export function renderPage(title: string, body: string): string {
       --oj-expand-easing: cubic-bezier(0.22, 1, 0.36, 1);
       --oj-content-drift-duration: 900ms;
       --oj-content-drift-easing: cubic-bezier(0.16, 1, 0.3, 1);
+      --oj-content-start-opacity: 0.12;
       --oj-muted: var(--vscode-descriptionForeground);
       --oj-text: var(--vscode-foreground);
       --oj-ac: var(--vscode-testing-iconPassed, #3fb950);
@@ -968,12 +969,16 @@ export function renderPage(title: string, body: string): string {
     }
     .case-detail-inner,
     .subtask-children-inner {
+      opacity: var(--oj-content-start-opacity);
       position: relative;
       top: -3px;
-      transition: top var(--oj-content-drift-duration) var(--oj-content-drift-easing);
+      transition:
+        top var(--oj-content-drift-duration) var(--oj-content-drift-easing),
+        opacity var(--oj-content-drift-duration) var(--oj-content-drift-easing);
     }
     .case-detail-panel.expanded .case-detail-inner,
     .subtask-children-panel.expanded .subtask-children-inner {
+      opacity: 1;
       top: 0;
     }
     .subtask-children-inner {
@@ -1069,6 +1074,11 @@ export function renderPage(title: string, body: string): string {
       .subtask-children-inner,
       .testcaseName::before {
         transition: none;
+      }
+      .case-detail-inner,
+      .subtask-children-inner,
+      .testcaseName::before {
+        opacity: 1;
         top: 0;
         transform: none;
       }

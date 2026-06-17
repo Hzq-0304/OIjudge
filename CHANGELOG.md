@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 为测试报告展开详情增加透明到实体的淡入效果 / Add fade-in opacity transition for expanded report details.
+
 - 放慢测试报告展开动画，使详情和 Subtask 展开更自然 / Slow down report expansion animations for smoother case details and subtask expansion.
 
 - 修复测试报告展开动画中文字模糊和结束跳变的问题，并优化 Subtask 展开动画 / Fix blurry text and end-of-animation jumps in report expansion and improve subtask expansion animation.

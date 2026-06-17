@@ -77,6 +77,7 @@ describe('report verdict display', () => {
     expect(driftDuration).toBeGreaterThan(expandDuration);
     expect(html).toContain('--oj-content-drift-duration: 900ms;');
     expect(html).toContain('--oj-content-drift-easing: cubic-bezier(0.16, 1, 0.3, 1);');
+    expect(html).toContain('--oj-content-start-opacity: 0.12;');
     expect(html).toContain('transition:');
     expect(html).toContain('transition: height var(--oj-expand-duration) var(--oj-expand-easing);');
     expect(html).toContain('prefers-reduced-motion: reduce');
@@ -88,22 +89,29 @@ describe('report verdict display', () => {
     expect(html).not.toContain('style.display');
   });
 
-  it('drifts expanded content with a tiny top offset without blur, scale, or opacity animation', () => {
+  it('fades and drifts expanded content without blur, scale, or filter animation', () => {
     const html = renderPage('Report', renderReportBody(workspace(), report(), 'A', problemWithSubtask()));
     const driftOffset = cssPxValue(html, 'top');
+    const startOpacity = cssVariableNumber(html, '--oj-content-start-opacity');
 
     expect(html).toContain('.case-detail-inner,');
     expect(html).toContain('.subtask-children-inner');
+    expect(startOpacity).toBeGreaterThan(0);
+    expect(startOpacity).toBeLessThan(1);
+    expect(html).toContain('opacity: var(--oj-content-start-opacity);');
     expect(Math.abs(driftOffset)).toBeLessThanOrEqual(4);
     expect(html).toContain('top: -3px;');
-    expect(html).toContain('transition: top var(--oj-content-drift-duration) var(--oj-content-drift-easing);');
+    expect(html).toContain('top var(--oj-content-drift-duration) var(--oj-content-drift-easing),');
+    expect(html).toContain('opacity var(--oj-content-drift-duration) var(--oj-content-drift-easing);');
     expect(html).toContain('.case-detail-panel.expanded .case-detail-inner');
     expect(html).toContain('.subtask-children-panel.expanded .subtask-children-inner');
+    expect(html).toContain('opacity: 1;');
     expect(html).toContain('top: 0;');
     expect(html).not.toContain('scale(');
     expect(html).not.toContain('filter:');
     expect(html).not.toContain('blur(');
     expect(html).not.toContain('opacity var(--oj-expand-duration)');
+    expect(html).not.toContain('will-change: transform');
     expect(html).not.toContain('transform var(--oj-expand-duration)');
   });
 
@@ -116,6 +124,8 @@ describe('report verdict display', () => {
     expect(html).toContain('.case-detail-inner,');
     expect(html).toContain('.subtask-children-inner,');
     expect(html).toContain('transition: none;');
+    expect(html).toContain('opacity: 1;');
+    expect(html).toContain('top: 0;');
   });
 
   it('uses soft report detail actions instead of default solid VS Code buttons', () => {
@@ -226,6 +236,13 @@ function problemWithSubtask(): ProblemConfig {
 function cssDurationMs(html: string, variableName: string): number {
   const escapedName = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = html.match(new RegExp(`${escapedName}:\\s*(\\d+)ms;`));
+  expect(match).not.toBeNull();
+  return Number(match?.[1]);
+}
+
+function cssVariableNumber(html: string, variableName: string): number {
+  const escapedName = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`${escapedName}:\\s*(-?\\d+(?:\\.\\d+)?);`));
   expect(match).not.toBeNull();
   return Number(match?.[1]);
 }
