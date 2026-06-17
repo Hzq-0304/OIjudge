@@ -326,6 +326,7 @@ describe('sample tree add entry', () => {
 
     expect(provider.isSampleRunning(problem.id, sample?.id ?? '')).toBe(false);
     expect(iconId(initialItem)).toBe('circle-outline');
+    expect(runningItem.label).toBe(`RUN ${sample?.name}`);
     expect(iconId(runningItem)).toBe('sync~spin');
     expect(iconId(clearedItem)).toBe('circle-outline');
     expect(clearedItem.contextValue).toBe(initialItem.contextValue);
@@ -362,7 +363,7 @@ describe('sample tree add entry', () => {
     expect(iconId(secondItem)).toBe('circle-outline');
   });
 
-  it('gives running icons priority over verdict icons and restores verdict icons afterward', async () => {
+  it('shows running text and spinner before restoring the AC check icon afterward', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
@@ -392,26 +393,32 @@ describe('sample tree add entry', () => {
     provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
     const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
 
-    expect(verdictIconFileNames(passedItem)).toEqual({ light: 'ac.svg', dark: 'ac.svg' });
+    expect(passedItem.label).toBe(sample?.name);
+    expect(iconId(passedItem)).toBe('check');
+    expect(iconColorId(passedItem)).toBe('testing.iconPassed');
+    expect(runningItem.label).toBe(`RUN ${sample?.name}`);
     expect(iconId(runningItem)).toBe('sync~spin');
-    expect(verdictIconFileNames(restoredItem)).toEqual({ light: 'ac.svg', dark: 'ac.svg' });
+    expect(restoredItem.label).toBe(sample?.name);
+    expect(iconId(restoredItem)).toBe('check');
   });
 
-  it('shows AC, WA, and MLE verdict SVG icons in the sample icon slot', async () => {
+  it('shows an AC check icon and non-AC verdict acronyms without status icons', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const first = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
     const second = await addProblemSample(workspaceFolder, problem.id, '2\n', '2\n', { decodeEscapes: false });
     const third = await addProblemSample(workspaceFolder, problem.id, '3\n', '3\n', { decodeEscapes: false });
+    const fourth = await addProblemSample(workspaceFolder, problem.id, '4\n', '4\n', { decodeEscapes: false });
     await saveProblemReport(workspaceFolder, problem.id, {
       source: 'main.cpp',
       generatedAt: '2026-06-16T00:00:00.000Z',
       limits: { timeMs: 1000, memoryMb: 256 },
-      summary: { accepted: 1, total: 3 },
+      summary: { accepted: 1, total: 4 },
       samples: [
         reportSample(first, 'AC'),
         reportSample(second, 'WA'),
-        reportSample(third, 'MLE')
+        reportSample(third, 'MLE'),
+        reportSample(fourth, 'TLE')
       ],
       results: []
     });
@@ -419,20 +426,18 @@ describe('sample tree add entry', () => {
 
     const items = (await getSampleNodes(provider)).map((node) => provider.getTreeItem(node));
 
-    expect(items.map(verdictIconFileNames)).toEqual([
-      { light: 'ac.svg', dark: 'ac.svg' },
-      { light: 'wa.svg', dark: 'wa.svg' },
-      { light: 'mle.svg', dark: 'mle.svg' }
+    expect(items.map((item) => item.label)).toEqual([
+      first?.name,
+      `WA ${second?.name}`,
+      `MLE ${third?.name}`,
+      `TLE ${fourth?.name}`
     ]);
-    expect(items.map(verdictIconDirs)).toEqual([
-      { light: 'light', dark: 'dark' },
-      { light: 'light', dark: 'dark' },
-      { light: 'light', dark: 'dark' }
-    ]);
-    expect(items.map((item) => item.description)).toEqual(['1ms  33/33', '1ms  0/33', '1ms  0/34']);
+    expect(items.map(iconId)).toEqual(['check', undefined, undefined, undefined]);
+    expect(iconColorId(items[0])).toBe('testing.iconPassed');
+    expect(items.map((item) => item.description)).toEqual(['1ms  25/25', '1ms  0/25', '1ms  0/25', '1ms  0/25']);
   });
 
-  it('keeps the spinner ahead of verdict SVG icons and restores the verdict icon afterward', async () => {
+  it('keeps the spinner ahead of verdict text and restores verdict text afterward', async () => {
     const workspaceFolder = await createWorkspace();
     const problem = await createProblem(workspaceFolder, 'A');
     const sample = await addProblemSample(workspaceFolder, problem.id, '1\n', '1\n', { decodeEscapes: false });
@@ -451,10 +456,11 @@ describe('sample tree add entry', () => {
     provider.clearSamplesRunning(problem.id, [sample?.id ?? '']);
     const restoredItem = provider.getTreeItem((await getSampleNodes(provider))[0]);
 
-    expect(runningItem.description).toBe('RUNNING  0/100');
+    expect(runningItem.label).toBe(`RUN ${sample?.name}`);
+    expect(runningItem.description).toBe('0/100');
     expect(iconId(runningItem)).toBe('sync~spin');
+    expect(restoredItem.label).toBe(`WA ${sample?.name}`);
     expect(restoredItem.description).toBe('1ms  0/100');
-    expect(verdictIconFileNames(restoredItem)).toEqual({ light: 'wa.svg', dark: 'wa.svg' });
   });
 
   it('maps all sample statuses to explicit verdict acronyms', () => {
@@ -540,20 +546,8 @@ function iconId(item: vscode.TreeItem): string | undefined {
   return (item.iconPath as { id?: string } | undefined)?.id;
 }
 
-function verdictIconFileNames(item: vscode.TreeItem): { light?: string; dark?: string } {
-  const iconPath = item.iconPath as { light?: { fsPath?: string }; dark?: { fsPath?: string } } | undefined;
-  return {
-    light: iconPath?.light?.fsPath ? path.basename(iconPath.light.fsPath) : undefined,
-    dark: iconPath?.dark?.fsPath ? path.basename(iconPath.dark.fsPath) : undefined
-  };
-}
-
-function verdictIconDirs(item: vscode.TreeItem): { light?: string; dark?: string } {
-  const iconPath = item.iconPath as { light?: { fsPath?: string }; dark?: { fsPath?: string } } | undefined;
-  return {
-    light: iconPath?.light?.fsPath ? path.basename(path.dirname(iconPath.light.fsPath)) : undefined,
-    dark: iconPath?.dark?.fsPath ? path.basename(path.dirname(iconPath.dark.fsPath)) : undefined
-  };
+function iconColorId(item: vscode.TreeItem): string | undefined {
+  return (item.iconPath as { color?: { id?: string } } | undefined)?.color?.id;
 }
 
 function reportSample(sample: SampleConfig | undefined, status: SampleStatus) {

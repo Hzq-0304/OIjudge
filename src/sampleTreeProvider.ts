@@ -24,7 +24,7 @@ import { getSampleFileStatus, inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
 import { isSetterModeEnabled } from './setterMode';
 import { CheckerType, JudgeMode, JudgeReport, ProblemConfig, SampleReport, SampleStatus, SubtaskConfig } from './types';
-import { formatVerdictAcronym, verdictIconName } from './verdict';
+import { formatVerdictAcronym } from './verdict';
 
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'subtask' | 'action';
 type NodeGroup =
@@ -39,14 +39,13 @@ type NodeGroup =
   | 'setter'
   | 'actions'
   | 'sampleActions';
-type TreeIconPath = vscode.ThemeIcon | vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
 
 type TreeNode = {
   kind: NodeKind;
   label: string;
   description?: string;
   tooltip?: string;
-  icon?: TreeIconPath;
+  icon?: vscode.ThemeIcon;
   command?: vscode.Command;
   collapsibleState?: vscode.TreeItemCollapsibleState;
   group?: NodeGroup;
@@ -680,8 +679,9 @@ async function createSampleNodes(
       : scoreInfo
         ? `${scoreInfo.score} ${scoreInfo.manual ? t('score.manual') : t('score.auto')}`
         : undefined;
+    const label = formatSampleLabel(sample.name, status, running);
     const baseDescription = running
-      ? 'RUNNING'
+      ? undefined
       : hasGeneratedAnswer
         ? t('setter.generatedOutput.pending')
         : answerPending
@@ -696,7 +696,7 @@ async function createSampleNodes(
       : '';
     return {
       kind: 'sample',
-      label: sample.name,
+      label,
       description,
       tooltip: [
         `${t('sampleName')}: ${sample.name}`,
@@ -813,10 +813,21 @@ function joinDescriptionParts(...parts: Array<string | undefined>): string | und
   return text || undefined;
 }
 
+function formatSampleLabel(sampleName: string, status: SampleStatus | 'Not Run', running: boolean): string {
+  if (running) {
+    return `RUN ${sampleName}`;
+  }
+  if (status === 'AC' || status === 'Not Run') {
+    return sampleName;
+  }
+  const verdictText = formatVerdictText(status);
+  return verdictText ? `${verdictText} ${sampleName}` : sampleName;
+}
+
 function getSampleIcon(
   status: SampleStatus | 'Not Run',
   options: { running: boolean; hasGeneratedAnswer: boolean; answerPending: boolean }
-): TreeIconPath {
+): vscode.ThemeIcon | undefined {
   if (options.running) {
     return new vscode.ThemeIcon('sync~spin');
   }
@@ -826,21 +837,13 @@ function getSampleIcon(
   if (options.answerPending) {
     return new vscode.ThemeIcon('warning');
   }
-  const iconName = verdictIconName(status);
-  if (iconName) {
-    return getVerdictIconPath(iconName);
+  if (status === 'AC') {
+    return new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
   }
-  return status === 'Missing'
-    ? new vscode.ThemeIcon(statusIcon(status), new vscode.ThemeColor('errorForeground'))
-    : new vscode.ThemeIcon(statusIcon(status));
-}
-
-function getVerdictIconPath(iconName: string): { light: vscode.Uri; dark: vscode.Uri } {
-  const basePath = path.join(__dirname, '..', 'resources', 'icons', 'verdict');
-  return {
-    light: vscode.Uri.file(path.join(basePath, 'light', `${iconName}.svg`)),
-    dark: vscode.Uri.file(path.join(basePath, 'dark', `${iconName}.svg`))
-  };
+  if (status !== 'Not Run') {
+    return undefined;
+  }
+  return new vscode.ThemeIcon(statusIcon(status));
 }
 
 function getRuntimeExplanation(report: SampleReport) {

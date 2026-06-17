@@ -74,32 +74,3 @@ export function formatVerdictAcronym(verdict: VerdictLike | undefined): string {
       return verdict.trim() ? verdict : 'UNKNOWN';
   }
 }
-
-export function verdictIconName(verdict: SampleStatus | 'Not Run'): string | undefined {
-  switch (formatVerdictAcronym(verdict)) {
-    case 'AC':
-      return 'ac';
-    case 'WA':
-      return 'wa';
-    case 'TLE':
-      return 'tle';
-    case 'MLE':
-      return 'mle';
-    case 'RE':
-      return 're';
-    case 'CE':
-      return 'ce';
-    case 'OLE':
-      return 'ole';
-    case 'SKIP':
-      return 'skip';
-    case 'UNKNOWN':
-    case 'CHECKER':
-    case 'SCORED':
-    case 'MISSING':
-    case 'OUTPUT':
-      return 'unknown';
-    default:
-      return undefined;
-  }
-}

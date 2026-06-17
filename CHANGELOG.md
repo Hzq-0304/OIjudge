@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 改进样例树 verdict 显示：AC 显示通过图标，非 AC 显示清晰文字 / Improve sample tree verdict display with check icon for AC and text for non-AC results.
+- 样例树 verdict 改为清晰文本显示 / Fix sample tree verdicts to use readable text instead of tiny icons.
 - 修复深色主题下样例树 verdict 图标不可见的问题 / Fix verdict icons being unreadable in dark themes.
 - 修复批量测试时样例结果不会实时显示的问题 / Fix sample verdicts not updating during batch runs.
 - 样例树状态图标改为显示 AC、WA、MLE 等字母 verdict / Show verdict acronyms such as AC, WA, and MLE in sample tree status icons.
