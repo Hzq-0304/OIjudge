@@ -4,10 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 const extensionSource = readFileSync(path.resolve(__dirname, '..', 'src', 'extension.ts'), 'utf8');
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8')) as {
+  name: string;
+  displayName?: string;
+  description?: string;
+  publisher: string;
   activationEvents?: string[];
   contributes: {
     commands: Array<{ command: string; title?: string; icon?: string }>;
     views: Record<string, Array<{ id: string; name: string }>>;
+    configuration?: unknown;
     menus: {
       'view/title': Array<{ command: string; when: string; group: string }>;
       'view/item/context': Array<{ command: string; when: string; group: string }>;
@@ -15,6 +20,8 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'packa
     };
   };
 };
+const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'package.nls.json'), 'utf8')) as Record<string, string>;
+const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
 
 const legacyInternalCommands = [
   'oijudger.openCheckerStderr',
@@ -32,7 +39,61 @@ function menuCommands(): string[] {
     .map((entry) => entry.command);
 }
 
+function nlsKey(value: string | undefined): string | undefined {
+  const match = /^%([^%]+)%$/.exec(value ?? '');
+  return match?.[1];
+}
+
+function resolveNls(value: string | undefined, bundle: Record<string, string> = packageNls): string | undefined {
+  const key = nlsKey(value);
+  return key ? bundle[key] : undefined;
+}
+
+function collectPlaceholders(value: unknown, keys = new Set<string>()): Set<string> {
+  if (typeof value === 'string') {
+    for (const match of value.matchAll(/%([^%]+)%/g)) {
+      keys.add(match[1]);
+    }
+    return keys;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectPlaceholders(item, keys);
+    }
+    return keys;
+  }
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) {
+      collectPlaceholders(item, keys);
+    }
+  }
+  return keys;
+}
+
 describe('package tree sample add menu', () => {
+  it('localizes extension manifest display text through package.nls bundles', () => {
+    expect(packageJson.name).toBe('oijudge');
+    expect(packageJson.publisher).toBe('Hzq');
+    expect(packageJson.displayName).toBe('%extension.displayName%');
+    expect(packageJson.description).toBe('%extension.description%');
+    expect(packageNls['extension.displayName']).toBe('OI Judge');
+    expect(packageNls['extension.description']).toBe(
+      'Local OI sample judge for VS Code, with custom checkers, generators, subtasks, and reports.'
+    );
+    expect(packageNlsZhCn['extension.displayName']).toBe('OI Judge');
+    expect(packageNlsZhCn['extension.description']).toContain('OI');
+    expect(packageNlsZhCn['extension.description']).toContain('本地样例评测');
+    expect(packageNls['commands.setIoMode.title']).toBe('OI Judge: Set I/O Mode');
+    expect(packageNls['commands.setFileIoNames.title']).toBe('OI Judge: Set File I/O Names');
+    expect(packageNlsZhCn['configuration.oijudger.language.description']).toBe('控制 OI Judge 界面语言。');
+    expect(packageNlsZhCn['configuration.oijudger.setterMode.enabled.markdownDescription']).toContain('出题人工具');
+
+    const placeholders = [...collectPlaceholders(packageJson)].sort();
+    expect(placeholders.length).toBeGreaterThan(0);
+    expect(placeholders.filter((key) => !(key in packageNls))).toEqual([]);
+    expect(placeholders.filter((key) => !(key in packageNlsZhCn))).toEqual([]);
+  });
+
   it('keeps package commands, menu references, and registered commands consistent', () => {
     const contributed = new Set(packageJson.contributes.commands.map((entry) => entry.command));
     const registered = new Set(registeredCommands());
@@ -47,8 +108,11 @@ describe('package tree sample add menu', () => {
   it('keeps user-visible command titles present and consistently prefixed', () => {
     for (const command of packageJson.contributes.commands) {
       expect(command.title).toBeTruthy();
-      expect(command.title?.startsWith('OI Judge: ')).toBe(true);
-      expect(command.title).not.toContain('????');
+      expect(command.title).toMatch(/^%commands\.[A-Za-z0-9.]+\.title%$/);
+      expect(resolveNls(command.title)?.startsWith('OI Judge: ')).toBe(true);
+      expect(resolveNls(command.title, packageNlsZhCn)?.startsWith('OI Judge: ')).toBe(true);
+      expect(resolveNls(command.title)).not.toContain('????');
+      expect(resolveNls(command.title, packageNlsZhCn)).not.toContain('????');
     }
   });
 
@@ -104,8 +168,10 @@ describe('package tree sample add menu', () => {
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.runProblemSample');
     expect(command).toMatchObject({
       icon: '$(play)',
-      title: 'OI Judge: 运行该测试点/Run Sample'
+      title: '%commands.runProblemSample.title%'
     });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Run Sample');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 运行该测试点');
     expect(menu).toMatchObject({
       when: sampleNodeWhen,
       group: 'inline@1'
@@ -301,8 +367,10 @@ describe('package tree sample add menu', () => {
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.manageWorkspace');
     expect(command).toMatchObject({
       icon: '$(tools)',
-      title: 'OI Judge: 管理工作区/Manage Workspace'
+      title: '%commands.manageWorkspace.title%'
     });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Manage Workspace');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 管理工作区');
     expect(registeredCommands()).toContain('oijudger.manageWorkspace');
   });
 
@@ -311,8 +379,9 @@ describe('package tree sample add menu', () => {
     const contextMenus = packageJson.contributes.menus['view/item/context'];
     const entries = contextMenus.filter((entry) => entry.command === 'oijudger.exportProblemPackage');
 
-    expect(command?.title).toContain('Export Problem Package');
-    expect(command?.title).toContain('导出完整题目包');
+    expect(command?.title).toBe('%commands.exportProblemPackage.title%');
+    expect(resolveNls(command?.title)).toContain('Export Problem Package');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toContain('导出完整题目包');
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.exportProblemPackage');
     expect(entries.length).toBe(2);
     expect(entries.every((entry) => !entry.when.includes('oijudger.setterModeEnabled'))).toBe(true);
@@ -337,8 +406,9 @@ describe('package tree sample add menu', () => {
     const contextMenus = packageJson.contributes.menus['view/item/context'];
     const entries = contextMenus.filter((entry) => entry.command === 'oijudger.importProblemPackage');
 
-    expect(command?.title).toContain('Import Problem Package');
-    expect(command?.title).toContain('导入完整题目包');
+    expect(command?.title).toBe('%commands.importProblemPackage.title%');
+    expect(resolveNls(command?.title)).toContain('Import Problem Package');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toContain('导入完整题目包');
     expect(command?.icon).toBe('$(cloud-download)');
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.importProblemPackage');
     expect(titleMenus).toEqual([]);
@@ -393,7 +463,9 @@ describe('package tree sample add menu', () => {
       'oijudger.revealStressSessionFolder'
     ];
 
-    expect(stressView?.name).toBe('对拍记录/Stress Records');
+    expect(stressView?.name).toBe('%views.stressRecordsView.name%');
+    expect(resolveNls(stressView?.name)).toBe('Stress Records');
+    expect(resolveNls(stressView?.name, packageNlsZhCn)).toBe('对拍记录');
     expect(commands).toEqual(expect.arrayContaining(managementCommands));
     expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
       'onView:oijudger.stressRecordsView',

@@ -1,5 +1,7 @@
 # OI Judge
 
+[简体中文](./README.zh-CN.md) | English
+
 <p align="center">
   <a href="#chinese-introduction">
     <img src="https://img.shields.io/badge/中文介绍-点击查看-blue?style=for-the-badge" alt="中文介绍">

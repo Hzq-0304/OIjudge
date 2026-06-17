@@ -1,7 +1,7 @@
 {
   "name": "oijudge",
-  "displayName": "OI Judge",
-  "description": "Local OI sample judge for VS Code with custom checkers, File IO, and runtime diagnostics.",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
   "version": "5.1.0",
   "publisher": "Hzq",
   "icon": "resources/icons/icon.png",
@@ -136,512 +136,512 @@
     "commands": [
       {
         "command": "oijudger.initProblem",
-        "title": "OI Judge: 初始化题目/Init Problem",
+        "title": "%commands.initProblem.title%",
         "icon": "$(repo-create)"
       },
       {
         "command": "oijudger.addSample",
-        "title": "OI Judge: 添加样例/Add Sample",
+        "title": "%commands.addSample.title%",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.runAllSamples",
-        "title": "OI Judge: 运行全部样例/Run All Samples",
+        "title": "%commands.runAllSamples.title%",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.setTimeLimit",
-        "title": "OI Judge: 设置时间限制/Set Time Limit",
+        "title": "%commands.setTimeLimit.title%",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setMemoryLimit",
-        "title": "OI Judge: 设置内存限制/Set Memory Limit",
+        "title": "%commands.setMemoryLimit.title%",
         "icon": "$(server)"
       },
       {
         "command": "oijudger.setStackSize",
-        "title": "OI Judge: 设置栈空间/Set Stack Size",
+        "title": "%commands.setStackSize.title%",
         "icon": "$(layers)"
       },
       {
         "command": "oijudger.selectCompiler",
-        "title": "OI Judge: 选择 C++ 编译器/Select C++ Compiler",
+        "title": "%commands.selectCompiler.title%",
         "icon": "$(settings-gear)"
       },
       {
         "command": "oijudger.openLastReport",
-        "title": "OI Judge: 打开最近报告/Open Last Report",
+        "title": "%commands.openLastReport.title%",
         "icon": "$(preview)"
       },
       {
         "command": "oijudger.openResultPanel",
-        "title": "OI Judge: 打开结果面板/Open Result Panel",
+        "title": "%commands.openResultPanel.title%",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openSampleDetail",
-        "title": "OI Judge: 打开样例详情/Open Sample Detail",
+        "title": "%commands.openSampleDetail.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearOutputs",
-        "title": "OI Judge: 清空输出/Clear Outputs",
+        "title": "%commands.clearOutputs.title%",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.refreshView",
-        "title": "OI Judge: 刷新视图/Refresh View",
+        "title": "%commands.refreshView.title%",
         "icon": "$(refresh)"
       },
       {
         "command": "oijudger.manageWorkspace",
-        "title": "OI Judge: 管理工作区/Manage Workspace",
+        "title": "%commands.manageWorkspace.title%",
         "icon": "$(tools)"
       },
       {
         "command": "oijudger.createProblem",
-        "title": "OI Judge: 创建题目/Create Problem",
+        "title": "%commands.createProblem.title%",
         "icon": "$(new-folder)"
       },
       {
         "command": "oijudger.addProblemFromCurrentFile",
-        "title": "OI Judge: 从当前文件添加题目/Add Problem From Current File",
+        "title": "%commands.addProblemFromCurrentFile.title%",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.addProblemFromFile",
-        "title": "OI Judge: 从文件添加题目/Add Problem From File",
+        "title": "%commands.addProblemFromFile.title%",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.importLegacyProblem",
-        "title": "OI Judge: 导入旧版单题/Import Legacy Single Problem",
+        "title": "%commands.importLegacyProblem.title%",
         "icon": "$(repo-pull)"
       },
       {
         "command": "oijudger.addSampleFromSamplesGroup",
-        "title": "OI Judge: 添加样例/Add Sample",
+        "title": "%commands.addSampleFromSamplesGroup.title%",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.generateSampleInput",
-        "title": "OI Judge: 生成样例输入/Generate Sample Input",
+        "title": "%commands.generateSampleInput.title%",
         "icon": "$(wand)"
       },
       {
         "command": "oijudger.setProblemTotalScore",
-        "title": "OI Judge: 设置题目总分/Set Total Score",
+        "title": "%commands.setProblemTotalScore.title%",
         "icon": "$(symbol-number)"
       },
       {
         "command": "oijudger.exportTestcases",
-        "title": "OI Judge: 导出测试点/Export Testcases",
+        "title": "%commands.exportTestcases.title%",
         "icon": "$(export)"
       },
       {
         "command": "oijudger.exportProblemPackage",
-        "title": "OI Judge: 导出完整题目包/Export Problem Package",
+        "title": "%commands.exportProblemPackage.title%",
         "icon": "$(package)"
       },
       {
         "command": "oijudger.importProblemPackage",
-        "title": "OI Judge: 导入完整题目包/Import Problem Package",
+        "title": "%commands.importProblemPackage.title%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "oijudger.runStressTest",
-        "title": "OI Judge: 对拍/Run Stress Test",
+        "title": "%commands.runStressTest.title%",
         "icon": "$(beaker)"
       },
       {
         "command": "oijudger.createSubtask",
-        "title": "OI Judge: 新建 Subtask/Create Subtask",
+        "title": "%commands.createSubtask.title%",
         "icon": "$(new-folder)"
       },
       {
         "command": "oijudger.renameSubtask",
-        "title": "OI Judge: 重命名 Subtask/Rename Subtask",
+        "title": "%commands.renameSubtask.title%",
         "icon": "$(edit)"
       },
       {
         "command": "oijudger.deleteSubtask",
-        "title": "OI Judge: 删除 Subtask/Delete Subtask",
+        "title": "%commands.deleteSubtask.title%",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.bindSubtaskGeneratorInput",
-        "title": "OI Judge: 绑定生成器输入/Bind Generator Input",
+        "title": "%commands.bindSubtaskGeneratorInput.title%",
         "icon": "$(link)"
       },
       {
         "command": "oijudger.openSubtaskGeneratorInput",
-        "title": "OI Judge: 打开生成器输入/Open Generator Input",
+        "title": "%commands.openSubtaskGeneratorInput.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearSubtaskGeneratorInput",
-        "title": "OI Judge: 清除生成器输入/Clear Generator Input",
+        "title": "%commands.clearSubtaskGeneratorInput.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.runSubtask",
-        "title": "OI Judge: 评测 Subtask/Run Subtask",
+        "title": "%commands.runSubtask.title%",
         "icon": "$(run)"
       },
       {
         "command": "oijudger.generateSubtaskSampleInput",
-        "title": "OI Judge: 生成 Subtask 样例输入/Generate Subtask Sample Input",
+        "title": "%commands.generateSubtaskSampleInput.title%",
         "icon": "$(wand)"
       },
       {
         "command": "oijudger.setSubtaskScoringMode",
-        "title": "OI Judge: 设置 Subtask 计分模式/Set Subtask Scoring Mode",
+        "title": "%commands.setSubtaskScoringMode.title%",
         "icon": "$(symbol-number)"
       },
       {
         "command": "oijudger.moveSampleToSubtask",
-        "title": "OI Judge: 移动到 Subtask/Move to Subtask",
+        "title": "%commands.moveSampleToSubtask.title%",
         "icon": "$(move)"
       },
       {
         "command": "oijudger.addProblemSample",
-        "title": "OI Judge: 添加题目样例/Add Problem Sample",
+        "title": "%commands.addProblemSample.title%",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.addProblemSampleFromFiles",
-        "title": "OI Judge: 从文件添加题目样例/Add Problem Sample From Files",
+        "title": "%commands.addProblemSampleFromFiles.title%",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.batchAddSamples",
-        "title": "OI Judge: 批量添加样例/Batch Add Samples",
+        "title": "%commands.batchAddSamples.title%",
         "icon": "$(folder-opened)"
       },
       {
         "command": "oijudger.runProblemSamples",
-        "title": "OI Judge: 运行题目样例/Run Problem Samples",
+        "title": "%commands.runProblemSamples.title%",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.runSamplesWithProgram",
-        "title": "OI Judge: 选择程序评测/Run With Program",
+        "title": "%commands.runSamplesWithProgram.title%",
         "icon": "$(run)"
       },
       {
         "command": "oijudger.runProblemSample",
-        "title": "OI Judge: 运行该测试点/Run Sample",
+        "title": "%commands.runProblemSample.title%",
         "icon": "$(play)"
       },
       {
         "command": "oijudger.setProblemTimeLimit",
-        "title": "OI Judge: 设置题目时间限制/Set Problem Time Limit",
+        "title": "%commands.setProblemTimeLimit.title%",
         "icon": "$(watch)"
       },
       {
         "command": "oijudger.setProblemMemoryLimit",
-        "title": "OI Judge: 设置题目内存限制/Set Problem Memory Limit",
+        "title": "%commands.setProblemMemoryLimit.title%",
         "icon": "$(server)"
       },
       {
         "command": "oijudger.setProblemStackSize",
-        "title": "OI Judge: 设置题目栈空间/Set Problem Stack Size",
+        "title": "%commands.setProblemStackSize.title%",
         "icon": "$(layers)"
       },
       {
         "command": "oijudger.setJudgeMode",
-        "title": "OI Judge: 设置评测方式/Set Judge Mode",
+        "title": "%commands.setJudgeMode.title%",
         "icon": "$(diff)"
       },
       {
         "command": "oijudger.setIoMode",
-        "title": "OI Judge: 设置输入输出方式/Set I/O Mode",
+        "title": "%commands.setIoMode.title%",
         "icon": "$(terminal)"
       },
       {
         "command": "oijudger.setFileIoNames",
-        "title": "OI Judge: 设置文件输入输出文件名/Set File I/O Names",
+        "title": "%commands.setFileIoNames.title%",
         "icon": "$(files)"
       },
       {
         "command": "oijudger.setProblemStandard",
-        "title": "OI Judge: 设置题目 C++ 标准/Set Problem C++ Standard",
+        "title": "%commands.setProblemStandard.title%",
         "icon": "$(settings)"
       },
       {
         "command": "oijudger.selectProblemCompiler",
-        "title": "OI Judge: 选择题目编译器/Select Problem Compiler",
+        "title": "%commands.selectProblemCompiler.title%",
         "icon": "$(settings-gear)"
       },
       {
         "command": "oijudger.bindStatement",
-        "title": "OI Judge: 绑定题面/Bind Statement",
+        "title": "%commands.bindStatement.title%",
         "icon": "$(link)"
       },
       {
         "command": "oijudger.openStatement",
-        "title": "OI Judge: 打开题面/Open Statement",
+        "title": "%commands.openStatement.title%",
         "icon": "$(book)"
       },
       {
         "command": "oijudger.unbindStatement",
-        "title": "OI Judge: 解绑题面/Unbind Statement",
+        "title": "%commands.unbindStatement.title%",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "oijudger.addProgramToProblem",
-        "title": "OI Judge: 添加程序/Add Program",
+        "title": "%commands.addProgramToProblem.title%",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.setDefaultProgram",
-        "title": "OI Judge: 设置默认程序/Set Default Program",
+        "title": "%commands.setDefaultProgram.title%",
         "icon": "$(star-full)"
       },
       {
         "command": "oijudger.openProblemResultPanel",
-        "title": "OI Judge: 打开题目结果面板/Open Problem Result Panel",
+        "title": "%commands.openProblemResultPanel.title%",
         "icon": "$(layout-panel)"
       },
       {
         "command": "oijudger.openProblemSampleDetail",
-        "title": "OI Judge: 打开题目样例详情/Open Problem Sample Detail",
+        "title": "%commands.openProblemSampleDetail.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleInput",
-        "title": "OI Judge: 打开样例输入/Open Sample Input",
+        "title": "%commands.openSampleInput.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleAnswer",
-        "title": "OI Judge: 打开期望输出/Open Expected Output",
+        "title": "%commands.openSampleAnswer.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.openSampleOutput",
-        "title": "OI Judge: 打开运行结果/Open Run Result",
+        "title": "%commands.openSampleOutput.title%",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleUserOutput",
-        "title": "OI Judge: 打开运行结果/Open Run Result",
+        "title": "%commands.openSampleUserOutput.title%",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.openSampleDiff",
-        "title": "OI Judge: 打开差异/Open Diff",
+        "title": "%commands.openSampleDiff.title%",
         "icon": "$(diff)"
       },
       {
         "command": "oijudger.deleteSample",
-        "title": "OI Judge: 删除样例/Delete Sample",
+        "title": "%commands.deleteSample.title%",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.setChecker",
-        "title": "OI Judge: 设置 Checker/Set Checker",
+        "title": "%commands.setChecker.title%",
         "icon": "$(verified)"
       },
       {
         "command": "oijudger.setPlainCheckerProtocol",
-        "title": "OI Judge: 设置 Plain Checker 协议/Set Plain Checker Protocol",
+        "title": "%commands.setPlainCheckerProtocol.title%",
         "icon": "$(settings)"
       },
       {
         "command": "oijudger.clearChecker",
-        "title": "OI Judge: 清除 Checker/Clear Checker",
+        "title": "%commands.clearChecker.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.openChecker",
-        "title": "OI Judge: 打开 Checker/Open Checker",
+        "title": "%commands.openChecker.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.importTestlib",
-        "title": "OI Judge: 导入 testlib.h/Import testlib.h",
+        "title": "%commands.importTestlib.title%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "oijudger.openTestlib",
-        "title": "OI Judge: 打开 testlib.h/Open testlib.h",
+        "title": "%commands.openTestlib.title%",
         "icon": "$(book)"
       },
       {
         "command": "oijudger.openCheckerOutput",
-        "title": "OI Judge: 打开 Checker 输出/Open Checker Output",
+        "title": "%commands.openCheckerOutput.title%",
         "icon": "$(output)"
       },
       {
         "command": "oijudger.selectStdProgram",
-        "title": "OI Judge: 选择 STD/Select STD",
+        "title": "%commands.selectStdProgram.title%",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.openStdProgram",
-        "title": "OI Judge: 打开 STD/Open STD",
+        "title": "%commands.openStdProgram.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearStdProgram",
-        "title": "OI Judge: 清除 STD/Clear STD",
+        "title": "%commands.clearStdProgram.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.toggleAutoGenerateOutputFromStd",
-        "title": "OI Judge: 自动使用 STD 生成输出/Auto Generate Output with STD",
+        "title": "%commands.toggleAutoGenerateOutputFromStd.title%",
         "icon": "$(sync)"
       },
       {
         "command": "oijudger.generateSampleAnswerWithStd",
-        "title": "OI Judge: 用 STD 生成答案/Generate Answer with STD",
+        "title": "%commands.generateSampleAnswerWithStd.title%",
         "icon": "$(run)"
       },
       {
         "command": "oijudger.setSampleScore",
-        "title": "OI Judge: 设置测试点分值/Set Testcase Score",
+        "title": "%commands.setSampleScore.title%",
         "icon": "$(symbol-number)"
       },
       {
         "command": "oijudger.clearSampleScore",
-        "title": "OI Judge: 清除测试点分值/Clear Testcase Score",
+        "title": "%commands.clearSampleScore.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.generateAllSampleAnswersWithStd",
-        "title": "OI Judge: 用 STD 生成全部样例答案/Generate All Sample Answers with STD",
+        "title": "%commands.generateAllSampleAnswersWithStd.title%",
         "icon": "$(run-all)"
       },
       {
         "command": "oijudger.viewCurrentSampleAnswer",
-        "title": "OI Judge: 查看当前答案/View Current Answer",
+        "title": "%commands.viewCurrentSampleAnswer.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.viewGeneratedSampleAnswer",
-        "title": "OI Judge: 查看新生成答案/View Generated Answer",
+        "title": "%commands.viewGeneratedSampleAnswer.title%",
         "icon": "$(preview)"
       },
       {
         "command": "oijudger.diffGeneratedSampleAnswer",
-        "title": "OI Judge: 对比新生成答案/Compare Generated Answer",
+        "title": "%commands.diffGeneratedSampleAnswer.title%",
         "icon": "$(diff)"
       },
       {
         "command": "oijudger.applyGeneratedSampleAnswer",
-        "title": "OI Judge: 应用新生成答案/Apply Generated Answer",
+        "title": "%commands.applyGeneratedSampleAnswer.title%",
         "icon": "$(check)"
       },
       {
         "command": "oijudger.deleteGeneratedSampleAnswer",
-        "title": "OI Judge: 删除新生成答案/Delete Generated Answer",
+        "title": "%commands.deleteGeneratedSampleAnswer.title%",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.applyAllGeneratedSampleAnswers",
-        "title": "OI Judge: 应用全部新生成答案/Apply All Generated Answers",
+        "title": "%commands.applyAllGeneratedSampleAnswers.title%",
         "icon": "$(check-all)"
       },
       {
         "command": "oijudger.addProblemGenerator",
-        "title": "OI Judge: 添加 Generator/Add Generator",
+        "title": "%commands.addProblemGenerator.title%",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.openProblemGenerator",
-        "title": "OI Judge: 打开 Generator/Open Generator",
+        "title": "%commands.openProblemGenerator.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.removeProblemGenerator",
-        "title": "OI Judge: 移除 Generator/Remove Generator",
+        "title": "%commands.removeProblemGenerator.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.addProblemGeneratorInput",
-        "title": "OI Judge: 添加全局生成器输入/Add Global Generator Input",
+        "title": "%commands.addProblemGeneratorInput.title%",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.openProblemGeneratorInput",
-        "title": "OI Judge: 打开全局生成器输入/Open Global Generator Input",
+        "title": "%commands.openProblemGeneratorInput.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.removeProblemGeneratorInput",
-        "title": "OI Judge: 移除全局生成器输入/Remove Global Generator Input",
+        "title": "%commands.removeProblemGeneratorInput.title%",
         "icon": "$(trash)"
       },
       {
         "command": "oijudger.bindSubtaskGenerator",
-        "title": "OI Judge: 绑定数据生成器/Bind Generator",
+        "title": "%commands.bindSubtaskGenerator.title%",
         "icon": "$(symbol-parameter)"
       },
       {
         "command": "oijudger.openSubtaskGenerator",
-        "title": "OI Judge: 打开绑定的 Generator/Open Bound Generator",
+        "title": "%commands.openSubtaskGenerator.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearSubtaskGenerator",
-        "title": "OI Judge: 清除 Generator 绑定/Clear Generator Binding",
+        "title": "%commands.clearSubtaskGenerator.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.selectGeneratorProgram",
-        "title": "OI Judge: 选择数据生成器/Select Generator",
+        "title": "%commands.selectGeneratorProgram.title%",
         "icon": "$(file-code)"
       },
       {
         "command": "oijudger.openGeneratorProgram",
-        "title": "OI Judge: 打开数据生成器/Open Generator",
+        "title": "%commands.openGeneratorProgram.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.clearGeneratorProgram",
-        "title": "OI Judge: 清除数据生成器/Clear Generator",
+        "title": "%commands.clearGeneratorProgram.title%",
         "icon": "$(clear-all)"
       },
       {
         "command": "oijudger.addSetterInputSample",
-        "title": "OI Judge: 添加输入样例/Add Input Sample",
+        "title": "%commands.addSetterInputSample.title%",
         "icon": "$(file-add)"
       },
       {
         "command": "oijudger.setSampleName",
-        "title": "OI Judge: 设置样例名称/Set Sample Name",
+        "title": "%commands.setSampleName.title%",
         "icon": "$(tag)"
       },
       {
         "command": "oijudger.refreshStressRecords",
-        "title": "OI Judge: 刷新对拍记录/Refresh Stress Records",
+        "title": "%commands.refreshStressRecords.title%",
         "icon": "$(refresh)"
       },
       {
         "command": "oijudger.openStressFile",
-        "title": "OI Judge: 打开对拍文件/Open Stress File",
+        "title": "%commands.openStressFile.title%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "oijudger.addStressCaseToSamples",
-        "title": "OI Judge: 加入样例/Add to Samples",
+        "title": "%commands.addStressCaseToSamples.title%",
         "icon": "$(add)"
       },
       {
         "command": "oijudger.rerunStressCase",
-        "title": "OI Judge: 重新运行该用例/Rerun This Case",
+        "title": "%commands.rerunStressCase.title%",
         "icon": "$(debug-rerun)"
       },
       {
         "command": "oijudger.revealStressSessionFolder",
-        "title": "OI Judge: 打开所在文件夹/Reveal Session Folder",
+        "title": "%commands.revealStressSessionFolder.title%",
         "icon": "$(folder-opened)"
       },
       {
         "command": "oijudger.copyTestcaseFreopenInput",
-        "title": "OI Judge: 复制 freopen 输入代码/Copy freopen Input Snippet",
+        "title": "%commands.copyTestcaseFreopenInput.title%",
         "icon": "$(copy)"
       }
     ],
@@ -658,16 +658,16 @@
       "oijudger": [
         {
           "id": "oijudger.samplesView",
-          "name": "OI Judge"
+          "name": "%views.samplesView.name%"
         },
         {
           "id": "oijudger.stressRecordsView",
-          "name": "对拍记录/Stress Records"
+          "name": "%views.stressRecordsView.name%"
         }
       ]
     },
     "configuration": {
-      "title": "OI Judge",
+      "title": "%configuration.title%",
       "properties": {
         "oijudger.language": {
           "type": "string",
@@ -678,16 +678,16 @@
             "zh"
           ],
           "enumDescriptions": [
-            "Follow VSCode display language.",
-            "Use English UI text.",
-            "Use Chinese UI text."
+            "%configuration.oijudger.language.enumDescriptions.0%",
+            "%configuration.oijudger.language.enumDescriptions.1%",
+            "%configuration.oijudger.language.enumDescriptions.2%"
           ],
-          "description": "Controls OI Judge UI language."
+          "description": "%configuration.oijudger.language.description%"
         },
         "oijudger.setterMode.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "When enabled, OI Judge shows problem setter tools such as selecting the standard solution, maintaining sample names, and managing data configuration."
+          "markdownDescription": "%configuration.oijudger.setterMode.enabled.markdownDescription%"
         }
       }
     },

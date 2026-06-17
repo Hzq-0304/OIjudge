@@ -1,5 +1,7 @@
 # OI Judge
 
+简体中文 | [English](./README.md)
+
 OI Judge 是一款 VS Code 扩展，用于本地 OI 风格评测，也面向 OI 出题辅助流程。它可以帮助选手快速编译、运行、比较样例，也可以帮助出题人管理题目、样例、Subtask、STD、Generator、Checker、对拍、测试点导出和评测报告。
 
 项目定位：本地 OI 风格评测 + 出题辅助工具。

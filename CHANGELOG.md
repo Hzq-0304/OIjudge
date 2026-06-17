@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 为 VS Code 扩展 manifest 增加中英文 package.nls 本地化 / Add English and Simplified Chinese package.nls localization for the VS Code extension manifest.
 - 优化测试报告视觉层级、展开动画和 Subtask 分组样式 / Improve judge report visual hierarchy, expand animation, and Subtask grouping.
 
 - 新增 OI 风格文本比较，支持忽略行末空格和文末回车 / Add OI-style text comparison that ignores trailing whitespace and final newlines.
