@@ -45,6 +45,8 @@ describe('report verdict display', () => {
     expect(html).toContain('class="case-detail-inner"');
     expect(html).toContain('class="detailBlock detail-card"');
     expect(html).toContain('class="detail-code"');
+    expect(html).toContain('class="detail-action" data-command="input"');
+    expect(html).toContain('class="detail-action" data-command="diff"');
   });
 
   it('renders subtasks as grouped rows and indents child testcases', () => {
@@ -66,6 +68,45 @@ describe('report verdict display', () => {
     expect(html).toContain("panel?.classList.toggle('expanded'");
     expect(html).toContain('panel.style.maxHeight');
     expect(html).not.toContain('style.display');
+  });
+
+  it('uses soft report detail actions instead of default solid VS Code buttons', () => {
+    const html = renderPage('Report', renderReportBody(workspace(), report()));
+
+    expect(html).toContain('--oj-soft-button-bg');
+    expect(html).toContain('--oj-soft-button-hover-bg');
+    expect(html).toContain('--oj-soft-button-active-bg');
+    expect(html).toContain('.detail-action');
+    expect(html).toContain('background: var(--oj-soft-button-bg);');
+    expect(html).not.toContain('background: var(--vscode-button-background);');
+    expect(html).toContain('outline: 1px solid var(--vscode-focusBorder);');
+  });
+
+  it('keeps failure colors restrained and away from neutral metric columns', () => {
+    const html = renderPage('Report', renderReportBody(workspace(), report()));
+
+    expect(html).toContain('--oj-score-failed');
+    expect(html).toContain('.scoreCell.score-failed');
+    expect(html).toContain('color: var(--oj-score-failed);');
+    expect(html).toContain('statusPill verdict-pill verdict-wa">WA</span>');
+    expect(html).toContain('scoreCell score-failed verdict-wa">0/0');
+    expect(html).toContain('<span class="metricCell">2 ms</span>');
+    expect(html).not.toContain('metricCell verdict-wa');
+    expect(html).not.toContain('metricCell score-failed');
+    expect(html).not.toContain('testcaseRow status-wa');
+  });
+
+  it('uses lightweight subtask grouping and a subtle nested testcase guide', () => {
+    const html = renderPage('Report', renderReportBody(workspace(), report(), 'A', problemWithSubtask()));
+
+    expect(html).toContain('--oj-border-subtle');
+    expect(html).toContain('--oj-indent-guide');
+    expect(html).toContain('class="testcaseGroup subtask-row"');
+    expect(html).toContain('class="subtask-summary"');
+    expect(html).toContain('border: 1px solid var(--oj-border-subtle);');
+    expect(html).toContain('background: var(--oj-indent-guide);');
+    expect(html).toContain('opacity: 0.72;');
+    expect(html).not.toContain('subtask-row status-wa');
   });
 
   it('shows the new judge mode labels in report metadata', () => {

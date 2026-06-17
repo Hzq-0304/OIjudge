@@ -630,11 +630,11 @@ function renderActionButtons(
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
   const sampleValue = sampleId ?? '';
   return `<div class="buttons">
-    <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
-    <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
-    <button data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
-    <button data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
+    <button class="detail-action" data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
+    <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
+    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
+    <button class="detail-action" data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
+    <button class="detail-action" data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
   </div>`;
 }
 
@@ -649,12 +649,12 @@ function renderReportActionButtons(
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
   const sampleValue = sampleId ?? '';
   const diffButton = status === 'WA'
-    ? `\n    <button data-command="diff" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('report.showDiff'))}</button>`
+    ? `\n    <button class="detail-action" data-command="diff" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('report.showDiff'))}</button>`
     : '';
   return `<div class="buttons">
-    <button data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
-    <button data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}
+    <button class="detail-action" data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
+    <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
+    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}
   </div>`;
 }
 
@@ -740,13 +740,30 @@ export function renderPage(title: string, body: string): string {
       --oj-row-bg: var(--vscode-editor-background);
       --oj-row-hover-bg: var(--vscode-list-hoverBackground);
       --oj-border: var(--vscode-panel-border);
+      --oj-border-subtle: var(--vscode-panel-border);
+      --oj-detail-bg: var(--vscode-editor-background);
+      --oj-soft-button-bg: var(--vscode-list-hoverBackground);
+      --oj-soft-button-hover-bg: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+      --oj-soft-button-active-bg: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+      --oj-soft-button-border: var(--vscode-panel-border);
+      --oj-indent-guide: var(--vscode-panel-border);
       --oj-muted: var(--vscode-descriptionForeground);
       --oj-text: var(--vscode-foreground);
       --oj-ac: var(--vscode-testing-iconPassed, #3fb950);
-      --oj-wa: var(--vscode-testing-iconFailed, #f85149);
+      --oj-wa: var(--vscode-errorForeground, var(--vscode-testing-iconFailed, #ff7b72));
+      --oj-score-failed: var(--vscode-descriptionForeground);
       --oj-tle: #d29922;
       --oj-mle: #bc8cff;
       --oj-re: #f0883e;
+      --oj-border-subtle: color-mix(in srgb, var(--vscode-panel-border) 58%, transparent);
+      --oj-detail-bg: color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-editorWidget-background) 6%);
+      --oj-soft-button-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 88%, var(--vscode-foreground) 12%);
+      --oj-soft-button-hover-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 80%, var(--vscode-foreground) 20%);
+      --oj-soft-button-active-bg: color-mix(in srgb, var(--vscode-editorWidget-background) 74%, var(--vscode-foreground) 26%);
+      --oj-soft-button-border: color-mix(in srgb, var(--vscode-panel-border) 68%, transparent);
+      --oj-indent-guide: color-mix(in srgb, var(--vscode-panel-border) 42%, transparent);
+      --oj-wa: color-mix(in srgb, var(--vscode-errorForeground, var(--vscode-testing-iconFailed, #ff7b72)) 82%, var(--vscode-foreground) 18%);
+      --oj-score-failed: color-mix(in srgb, var(--oj-wa) 68%, var(--vscode-descriptionForeground) 32%);
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
       font-family: var(--vscode-font-family);
@@ -853,19 +870,22 @@ export function renderPage(title: string, body: string): string {
       background: var(--oj-row-hover-bg);
     }
     .subtask-row {
-      border-top: 1px solid var(--oj-border);
-      margin: 6px 8px;
+      border-top: 1px solid var(--oj-border-subtle);
+      margin: 4px 6px;
     }
     .subtask-row > summary {
-      background: var(--oj-card-bg);
-      border: 1px solid var(--oj-border);
-      border-radius: 8px;
+      background: var(--oj-detail-bg);
+      border: 1px solid var(--oj-border-subtle);
+      border-radius: 7px;
       cursor: pointer;
-      font-weight: 650;
+      font-weight: 600;
       list-style: none;
     }
     .subtask-row > summary:hover {
       background: var(--oj-row-hover-bg);
+    }
+    .subtask-summary {
+      padding: 9px 12px;
     }
     .subtask-row > summary::-webkit-details-marker { display: none; }
     .testcaseName::before {
@@ -880,14 +900,15 @@ export function renderPage(title: string, body: string): string {
       transform: rotate(90deg);
     }
     .nested-case .testcaseName {
-      padding-left: 30px;
+      padding-left: 34px;
       position: relative;
     }
     .nested-case .testcaseName::after {
-      background: var(--oj-border);
+      background: var(--oj-indent-guide);
       content: '';
-      height: 18px;
-      left: 16px;
+      height: 16px;
+      left: 18px;
+      opacity: 0.72;
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
@@ -909,7 +930,7 @@ export function renderPage(title: string, body: string): string {
     }
     .score-passed { color: var(--oj-ac); }
     .score-failed,
-    .score-partial { color: currentColor; }
+    .score-partial { color: var(--oj-score-failed); }
     .score-muted { color: var(--oj-muted); }
     .verdict-ac { color: var(--oj-ac); }
     .verdict-wa,
@@ -925,6 +946,8 @@ export function renderPage(title: string, body: string): string {
     .verdict-partial,
     .verdict-scored { color: var(--vscode-testing-iconQueued, #d29922); }
     .verdict-not-run { color: var(--oj-muted); }
+    .scoreCell.score-failed,
+    .scoreCell.score-partial { color: var(--oj-score-failed); }
     .case-detail-panel {
       max-height: 0;
       opacity: 0;
@@ -940,29 +963,31 @@ export function renderPage(title: string, body: string): string {
       transform: translateY(0);
     }
     .case-detail-inner {
-      padding: 0 14px 14px 42px;
+      padding: 2px 12px 10px 42px;
     }
     .testcaseDetails {
-      border-top: 1px solid var(--oj-border);
-      padding-top: 12px;
+      background: var(--oj-detail-bg);
+      border: 1px solid var(--oj-border-subtle);
+      border-radius: 6px;
+      padding: 10px;
     }
     .testcaseGroupBody {
       border-top: 0;
       margin: 4px 8px 8px;
     }
     .detailBlock {
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .detail-card {
-      background: var(--oj-card-bg);
-      border: 1px solid var(--oj-border);
-      border-radius: 8px;
-      padding: 12px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
     }
     .detail-title {
       color: var(--oj-muted);
       font-size: 12px;
-      font-weight: 650;
+      font-weight: 600;
       margin: 0 0 8px;
       text-transform: uppercase;
     }
@@ -976,16 +1001,32 @@ export function renderPage(title: string, body: string): string {
       margin: 0;
       overflow-wrap: anywhere;
     }
-    .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-    .buttons button {
-      background: var(--vscode-button-background);
-      border: 0;
-      border-radius: 3px;
-      color: var(--vscode-button-foreground);
+    .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .buttons button,
+    .detail-action {
+      background: var(--oj-soft-button-bg);
+      border: 1px solid var(--oj-soft-button-border);
+      border-radius: 6px;
+      color: var(--vscode-foreground);
       cursor: pointer;
-      padding: 4px 10px;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 4px 9px;
     }
-    .buttons button:hover { background: var(--vscode-button-hoverBackground); }
+    .buttons button:hover,
+    .detail-action:hover {
+      background: var(--oj-soft-button-hover-bg);
+    }
+    .buttons button:active,
+    .detail-action:active {
+      background: var(--oj-soft-button-active-bg);
+    }
+    .buttons button:focus-visible,
+    .detail-action:focus-visible {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
     .buttons button:disabled {
       cursor: default;
       opacity: 0.55;
