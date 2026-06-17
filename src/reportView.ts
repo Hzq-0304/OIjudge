@@ -273,7 +273,7 @@ function formatJudgeMode(report: JudgeReport): string {
   if (isCheckerReport(report)) {
     return t('customChecker');
   }
-  return t('normalTextCompare');
+  return report.judgeMode === 'strictText' ? t('strictTextCompare') : t('normalTextCompare');
 }
 
 function formatIoMode(report: JudgeReport): string {

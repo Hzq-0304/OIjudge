@@ -22,6 +22,21 @@ describe('report verdict display', () => {
     expect(html).not.toContain('statusPill status-ac">通过</span>');
     expect(html).not.toContain('<strong>通过</strong>');
   });
+
+  it('shows the new judge mode labels in report metadata', () => {
+    expect(renderReportBody(workspace(), {
+      ...report(),
+      judgeMode: 'strictText'
+    })).toContain('<strong>Text Compare</strong>');
+    expect(renderReportBody(workspace(), {
+      ...report(),
+      judgeMode: 'trimTrailingWhitespace'
+    })).toContain('<strong>Text Compare (ignore trailing whitespace and final newlines)</strong>');
+    expect(renderReportBody(workspace(), {
+      ...report(),
+      judgeMode: 'checker'
+    })).toContain('<strong>Custom Checker</strong>');
+  });
 });
 
 function workspace(): vscode.WorkspaceFolder {

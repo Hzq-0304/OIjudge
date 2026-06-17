@@ -165,6 +165,11 @@ describe('sample tree add entry', () => {
       'oijudger.setJudgeMode',
       'oijudger.setIoMode'
     ]));
+    expect(configurationGroup?.label).toBe('Configuration');
+    expect(configurationCommands).not.toContain(undefined);
+    expect((await provider.getChildren(configurationGroup)).find((node) =>
+      node.command?.command === 'oijudger.setJudgeMode'
+    )?.label).toBe('Judge Mode: Text Compare (ignore trailing whitespace and final newlines)');
   });
 
   it('shows setter STD answer and generator actions when setter mode is enabled', async () => {

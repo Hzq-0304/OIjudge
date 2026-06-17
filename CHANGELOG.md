@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 新增 OI 风格文本比较，支持忽略行末空格和文末回车 / Add OI-style text comparison that ignores trailing whitespace and final newlines.
 - 修复样例运行中状态误显示为“自动”的问题 / Fix running sample state being shown as auto.
 - 简化 OI Judge 样例树结构并合并低频工作区操作 / Simplify the OI Judge sample tree and consolidate low-frequency workspace actions.
 - 为每个测试点增加单独运行按钮 / Add inline run button for each testcase.

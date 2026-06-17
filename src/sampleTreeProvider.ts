@@ -1114,11 +1114,11 @@ function createCheckerInfoNode(workspaceFolder: vscode.WorkspaceFolder, problem:
 
 function createJudgeModeNode(problem: ProblemConfig): TreeNode {
   const mode = getProblemJudgeMode(problem);
-  const label = mode === 'checker' ? t('customChecker') : t('normalTextCompare');
+  const label = formatJudgeModeLabel(mode);
   return {
     kind: 'info',
     label: `${t('judgeMode')}: ${label}`,
-    tooltip: mode === 'checker' ? t('checkerOptionsOnlyInCustomMode') : t('normalCompareDescription'),
+    tooltip: formatJudgeModeDescription(mode),
     icon: new vscode.ThemeIcon(mode === 'checker' ? 'verified' : 'diff'),
     problemId: problem.id,
     command: {
@@ -1133,6 +1133,20 @@ function createWorkspaceActionNodes(): TreeNode[] {
   return [
     actionNode(t('manageWorkspace'), 'oijudger.manageWorkspace', 'tools')
   ];
+}
+
+function formatJudgeModeLabel(mode: JudgeMode): string {
+  if (mode === 'checker') {
+    return t('customChecker');
+  }
+  return mode === 'strictText' ? t('strictTextCompare') : t('normalTextCompare');
+}
+
+function formatJudgeModeDescription(mode: JudgeMode): string {
+  if (mode === 'checker') {
+    return t('checkerOptionsOnlyInCustomMode');
+  }
+  return mode === 'strictText' ? t('strictTextCompareDescription') : t('normalCompareDescription');
 }
 
 function setterGroupNode(
@@ -1301,7 +1315,13 @@ function capitalize(value: string): string {
 }
 
 function getProblemJudgeMode(problem: ProblemConfig): JudgeMode {
-  return problem.judgeMode ?? (problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'normal');
+  if (problem.judgeMode === 'strictText' || problem.judgeMode === 'trimTrailingWhitespace' || problem.judgeMode === 'checker') {
+    return problem.judgeMode;
+  }
+  if ((problem as { judgeMode?: string }).judgeMode === 'normal') {
+    return 'trimTrailingWhitespace';
+  }
+  return problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'trimTrailingWhitespace';
 }
 
 type PlainProtocolSource = {

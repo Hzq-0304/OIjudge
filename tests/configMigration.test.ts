@@ -27,8 +27,8 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     await Promise.all(workspaces.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
   });
 
-  it('defaults old configs without checker to normal judge mode', () => {
-    expect(normalizeJudgeMode(undefined, undefined)).toBe('normal');
+  it('defaults old configs without checker to OI-style text compare mode', () => {
+    expect(normalizeJudgeMode(undefined, undefined)).toBe('trimTrailingWhitespace');
     expect(normalizeCheckerConfig(undefined)).toEqual({ enabled: false, type: 'none' });
   });
 
@@ -40,12 +40,20 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     })).toBe('checker');
   });
 
-  it('keeps explicit normal judge mode even when checker config exists', () => {
+  it('maps old normal judge mode to OI-style text compare even when checker config exists', () => {
     expect(normalizeJudgeMode('normal', {
       enabled: true,
       type: 'plain',
       source: 'checker.cpp'
-    })).toBe('normal');
+    })).toBe('trimTrailingWhitespace');
+  });
+
+  it('keeps explicit strict text compare mode even when checker config exists', () => {
+    expect(normalizeJudgeMode('strictText', {
+      enabled: true,
+      type: 'plain',
+      source: 'checker.cpp'
+    })).toBe('strictText');
   });
 
   it('defaults missing ioMode to stdio', () => {
@@ -86,6 +94,7 @@ describe('judgeMode and ioMode compatibility defaults', () => {
     const dataDirStat = await fs.stat(getOiJudgeDataDir(workspaceFolder));
     expect(dataDirStat.isDirectory()).toBe(true);
     expect(saved.problems[0].id).toBe(problem.id);
+    expect(saved.problems[0].judgeMode).toBe('trimTrailingWhitespace');
     await expect(fs.readFile(settingsPath, 'utf8')).resolves.toBe('{"C_Cpp.default.compilerPath":"local-g++.exe"}\n');
   });
 

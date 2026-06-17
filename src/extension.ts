@@ -144,7 +144,7 @@ import {
 } from './stressRecords';
 import { runProcess } from './runner';
 import { withCompilerPathEnv } from './compilerRuntime';
-import { CompileResult, FileIoConfig, IoMode, JudgeReport, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
+import { CompileResult, FileIoConfig, IoMode, JudgeMode, JudgeReport, PlainCheckerConfig, ProblemConfig, SampleConfig } from './types';
 
 const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -153,6 +153,7 @@ let activeProblemId: string | undefined;
 type AddSampleMode = 'paste' | 'files';
 type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
 type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
+export type JudgeModeItem = vscode.QuickPickItem & { mode: JudgeMode };
 type GeneratorInputBindMode = 'create' | 'files';
 type GeneratorInputBindModeItem = vscode.QuickPickItem & { mode: GeneratorInputBindMode };
 type EmptyGeneratorOutputAction = 'saveAll' | 'skip' | 'cancel';
@@ -181,6 +182,26 @@ export function createWorkspaceManagementItems(): WorkspaceManagementItem[] {
     { label: t('addProblemFromFile'), command: 'oijudger.addProblemFromFile' },
     { label: t('refreshView'), command: 'oijudger.refreshView' },
     { label: t('importLegacyProblem'), command: 'oijudger.importLegacyProblem' }
+  ];
+}
+
+export function createJudgeModeItems(): JudgeModeItem[] {
+  return [
+    {
+      label: t('strictTextCompare'),
+      description: t('strictTextCompareDescription'),
+      mode: 'strictText'
+    },
+    {
+      label: t('normalTextCompare'),
+      description: t('normalCompareDescription'),
+      mode: 'trimTrailingWhitespace'
+    },
+    {
+      label: t('customChecker'),
+      description: t('customCheckerDescription'),
+      mode: 'checker'
+    }
   ];
 }
 
@@ -3122,10 +3143,7 @@ async function setJudgeModeCommand(
   }
 
   const picked = await vscode.window.showQuickPick(
-    [
-      { label: t('normalTextCompare'), mode: 'normal' as const },
-      { label: t('customChecker'), mode: 'checker' as const }
-    ],
+    createJudgeModeItems(),
     {
       title: t('setJudgeMode'),
       placeHolder: t('judgeMode')
@@ -3138,7 +3156,11 @@ async function setJudgeModeCommand(
   await updateProblemJudgeMode(context.workspaceFolder, context.problem.id, picked.mode);
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(
-    picked.mode === 'checker' ? t('switchedToCustomChecker') : t('switchedToNormalCompare')
+    picked.mode === 'checker'
+      ? t('switchedToCustomChecker')
+      : picked.mode === 'strictText'
+        ? t('switchedToStrictCompare')
+        : t('switchedToNormalCompare')
   );
 }
 
@@ -5417,11 +5439,14 @@ function readSampleId(problemArg: unknown, sampleArg: unknown): number | undefin
   return undefined;
 }
 
-function getEffectiveJudgeMode(problem: ProblemConfig): 'normal' | 'checker' {
-  if (problem.judgeMode === 'normal' || problem.judgeMode === 'checker') {
+function getEffectiveJudgeMode(problem: ProblemConfig): JudgeMode {
+  if (problem.judgeMode === 'strictText' || problem.judgeMode === 'trimTrailingWhitespace' || problem.judgeMode === 'checker') {
     return problem.judgeMode;
   }
-  return problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'normal';
+  if ((problem as { judgeMode?: string }).judgeMode === 'normal') {
+    return 'trimTrailingWhitespace';
+  }
+  return problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'trimTrailingWhitespace';
 }
 
 async function updateSetterModeContext(): Promise<void> {

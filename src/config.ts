@@ -292,7 +292,7 @@ export function createDefaultConfig(): OITestConfig {
       auto: true,
       sizeMb: null
     },
-    judgeMode: 'normal',
+    judgeMode: 'trimTrailingWhitespace',
     ioMode: 'stdio',
     fileIo: {
       inputFileName: 'input.txt',

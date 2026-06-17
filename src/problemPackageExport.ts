@@ -120,7 +120,7 @@ export async function exportProblemPackage(
       timeLimitMs: problem.limits.timeMs,
       memoryLimitMb: problem.limits.memoryMb,
       ioMode: problem.ioMode ?? 'stdio',
-      judgeMode: problem.judgeMode ?? (problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'normal'),
+      judgeMode: problem.judgeMode ?? (problem.checker?.enabled && problem.checker.type !== 'none' ? 'checker' : 'trimTrailingWhitespace'),
       checkerType: problem.checker?.enabled ? problem.checker.type : undefined
     },
     files: {

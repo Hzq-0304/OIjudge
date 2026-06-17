@@ -5,7 +5,7 @@ import { compileChecker, CheckerCompileResult, getCheckerTimeLimitMs } from './c
 import { runPlainChecker, runTestlibChecker } from './checkerRunner';
 import { compileSource } from './compiler';
 import { withCompilerPathEnv } from './compilerRuntime';
-import { isOutputAccepted } from './comparator';
+import { isOutputAccepted, TextCompareMode } from './comparator';
 import { exists, getOiJudgeDataRelPath, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
 import { t } from './i18n';
 import { runNativeProcess } from './nativeRunner';
@@ -25,7 +25,7 @@ import {
   resolveSamplePath
 } from './sampleFiles';
 import { isSetterModeEnabled } from './setterMode';
-import { CheckerConfig, CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
+import { CheckerConfig, CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
 
 type RunClassification = 'OLE' | 'TLE' | 'MLE' | 'RE' | undefined;
@@ -101,7 +101,7 @@ export async function runAllSamples(
   const activeChecker = judgeMode === 'checker' && config.checker?.enabled && config.checker.type !== 'none'
     ? config.checker
     : undefined;
-  output.appendLine(`Judge mode: ${judgeMode === 'checker' ? 'custom checker' : 'normal text compare'}`);
+  output.appendLine(`Judge mode: ${formatJudgeModeForOutput(judgeMode)}`);
   if (activeChecker) {
     output.appendLine(`Checker type: ${activeChecker.type}`);
   }
@@ -155,7 +155,8 @@ export async function runAllSamples(
         compile.stack,
         compile.compilerCommand,
         checkerContext,
-        Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id])
+        Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id]),
+        getTextCompareMode(judgeMode)
       );
       samples.push(sampleReport);
       await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
@@ -320,11 +321,27 @@ function createCompileErrorJudgeReport(
   };
 }
 
-function getJudgeMode(config: OITestConfig): 'normal' | 'checker' {
-  if (config.judgeMode === 'normal' || config.judgeMode === 'checker') {
+function getJudgeMode(config: OITestConfig): JudgeMode {
+  if (config.judgeMode === 'strictText' || config.judgeMode === 'trimTrailingWhitespace' || config.judgeMode === 'checker') {
     return config.judgeMode;
   }
-  return config.checker?.enabled && config.checker.type !== 'none' ? 'checker' : 'normal';
+  if ((config as { judgeMode?: string }).judgeMode === 'normal') {
+    return 'trimTrailingWhitespace';
+  }
+  return config.checker?.enabled && config.checker.type !== 'none' ? 'checker' : 'trimTrailingWhitespace';
+}
+
+function getTextCompareMode(judgeMode: JudgeMode): TextCompareMode {
+  return judgeMode === 'strictText' ? 'strictText' : 'trimTrailingWhitespace';
+}
+
+function formatJudgeModeForOutput(judgeMode: JudgeMode): string {
+  if (judgeMode === 'checker') {
+    return 'custom checker';
+  }
+  return judgeMode === 'strictText'
+    ? 'strict text compare'
+    : 'text compare (ignore trailing whitespace and final newlines)';
 }
 
 function getIoMode(config: OITestConfig): IoMode {
@@ -457,7 +474,8 @@ async function judgeSample(
   compileStack?: CompileStackReport,
   compilerCommand?: string,
   checkerContext?: CheckerContext,
-  generatedAnswerPending = false
+  generatedAnswerPending = false,
+  textCompareMode: TextCompareMode = 'trimTrailingWhitespace'
 ): Promise<SampleReport> {
   const fileStatus = await getSampleFileStatus(workspaceFolder, sample);
   const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
@@ -879,7 +897,7 @@ async function judgeSample(
 
   let accepted: boolean;
   try {
-    accepted = isOutputAccepted(judgeOutput, answer);
+    accepted = isOutputAccepted(judgeOutput, answer, textCompareMode);
   } catch (error) {
     const compareTimeMs = elapsedMs(compareStartedAt);
     const compareError = formatUnknownError(error);

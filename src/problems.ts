@@ -548,7 +548,7 @@ export async function updateProblemJudgeMode(
   judgeMode: ProblemConfig['judgeMode']
 ): Promise<ProblemConfig | undefined> {
   return updateProblem(workspaceFolder, problemId, (problem) => {
-    problem.judgeMode = judgeMode ?? 'normal';
+    problem.judgeMode = judgeMode ?? 'trimTrailingWhitespace';
     if (problem.judgeMode === 'checker' && !problem.checker) {
       problem.checker = { enabled: false, type: 'none' };
     }

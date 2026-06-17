@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createGeneratorInputBindModeItems, createProblemSampleAddModeItems, scanSamplePairs } from '../src/extension';
+import { createGeneratorInputBindModeItems, createJudgeModeItems, createProblemSampleAddModeItems, scanSamplePairs } from '../src/extension';
 
 const workspaces: string[] = [];
 
@@ -25,6 +25,18 @@ describe('sample add QuickPick items', () => {
     expect(items.map((item) => item.mode)).toEqual(['create', 'files']);
     expect(items.every((item) => item.label && item.description)).toBe(true);
     expect(items.find((item) => item.mode === 'create')?.description).toContain('.txt');
+  });
+
+  it('offers strict text, OI-style text, and custom checker judge modes', () => {
+    const items = createJudgeModeItems();
+
+    expect(items.map((item) => item.mode)).toEqual(['strictText', 'trimTrailingWhitespace', 'checker']);
+    expect(items.map((item) => item.label)).toEqual([
+      'Text Compare',
+      'Text Compare (ignore trailing whitespace and final newlines)',
+      'Custom Checker'
+    ]);
+    expect(items.every((item) => item.description)).toBe(true);
   });
 
   it('prefers .out over .ans when batch importing with the default answer suffix', async () => {

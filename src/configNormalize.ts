@@ -33,13 +33,16 @@ export function normalizeCheckerConfig(checker: CheckerConfig | undefined): Chec
 }
 
 export function normalizeJudgeMode(
-  judgeMode: JudgeMode | undefined,
+  judgeMode: JudgeMode | 'normal' | undefined,
   checker: CheckerConfig | undefined
 ): JudgeMode {
-  if (judgeMode === 'normal' || judgeMode === 'checker') {
+  if (judgeMode === 'strictText' || judgeMode === 'trimTrailingWhitespace' || judgeMode === 'checker') {
     return judgeMode;
   }
-  return checker?.enabled && checker.type !== 'none' ? 'checker' : 'normal';
+  if (judgeMode === 'normal') {
+    return 'trimTrailingWhitespace';
+  }
+  return checker?.enabled && checker.type !== 'none' ? 'checker' : 'trimTrailingWhitespace';
 }
 
 export function normalizeIoMode(ioMode: IoMode | undefined): IoMode {

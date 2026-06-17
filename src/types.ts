@@ -2,7 +2,7 @@ import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
 
 export type SampleSourceType = 'managed' | 'external';
 export type CheckerType = 'none' | 'testlib' | 'plain';
-export type JudgeMode = 'normal' | 'checker';
+export type JudgeMode = 'strictText' | 'trimTrailingWhitespace' | 'checker';
 export type IoMode = 'stdio' | 'fileio';
 export type TestlibMode = 'auto' | 'managed' | 'custom';
 export type PlainCheckerVerdictPosition = 'firstLine' | 'lastLine';
