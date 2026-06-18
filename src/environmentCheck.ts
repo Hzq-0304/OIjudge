@@ -49,7 +49,7 @@ export type EnvironmentCheckOptions = {
   output?: Pick<vscode.OutputChannel, 'appendLine'>;
   compilerCandidates?: string[];
   runNativeRunner?: typeof runNativeProcess;
-  killProcess?: typeof killProcessTree;
+  killProcess?: (child: ChildProcess) => void | Promise<void>;
 };
 
 type ProcessRunResult = {
@@ -286,7 +286,7 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
     const stopped = await runStopProcessProbe(
       exePath,
       context.tempRoot!,
-      options.killProcess ?? killProcessTree,
+      options.killProcess ?? killEnvironmentCheckProcessTree,
       withCompilerPathEnv(context.compiler!.command)
     );
     if (!stopped) {
@@ -562,7 +562,7 @@ function runProcessWithTimeout(
 async function runStopProcessProbe(
   command: string,
   cwd: string,
-  killProcess: (child: ChildProcess) => void,
+  killProcess: (child: ChildProcess) => void | Promise<void>,
   env?: NodeJS.ProcessEnv
 ): Promise<boolean> {
   const child = spawn(command, [], { cwd, env, shell: false, windowsHide: true });
@@ -582,17 +582,45 @@ async function runStopProcessProbe(
     stdout += chunk.toString('utf8');
   });
   try {
-    await waitUntil(() => stdout.includes('started') || closed, 1000);
-    killProcess(child);
+    await waitUntil(() => stdout.includes('started') || closed, 2000);
+    await killProcess(child);
     await promiseWithTimeout(closePromise, STOP_CHECK_TIMEOUT_MS);
     return closed;
   } finally {
     if (!closed) {
-      killProcess(child);
+      await killProcess(child);
       child.kill('SIGKILL');
       await promiseWithTimeout(closePromise, 1000).catch(() => undefined);
     }
   }
+}
+
+export const environmentCheckTestHooks = {
+  runStopProcessProbe
+};
+
+async function killEnvironmentCheckProcessTree(child: ChildProcess): Promise<void> {
+  const pid = child.pid;
+  if (!pid) {
+    return;
+  }
+
+  if (process.platform !== 'win32') {
+    killProcessTree(child);
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'ignore'
+    });
+    killer.on('error', () => {
+      child.kill('SIGKILL');
+      resolve();
+    });
+    killer.on('close', () => resolve());
+  });
 }
 
 function makeNativeRunnerConfig(compiler: string): OITestConfig {

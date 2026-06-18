@@ -1,7 +1,10 @@
+import { promises as fs } from 'fs';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
   buildCompileArgs,
   calculateEnvironmentOverallStatus,
+  environmentCheckTestHooks,
   EnvironmentCheckItem,
   executablePath,
   formatEnvironmentCheckReport,
@@ -80,6 +83,32 @@ describe('environment check helpers', () => {
     expect(truncateText('a\nb\nc', 2)).toContain('... (1 more lines truncated)');
     expect(truncateText('abcdef', 20, 3)).toContain('abc');
     expect(truncateText('abcdef', 20, 3)).toContain('... (truncated)');
+  });
+
+  it('waits for an asynchronous stop-process kill helper to close the child', async () => {
+    const scriptPath = path.join(process.cwd(), '.tmp', 'environment-check-test', 'sleep-probe.js');
+    await fs.mkdir(path.dirname(scriptPath), { recursive: true });
+    await fs.writeFile(scriptPath, [
+      'console.log("started");',
+      'setInterval(() => undefined, 1000);',
+      ''
+    ].join('\n'), 'utf8');
+
+    const command = process.execPath;
+    const stopped = await environmentCheckTestHooks.runStopProcessProbe(
+      command,
+      process.cwd(),
+      async (child) => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        child.kill();
+      },
+      {
+        ...process.env,
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${scriptPath}`].filter(Boolean).join(' ')
+      }
+    );
+
+    expect(stopped).toBe(true);
   });
 });
 
