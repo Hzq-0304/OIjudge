@@ -38,7 +38,17 @@ describe('cross-platform judge regression', () => {
     const problem = await createSumArrayProblem(workspaceFolder.uri.fsPath, compiler.command);
 
     const acceptedReport = await runAllSamples(workspaceFolder, solutionPath, problem, output());
-    expect(acceptedReport?.summary).toEqual({ accepted: 5, total: 5, wrongAnswer: 0, scored: 0, checkerError: 0 });
+    expect(acceptedReport?.summary).toMatchObject({ accepted: 5, total: 5 });
+    expect(acceptedReport?.summary.wrongAnswer ?? 0).toBe(0);
+    expect(acceptedReport?.summary.checkerError ?? 0).toBe(0);
+    expect(acceptedReport?.summary.runtimeError ?? 0).toBe(0);
+    expect(acceptedReport?.summary.timeLimitExceeded ?? 0).toBe(0);
+    expect(acceptedReport?.summary.memoryLimitExceeded ?? 0).toBe(0);
+    for (const value of Object.values(acceptedReport?.summary ?? {})) {
+      if (typeof value === 'number') {
+        expect(value).toBeGreaterThanOrEqual(0);
+      }
+    }
     expect(acceptedReport?.score).toEqual({ earned: 100, total: 100 });
     for (const sample of acceptedReport?.samples ?? []) {
       expect(sample.status).toBe('AC');
@@ -55,6 +65,8 @@ describe('cross-platform judge regression', () => {
     expect(htmlPath).toContain('sum-array-report.html');
 
     const wrongReport = await runAllSamples(workspaceFolder, wrongSolutionPath, problem, output());
+    expect(wrongReport?.summary).toMatchObject({ total: 5 });
+    expect(wrongReport?.summary.wrongAnswer ?? 0).toBeGreaterThanOrEqual(1);
     expect(wrongReport?.summary.accepted).toBeLessThan(wrongReport?.summary.total ?? 0);
     expect(wrongReport?.score?.earned).toBeLessThan(100);
     const wrongHtml = renderReportBody(workspaceFolder, wrongReport!, problem.id, problem);
@@ -142,7 +154,8 @@ function sequence(size: number, offset = 1): number[] {
 }
 
 function sumArraySolution(): string {
-  return `#include <bits/stdc++.h>
+  return `#include <iostream>
+#include <vector>
 using namespace std;
 int main() {
   ios::sync_with_stdio(false);
@@ -163,16 +176,19 @@ int main() {
 }
 
 function wrongSumArraySolution(): string {
-  return `#include <bits/stdc++.h>
+  return `#include <iostream>
 using namespace std;
 int main() {
   int n;
   if (!(cin >> n)) return 0;
-  long long sum = 1;
+  long long sum = 0;
   for (int i = 0; i < n; ++i) {
     long long x;
     cin >> x;
     sum += x;
+  }
+  if (sum < 0 || n == 1500) {
+    ++sum;
   }
   cout << sum << '\\n';
   return 0;

@@ -19,6 +19,7 @@ describe('cross-platform metric comparison', () => {
       cases: [
         { name: 'wa', verdict: 'WA', timeMs: 1, memoryKb: 1 },
         { name: 'bad-time', verdict: 'AC', timeMs: Number.POSITIVE_INFINITY, memoryKb: 1 },
+        { name: 'negative-time', verdict: 'AC', timeMs: -1, memoryKb: 1 },
         { name: 'bad-memory', verdict: 'AC', timeMs: 1, memoryKb: -1 }
       ]
     });
@@ -27,6 +28,7 @@ describe('cross-platform metric comparison', () => {
     expect(result.errors).toEqual(expect.arrayContaining([
       'wa: verdict is WA, expected AC',
       'bad-time: timeMs must be a finite number',
+      'negative-time: timeMs must not be negative',
       'bad-memory: memoryKb must not be negative'
     ]));
   });

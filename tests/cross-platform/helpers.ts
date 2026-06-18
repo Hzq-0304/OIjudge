@@ -54,7 +54,8 @@ export function compilerConfig(compiler: CompilerInfo): Pick<OITestConfig, 'comp
 }
 
 export async function findCppCompiler(): Promise<CompilerInfo | undefined> {
-  for (const command of ['g++', 'clang++']) {
+  const candidates = await getCompilerCandidates();
+  for (const command of candidates) {
     const version = await readCommandVersion(command);
     if (version) {
       return { command, version };
@@ -91,4 +92,46 @@ async function readCommandVersion(command: string): Promise<string | undefined> 
       resolve(Buffer.concat(chunks).toString('utf8').split(/\r?\n/u)[0]?.trim() || command);
     });
   });
+}
+
+async function getCompilerCandidates(): Promise<string[]> {
+  const candidates = ['g++', 'clang++'];
+  const configured = await readVsCodeCompilerPaths();
+  for (const compilerPath of configured) {
+    if (compilerPath && !candidates.includes(compilerPath)) {
+      candidates.push(compilerPath);
+    }
+  }
+  return candidates;
+}
+
+async function readVsCodeCompilerPaths(): Promise<string[]> {
+  const paths = new Set<string>();
+  await readJsonFile(path.join(process.cwd(), '.vscode', 'settings.json'), (settings) => {
+    const compilerPath = (settings as Record<string, unknown>)['C_Cpp.default.compilerPath'];
+    if (typeof compilerPath === 'string') {
+      paths.add(compilerPath);
+    }
+  });
+  await readJsonFile(path.join(process.cwd(), '.vscode', 'c_cpp_properties.json'), (properties) => {
+    const configurations = (properties as { configurations?: unknown }).configurations;
+    if (!Array.isArray(configurations)) {
+      return;
+    }
+    for (const configuration of configurations) {
+      const compilerPath = (configuration as { compilerPath?: unknown }).compilerPath;
+      if (typeof compilerPath === 'string') {
+        paths.add(compilerPath);
+      }
+    }
+  });
+  return [...paths];
+}
+
+async function readJsonFile(filePath: string, onRead: (value: unknown) => void): Promise<void> {
+  try {
+    onRead(JSON.parse(await fs.readFile(filePath, 'utf8')));
+  } catch {
+    // Optional local VS Code configuration is only a compiler discovery hint.
+  }
 }

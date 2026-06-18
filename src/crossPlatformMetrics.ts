@@ -59,6 +59,8 @@ export function compareCrossPlatformMetrics(
 
     if (!isFiniteNumber(testCase.timeMs)) {
       errors.push(`${testCase.name}: timeMs must be a finite number`);
+    } else if (testCase.timeMs < 0) {
+      errors.push(`${testCase.name}: timeMs must not be negative`);
     } else if (testCase.timeMs > thresholds.maxCaseTimeMs) {
       errors.push(`${testCase.name}: timeMs ${testCase.timeMs} exceeds ${thresholds.maxCaseTimeMs}`);
     }
