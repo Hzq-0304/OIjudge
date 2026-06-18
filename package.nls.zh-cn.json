@@ -14,6 +14,7 @@
   "commands.clearOutputs.title": "OI Judge: 清空输出",
   "commands.refreshView.title": "OI Judge: 刷新视图",
   "commands.manageWorkspace.title": "OI Judge: 管理工作区",
+  "commands.checkEnvironment.title": "OI Judge: 检查运行环境",
   "commands.createProblem.title": "OI Judge: 创建题目",
   "commands.addProblemFromCurrentFile.title": "OI Judge: 从当前文件添加题目",
   "commands.addProblemFromFile.title": "OI Judge: 从文件添加题目",

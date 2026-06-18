@@ -14,6 +14,7 @@
   "commands.clearOutputs.title": "OI Judge: Clear Outputs",
   "commands.refreshView.title": "OI Judge: Refresh View",
   "commands.manageWorkspace.title": "OI Judge: Manage Workspace",
+  "commands.checkEnvironment.title": "OI Judge: Check Environment",
   "commands.createProblem.title": "OI Judge: Create Problem",
   "commands.addProblemFromCurrentFile.title": "OI Judge: Add Problem From Current File",
   "commands.addProblemFromFile.title": "OI Judge: Add Problem From File",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增环境自检命令，帮助诊断编译器、C++17、程序运行、stdin/stdout、文件 IO、native runner、用时内存和停止进程能力 / Add environment check command to diagnose compiler, C++17, execution, stdin/stdout, file IO, native runner, timing, memory, and process stop support.
+
 - 新增跨平台回归测试，覆盖 Judge 多样例组、对拍流程、停止对拍和报告 UI smoke test / Add cross-platform regression tests for judge sample groups, stress workflows, stop action, and report UI smoke checks.
 
 - 新增对拍当前代码命令，并支持使用调试停止按钮中断正在运行的对拍 / Add Stress Test Current Code command and support stopping active stress tests with a debug-stop action.

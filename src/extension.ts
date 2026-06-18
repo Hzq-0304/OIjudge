@@ -136,6 +136,7 @@ import {
   StressTestMode
 } from './stressTest';
 import { createStressRunController } from './stressRunController';
+import { formatEnvironmentCheckReport, runEnvironmentCheck } from './environmentCheck';
 import {
   StressTreeNode,
   StressRecordsTreeProvider
@@ -176,7 +177,8 @@ export type WorkspaceManagementCommand =
   | 'oijudger.addProblemFromCurrentFile'
   | 'oijudger.addProblemFromFile'
   | 'oijudger.refreshView'
-  | 'oijudger.importLegacyProblem';
+  | 'oijudger.importLegacyProblem'
+  | 'oijudger.checkEnvironment';
 export type WorkspaceManagementItem = vscode.QuickPickItem & { command: WorkspaceManagementCommand };
 const MAX_GENERATED_SAMPLE_INPUT_COUNT = 100;
 type AutoStdOutputContext =
@@ -278,7 +280,8 @@ export function createWorkspaceManagementItems(): WorkspaceManagementItem[] {
     { label: t('addProblemFromCurrentFile'), command: 'oijudger.addProblemFromCurrentFile' },
     { label: t('addProblemFromFile'), command: 'oijudger.addProblemFromFile' },
     { label: t('refreshView'), command: 'oijudger.refreshView' },
-    { label: t('importLegacyProblem'), command: 'oijudger.importLegacyProblem' }
+    { label: t('importLegacyProblem'), command: 'oijudger.importLegacyProblem' },
+    { label: t('environmentCheck'), command: 'oijudger.checkEnvironment' }
   ];
 }
 
@@ -537,6 +540,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.refreshView', () => {
       sampleTreeProvider.refresh();
       void updateStatusBar();
+    }),
+    vscode.commands.registerCommand('oijudger.checkEnvironment', async () => {
+      await checkEnvironmentCommand(context);
     }),
     vscode.commands.registerCommand('oijudger.manageWorkspace', async () => {
       await manageWorkspaceCommand();
@@ -919,6 +925,62 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // Nothing to clean up.
+}
+
+async function checkEnvironmentCommand(context: vscode.ExtensionContext): Promise<void> {
+  output.appendLine('');
+  output.appendLine('=== OI Judge Environment Check ===');
+  const workspaceFolder = vscode.window.activeTextEditor
+    ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+    : vscode.workspace.workspaceFolders?.[0];
+  const configuredCompiler = workspaceFolder ? await resolveEnvironmentCheckCompiler(workspaceFolder) : undefined;
+  const report = await runEnvironmentCheck({
+    workspaceFolder,
+    configuredCompiler,
+    vscodeVersion: vscode.version,
+    extensionVersion: context.extension?.packageJSON?.version,
+    output
+  });
+  const reportText = formatEnvironmentCheckReport(report);
+  const openReport = t('environmentCheck.openReport');
+  const copyReport = t('environmentCheck.copyReport');
+  const openOutput = t('environmentCheck.openOutput');
+  const message = report.overallStatus === 'pass'
+    ? t('environmentCheck.passed')
+    : report.overallStatus === 'warn'
+      ? t('environmentCheck.warning')
+      : t('environmentCheck.failed');
+  const showMessage = report.overallStatus === 'fail'
+    ? vscode.window.showErrorMessage
+    : report.overallStatus === 'warn'
+      ? vscode.window.showWarningMessage
+      : vscode.window.showInformationMessage;
+  const picked = await showMessage(message, openReport, copyReport, openOutput);
+  if (picked === openReport) {
+    const document = await vscode.workspace.openTextDocument({
+      content: reportText,
+      language: 'plaintext'
+    });
+    await vscode.window.showTextDocument(document, { preview: true });
+  } else if (picked === copyReport) {
+    await vscode.env.clipboard.writeText(reportText);
+    vscode.window.showInformationMessage(t('environmentCheck.copied'));
+  } else if (picked === openOutput) {
+    output.show(true);
+  }
+}
+
+async function resolveEnvironmentCheckCompiler(workspaceFolder: vscode.WorkspaceFolder): Promise<string | undefined> {
+  try {
+    const problems = await ensureProblemsConfig(workspaceFolder);
+    const activeProblem = activeProblemId
+      ? problems.problems.find((problem) => problem.id === activeProblemId)
+      : undefined;
+    const problem = activeProblem ?? problems.problems[0];
+    return problem?.compiler?.command;
+  } catch {
+    return undefined;
+  }
 }
 
 async function manageWorkspaceCommand(): Promise<void> {

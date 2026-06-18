@@ -241,6 +241,14 @@ Stress Test:
 - Failed cases are saved under `.vscode/.OIJudge/stress/` with input, STD output, tested output, stderr files, and `summary.json`.
 - The `Stress Records` view can open saved files, add a failed case to samples, rerun a failed case, refresh records, and reveal the session folder.
 
+Environment Check:
+
+- Run `OI Judge: Check Environment` from the Command Palette or the OI Judge sidebar toolbar.
+- The check covers platform information, temporary directories with spaces, compiler discovery, C++17 compilation, executable launch, stdin/stdout, file IO, native runner availability, time/memory sanity, and process stop support.
+- OI Judge writes a detailed plain-text report to the `OI Judge` OutputChannel and offers buttons to open the report, copy the report, or open the output panel.
+- Probe sources, executables, inputs, outputs, and native runner helper files are created under a temporary directory and cleaned up after the check.
+- If a required tool is missing, the report includes platform-specific suggestions such as installing MinGW-w64 on Windows, Xcode Command Line Tools on macOS, or `g++` on Linux.
+
 Testcase export:
 
 - `OI Judge: Export Testcases` copies or moves sample input/output files and writes an `.OIJudge/config.json` export record.

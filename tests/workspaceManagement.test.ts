@@ -8,7 +8,8 @@ describe('workspace management actions', () => {
       'oijudger.addProblemFromCurrentFile',
       'oijudger.addProblemFromFile',
       'oijudger.refreshView',
-      'oijudger.importLegacyProblem'
+      'oijudger.importLegacyProblem',
+      'oijudger.checkEnvironment'
     ]);
   });
 });

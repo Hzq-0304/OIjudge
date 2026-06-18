@@ -364,6 +364,11 @@ describe('package tree sample add menu', () => {
         command: 'oijudger.refreshView',
         when: 'view == oijudger.samplesView',
         group: 'navigation@4'
+      },
+      {
+        command: 'oijudger.checkEnvironment',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@5'
       }
     ]);
   });
@@ -439,6 +444,28 @@ describe('package tree sample add menu', () => {
     expect(resolveNls(command?.title)).toBe('OI Judge: Manage Workspace');
     expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 管理工作区');
     expect(registeredCommands()).toContain('oijudger.manageWorkspace');
+  });
+
+  it('contributes Environment Check to the command palette and samples view toolbar', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.checkEnvironment');
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.checkEnvironment');
+    expect(command).toMatchObject({
+      icon: '$(checklist)',
+      title: '%commands.checkEnvironment.title%'
+    });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Check Environment');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 检查运行环境');
+    expect(registeredCommands()).toContain('oijudger.checkEnvironment');
+    expect(packageJson.contributes.menus['view/title']).toContainEqual({
+      command: 'oijudger.checkEnvironment',
+      when: 'view == oijudger.samplesView',
+      group: 'navigation@5'
+    });
+    expect(packageJson.contributes.menus.commandPalette).not.toContainEqual({
+      command: 'oijudger.checkEnvironment',
+      when: 'false'
+    });
   });
 
   it('contributes problem package export to command palette and problem nodes only', () => {

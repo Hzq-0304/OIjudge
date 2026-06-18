@@ -236,6 +236,14 @@ int main() {
 - 失败用例会保存在 `.vscode/.OIJudge/stress/` 下，包含输入、STD 输出、待测输出、stderr 文件和 `summary.json`。
 - `Stress Records` 视图可以打开保存文件、把失败用例加入样例、重新运行失败用例、刷新记录，并打开 session 文件夹。
 
+## 环境自检
+
+- 运行 `OI Judge: 检查运行环境`，或点击 OI Judge 侧边栏工具栏中的环境自检入口。
+- 该命令会检查当前平台、带空格的临时目录、编译器发现、C++17 编译、可执行程序运行、stdin/stdout、文件 IO、native runner、用时/内存采集和停止进程能力。
+- 检查完成后会把详细纯文本报告写入 `OI Judge` OutputChannel，并提供“打开报告”“复制报告”“打开输出”按钮。
+- 自检用到的源码、可执行文件、输入输出文件和 native runner helper 都会放在临时目录中，结束后自动清理，不污染用户 workspace。
+- 如果缺少必要工具，报告会给出平台相关建议，例如 Windows 安装 MinGW-w64 并加入 PATH、macOS 安装 Xcode Command Line Tools、Linux 安装 `g++`。
+
 ## 测试点导出
 
 - `OI Judge: Export Testcases` 可以复制或移动样例输入/输出文件，并写出 `.OIJudge/config.json` 导出记录。

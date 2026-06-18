@@ -33,6 +33,7 @@
     "onCommand:oijudger.openSampleDetail",
     "onCommand:oijudger.clearOutputs",
     "onCommand:oijudger.refreshView",
+    "onCommand:oijudger.checkEnvironment",
     "onCommand:oijudger.manageWorkspace",
     "onCommand:oijudger.createProblem",
     "onCommand:oijudger.addProblemFromCurrentFile",
@@ -201,6 +202,11 @@
         "command": "oijudger.manageWorkspace",
         "title": "%commands.manageWorkspace.title%",
         "icon": "$(tools)"
+      },
+      {
+        "command": "oijudger.checkEnvironment",
+        "title": "%commands.checkEnvironment.title%",
+        "icon": "$(checklist)"
       },
       {
         "command": "oijudger.createProblem",
@@ -743,6 +749,11 @@
           "command": "oijudger.refreshView",
           "when": "view == oijudger.samplesView",
           "group": "navigation@4"
+        },
+        {
+          "command": "oijudger.checkEnvironment",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@5"
         },
         {
           "command": "oijudger.refreshStressRecords",

@@ -1,5 +1,8 @@
 export const env = {
-  language: 'en'
+  language: 'en',
+  clipboard: {
+    writeText: async () => undefined
+  }
 };
 
 const configurationValues = new Map<string, unknown>();
