@@ -5,6 +5,7 @@ import { compileSource } from './compiler';
 import { getOITestDir } from './config';
 import { isOutputAccepted } from './comparator';
 import { withCompilerPathEnv } from './compilerRuntime';
+import { t } from './i18n';
 import { runProcess } from './runner';
 import { OITestConfig } from './types';
 
@@ -188,6 +189,7 @@ function parseStressSession(
 ): StressSession {
   const mode = summary.mode === 'generator-std' || summary.mode === 'standalone' ? summary.mode : 'unknown';
   if (mode === 'generator-std') {
+    const modeLabel = t('stress.records.mode.generatorStd');
     const failedAt = asNumber(summary.failedAt);
     const failedCaseSummary = asRecord(summary.failedCase);
     const failedCase = failedAt !== undefined || failedCaseSummary
@@ -200,21 +202,22 @@ function parseStressSession(
       mode,
       label: formatSessionLabel(id),
       description: failedAt !== undefined
-        ? `Wrong Answer at #${failedAt}`
-        : `Passed ${asNumber(summary.passed) ?? 0}/${asNumber(summary.rounds) ?? 0}`,
+        ? `${modeLabel}, Wrong Answer at #${failedAt}`
+        : `${modeLabel}, Passed ${asNumber(summary.passed) ?? 0}/${asNumber(summary.rounds) ?? 0}`,
       summary,
       failedCase
     };
   }
 
   if (mode === 'standalone') {
+    const modeLabel = t('stress.records.mode.standalone');
     return {
       id,
       dir,
       summaryPath,
       mode,
       label: formatSessionLabel(id),
-      description: `Standalone exit code ${summary.exitCode ?? 'unknown'}`,
+      description: `${modeLabel}, exit code ${summary.exitCode ?? 'unknown'}`,
       summary,
       standalone: {
         stdout: asString(summary.stdout),

@@ -2,12 +2,25 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createGeneratorInputBindModeItems, createJudgeModeItems, createProblemSampleAddModeItems, scanSamplePairs } from '../src/extension';
+import * as vscode from 'vscode';
+import {
+  createGeneratorInputBindModeItems,
+  createJudgeModeItems,
+  createProblemSampleAddModeItems,
+  createStressTestModeItems,
+  getStressStandalonePickerTitle,
+  scanSamplePairs
+} from '../src/extension';
 
 const workspaces: string[] = [];
+const vscodeMock = vscode as unknown as {
+  __resetConfiguration: () => void;
+  __setConfiguration: (key: string, value: unknown) => void;
+};
 
 describe('sample add QuickPick items', () => {
   afterEach(async () => {
+    vscodeMock.__resetConfiguration();
     await Promise.all(workspaces.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
   });
 
@@ -37,6 +50,41 @@ describe('sample add QuickPick items', () => {
       'Custom Checker'
     ]);
     expect(items.every((item) => item.description)).toBe(true);
+  });
+
+  it('describes split-file and single-file stress modes clearly in English', () => {
+    const items = createStressTestModeItems();
+
+    expect(items.map((item) => item.mode)).toEqual(['generator-std', 'standalone']);
+    expect(items.find((item) => item.mode === 'generator-std')).toMatchObject({
+      label: expect.stringContaining('Generator + STD + Solution'),
+      description: expect.stringContaining('runs the generator, STD, and solution separately'),
+      detail: expect.stringContaining('compile and orchestrate all three')
+    });
+    expect(items.find((item) => item.mode === 'standalone')).toMatchObject({
+      label: expect.stringContaining('Single-file stress test'),
+      description: expect.stringContaining('self-contained contest-style stress program'),
+      detail: expect.stringContaining('OI Judge only compiles and runs it')
+    });
+    expect(items.find((item) => item.mode === 'standalone')?.detail).toContain('generate tests and decide pass/fail');
+    expect(getStressStandalonePickerTitle()).toContain('Single-file');
+  });
+
+  it('describes split-file and contest-style single-file stress modes in Chinese', () => {
+    vscodeMock.__setConfiguration('language', 'zh');
+    const items = createStressTestModeItems();
+
+    expect(items.find((item) => item.mode === 'generator-std')).toMatchObject({
+      label: expect.stringContaining('分文件对拍'),
+      description: expect.stringContaining('分别运行生成器、STD 和待测程序'),
+      detail: expect.stringContaining('组织三者运行')
+    });
+    expect(items.find((item) => item.mode === 'standalone')).toMatchObject({
+      label: expect.stringContaining('单文件对拍（考场式）'),
+      description: expect.stringContaining('自包含的考场式对拍程序'),
+      detail: expect.stringContaining('生成数据和判断对错应由该程序内部完成')
+    });
+    expect(getStressStandalonePickerTitle()).toContain('单文件');
   });
 
   it('prefers .out over .ans when batch importing with the default answer suffix', async () => {

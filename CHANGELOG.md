@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 优化对拍模式文案，明确区分分文件对拍和单文件考场式对拍 / Clarify stress-test mode labels for split-file and single-file contest-style workflows.
+
 - 新增“测试当前代码”命令，可从当前聚焦的 `.cpp` 文件直接运行当前题目的全部测试点 / Add Test Current Code command to run all testcases for the active problem from the focused `.cpp` file.
 
 - 新增报告失败样例分组内置顶显示，便于优先查看未通过测试点 / Add failed-case-first ordering within each report group for easier debugging.

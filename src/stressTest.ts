@@ -51,7 +51,7 @@ export async function runGeneratorStdStressTest(input: GeneratorStdStressInput):
   input.output.clear();
   input.output.show(true);
   input.output.appendLine('Stress Test');
-  input.output.appendLine('Mode: Generator + STD');
+  input.output.appendLine('Mode: Split-file stress test: Generator + STD + Solution');
   input.output.appendLine(`Generator: ${input.generatorPath}`);
   input.output.appendLine(`STD: ${input.stdPath}`);
   input.output.appendLine(`Solution: ${input.solutionPath}`);
@@ -64,6 +64,8 @@ export async function runGeneratorStdStressTest(input: GeneratorStdStressInput):
   if (!generator || !std || !solution) {
     await writeSummary(sessionDir, {
       mode: 'generator-std',
+      modeLabel: 'Split-file stress test',
+      description: 'Generator + STD + Solution',
       generator: input.generatorPath,
       std: input.stdPath,
       solution: input.solutionPath,
@@ -118,6 +120,8 @@ export async function runGeneratorStdStressTest(input: GeneratorStdStressInput):
 
   await writeSummary(sessionDir, {
     mode: 'generator-std',
+    modeLabel: 'Split-file stress test',
+    description: 'Generator + STD + Solution',
     generator: input.generatorPath,
     std: input.stdPath,
     solution: input.solutionPath,
@@ -132,7 +136,7 @@ export async function runStandaloneStressTest(input: StandaloneStressInput): Pro
   input.output.clear();
   input.output.show(true);
   input.output.appendLine('Stress Test');
-  input.output.appendLine('Mode: Standalone');
+  input.output.appendLine('Mode: Single-file stress test');
   input.output.appendLine(`Program: ${input.programPath}`);
   input.output.appendLine('');
 
@@ -140,6 +144,8 @@ export async function runStandaloneStressTest(input: StandaloneStressInput): Pro
   if (!program) {
     await writeSummary(sessionDir, {
       mode: 'standalone',
+      modeLabel: 'Single-file stress test',
+      description: 'Self-contained contest-style stress program',
       program: input.programPath,
       compileFailed: true
     });
@@ -153,6 +159,8 @@ export async function runStandaloneStressTest(input: StandaloneStressInput): Pro
   await fs.writeFile(stderrPath, result.stderr, 'utf8');
   await writeSummary(sessionDir, {
     mode: 'standalone',
+    modeLabel: 'Single-file stress test',
+    description: 'Self-contained contest-style stress program',
     program: input.programPath,
     exitCode: result.code,
     timedOut: result.timedOut,
@@ -228,6 +236,8 @@ function buildGeneratorStdSummary(
 ): Record<string, unknown> {
   return {
     mode: 'generator-std',
+    modeLabel: 'Split-file stress test',
+    description: 'Generator + STD + Solution',
     generator: input.generatorPath,
     std: input.stdPath,
     solution: input.solutionPath,

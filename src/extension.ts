@@ -156,6 +156,7 @@ type AddSampleMode = 'paste' | 'files';
 type ProblemSampleAddMode = 'manual' | 'files' | 'batch';
 type ProblemSampleAddModeItem = vscode.QuickPickItem & { mode: ProblemSampleAddMode };
 export type JudgeModeItem = vscode.QuickPickItem & { mode: JudgeMode };
+export type StressTestModeItem = vscode.QuickPickItem & { mode: StressTestMode };
 type GeneratorInputBindMode = 'create' | 'files';
 type GeneratorInputBindModeItem = vscode.QuickPickItem & { mode: GeneratorInputBindMode };
 type EmptyGeneratorOutputAction = 'saveAll' | 'skip' | 'cancel';
@@ -294,6 +295,27 @@ export function createJudgeModeItems(): JudgeModeItem[] {
       mode: 'checker'
     }
   ];
+}
+
+export function createStressTestModeItems(): StressTestModeItem[] {
+  return [
+    {
+      label: t('stress.mode.generatorStd'),
+      description: t('stress.mode.generatorStd.description'),
+      detail: t('stress.mode.generatorStd.detail'),
+      mode: 'generator-std'
+    },
+    {
+      label: t('stress.mode.standalone'),
+      description: t('stress.mode.standalone.description'),
+      detail: t('stress.mode.standalone.detail'),
+      mode: 'standalone'
+    }
+  ];
+}
+
+export function getStressStandalonePickerTitle(): string {
+  return t('stress.selectStandalone');
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -1993,7 +2015,7 @@ async function runStressTestCommand(
   }
 
   if (mode === 'standalone') {
-    const program = await pickCppFile(t('stress.selectStandalone'));
+    const program = await pickCppFile(getStressStandalonePickerTitle());
     if (!program) {
       return;
     }
@@ -2052,10 +2074,7 @@ async function runStressTestCommand(
 
 async function pickStressTestMode(): Promise<StressTestMode | undefined> {
   const picked = await vscode.window.showQuickPick(
-    [
-      { label: t('stress.mode.generatorStd'), mode: 'generator-std' as const },
-      { label: t('stress.mode.standalone'), mode: 'standalone' as const }
-    ],
+    createStressTestModeItems(),
     {
       title: t('stress.mode.select'),
       placeHolder: t('stress.mode.select')

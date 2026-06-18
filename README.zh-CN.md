@@ -228,8 +228,9 @@ int main() {
 
 ## Stress Test / 对拍
 
-- `OI Judge: Run Stress Test` 支持 Generator + STD + Solution 对拍，也支持 standalone 运行。
-- Generator + STD 模式会反复生成输入、运行 STD 得到期望输出、运行待测程序，并比较输出。
+- `OI Judge: Run Stress Test` 支持两种对拍方式。
+- 分文件对拍：Generator + STD + Solution。适合将生成器、标程、待测程序分别写成三个文件。插件会自动运行生成器生成输入，再分别运行 STD 和待测程序，并比较输出。
+- 单文件对拍（考场式）。适合常见的考场 stress.cpp 写法。你可以在一个程序里自行生成数据、运行暴力/正解和待测逻辑、比较答案。插件只负责编译并运行这个程序，并保存 stdout / stderr / summary。
 - 失败用例会保存在 `.vscode/.OIJudge/stress/` 下，包含输入、STD 输出、待测输出、stderr 文件和 `summary.json`。
 - `Stress Records` 视图可以打开保存文件、把失败用例加入样例、重新运行失败用例、刷新记录，并打开 session 文件夹。
 
