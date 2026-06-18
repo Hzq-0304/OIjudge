@@ -449,7 +449,11 @@ int main(int argc, char** argv) {
 npm install
 npm run compile
 npm test
+npm.cmd run test:cross-platform
+npm.cmd run test:report-ui
 npm pack --dry-run
 ```
+
+`test:cross-platform` 用于检查 Judge、对拍、停止对拍和报告产物生成在当前平台上的基本可用性。`test:report-ui` 会运行轻量级报告 HTML smoke test。GitHub Actions 会在 Windows / Linux / macOS 上运行这些跨平台回归测试，并上传结果 JSON 和报告 HTML 作为 artifact。
 
 在 VS Code 中按 F5，并选择 `Run OI Judge Extension`，即可打开扩展开发宿主窗口。

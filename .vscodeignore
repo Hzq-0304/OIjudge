@@ -10,5 +10,6 @@ tsconfig.json
 node_modules/**
 .oitest/**
 .codegraph/**
+.tmp/**
 *.vsix
 *.log

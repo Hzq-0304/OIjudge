@@ -6,5 +6,6 @@ tsconfig.json
 *.vsix
 .codegraph/**
 .oitest/**
+.tmp/**
 dist/**
 *.log

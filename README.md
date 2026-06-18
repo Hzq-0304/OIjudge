@@ -890,8 +890,12 @@ int main(int argc, char** argv) {
 npm install
 npm run compile
 npm test
+npm run test:cross-platform
+npm run test:report-ui
 npm pack --dry-run
 ```
+
+`test:cross-platform` checks judge, stress-test, stop-stress, and report artifact generation on the current platform. `test:report-ui` runs a lightweight report HTML smoke test. GitHub Actions runs these checks on Windows, Linux, and macOS and uploads result JSON plus report HTML artifacts.
 
 在 VS Code 中按 F5，并选择 `Run OI Judge Extension`，即可打开扩展开发宿主窗口。
 
@@ -903,7 +907,11 @@ From the project root:
 npm install
 npm run compile
 npm test
+npm run test:cross-platform
+npm run test:report-ui
 npm pack --dry-run
 ```
+
+`test:cross-platform` checks judge, stress-test, stop-stress, and report artifact generation on the current platform. `test:report-ui` runs a lightweight report HTML smoke test. GitHub Actions runs these checks on Windows, Linux, and macOS and uploads result JSON plus report HTML artifacts.
 
 Press F5 in VSCode and choose `Run OI Judge Extension` to open the Extension Development Host.

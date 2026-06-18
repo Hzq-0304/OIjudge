@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增跨平台回归测试，覆盖 Judge 多样例组、对拍流程、停止对拍和报告 UI smoke test / Add cross-platform regression tests for judge sample groups, stress workflows, stop action, and report UI smoke checks.
+
 - 新增对拍当前代码命令，并支持使用调试停止按钮中断正在运行的对拍 / Add Stress Test Current Code command and support stopping active stress tests with a debug-stop action.
 
 - 优化对拍模式文案，明确区分分文件对拍和单文件考场式对拍 / Clarify stress-test mode labels for split-file and single-file contest-style workflows.

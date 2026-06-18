@@ -1,0 +1,73 @@
+name: Cross Platform Regression
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  regression:
+    name: ${{ matrix.os }} / Node 24
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup compiler on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y g++
+
+      - name: Setup compiler on Windows
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+          path-type: inherit
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Cross-platform regression
+        run: npm run test:cross-platform
+
+      - name: Report UI smoke
+        run: npm run test:report-ui
+
+      - name: Pack dry run
+        run: npm pack --dry-run
+
+      - name: Upload cross-platform artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-platform-results-${{ runner.os }}
+          path: |
+            .tmp/oijudge-cross-platform/**/*.json
+            .tmp/oijudge-cross-platform/report-html/**/*.html
+            .tmp/oijudge-cross-platform/workspaces/**/.vscode/.OIJudge/stress/**
+          if-no-files-found: ignore
