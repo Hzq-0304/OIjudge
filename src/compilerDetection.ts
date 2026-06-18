@@ -18,6 +18,8 @@ type CppProperties = {
   }>;
 };
 
+const COMPILER_LOOKUP_TIMEOUT_MS = 1500;
+
 export async function ensureCompilerConfigured(
   workspaceFolder: vscode.WorkspaceFolder,
   config: OITestConfig
@@ -62,27 +64,32 @@ export async function findCompiler(
   workspaceFolder: vscode.WorkspaceFolder,
   config: OITestConfig
 ): Promise<CompilerCandidate | undefined> {
-  const candidates: CompilerCandidate[] = [
-    ...readOIJudgerConfigCandidates(config),
-    ...(await readCppSettingsFileCandidates(workspaceFolder)),
-    ...readCppSettingCandidates(workspaceFolder),
-    ...(await readCppPropertiesCandidates(workspaceFolder)),
-    ...(await readPathCandidates()),
-    ...(await readWindowsMingwCandidates())
+  const candidateGroups: Array<() => CompilerCandidate[] | Promise<CompilerCandidate[]>> = [
+    () => readOIJudgerConfigCandidates(config),
+    () => readCppSettingsFileCandidates(workspaceFolder),
+    () => readCppSettingCandidates(workspaceFolder),
+    () => readCppPropertiesCandidates(workspaceFolder),
+    () => readPathCandidates(),
+    () => readWindowsMingwCandidates()
   ];
 
-  for (const candidate of candidates) {
-    const command = normalizeCommand(candidate.command);
-    if (!command) {
-      continue;
-    }
+  const seenCommands = new Set<string>();
+  for (const readCandidates of candidateGroups) {
+    for (const candidate of await readCandidates()) {
+      const command = normalizeCommand(candidate.command);
+      const key = commandKey(command);
+      if (!command || seenCommands.has(key)) {
+        continue;
+      }
+      seenCommands.add(key);
 
-    const resolved = await resolveCompilerCommand(command);
-    if (resolved) {
-      return {
-        command: resolved,
-        source: candidate.source
-      };
+      const resolved = await resolveCompilerCommand(command);
+      if (resolved) {
+        return {
+          command: resolved,
+          source: candidate.source
+        };
+      }
     }
   }
 
@@ -270,7 +277,10 @@ async function findCommandInPath(command: string): Promise<string | undefined> {
 
 function exec(command: string, args: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true }, (error, stdout) => {
+    execFile(command, args, {
+      windowsHide: true,
+      timeout: COMPILER_LOOKUP_TIMEOUT_MS
+    }, (error, stdout) => {
       if (error) {
         resolve(undefined);
         return;
@@ -282,6 +292,10 @@ function exec(command: string, args: string[]): Promise<string | undefined> {
 
 function normalizeCommand(command: string): string {
   return command.trim().replace(/^"(.+)"$/u, '$1');
+}
+
+function commandKey(command: string): string {
+  return process.platform === 'win32' ? command.toLowerCase() : command;
 }
 
 async function exists(filePath: string): Promise<boolean> {

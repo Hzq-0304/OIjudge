@@ -11,6 +11,8 @@ export type CompilerInfo = {
   version: string;
 };
 
+const COMPILER_VERSION_TIMEOUT_MS = 5000;
+
 export function workspace(fsPath: string): vscode.WorkspaceFolder {
   return {
     uri: { fsPath, scheme: 'file' },
@@ -82,14 +84,27 @@ async function readCommandVersion(command: string): Promise<string | undefined> 
   return new Promise((resolve) => {
     const child = spawn(command, ['--version'], { windowsHide: true });
     const chunks: Buffer[] = [];
-    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-    child.on('error', () => resolve(undefined));
-    child.on('close', (code) => {
-      if (code !== 0) {
-        resolve(undefined);
+    let settled = false;
+    const finish = (version: string | undefined) => {
+      if (settled) {
         return;
       }
-      resolve(Buffer.concat(chunks).toString('utf8').split(/\r?\n/u)[0]?.trim() || command);
+      settled = true;
+      clearTimeout(timer);
+      resolve(version);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(undefined);
+    }, COMPILER_VERSION_TIMEOUT_MS);
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    child.on('error', () => finish(undefined));
+    child.on('close', (code) => {
+      if (code !== 0) {
+        finish(undefined);
+        return;
+      }
+      finish(Buffer.concat(chunks).toString('utf8').split(/\r?\n/u)[0]?.trim() || command);
     });
   });
 }
