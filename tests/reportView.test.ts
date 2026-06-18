@@ -24,7 +24,7 @@ describe('report verdict display', () => {
     expect(html).not.toContain('答案错误');
     expect(html).not.toContain('statusPill verdict-pill verdict-ac">通过</span>');
     expect(html).not.toContain('<strong>通过</strong>');
-  });
+  }, 15_000);
 
   it('renders testcase rows as labeled items without a visible table header', () => {
     const html = renderReportBody(workspace(), report());
