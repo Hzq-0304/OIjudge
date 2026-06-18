@@ -235,7 +235,7 @@ export function getNativeRunnerPlatformConfig(platform: NodeJS.Platform = proces
     return {
       sourceFile: 'oijudge-runner-posix.cpp',
       helperFile: 'oijudge-runner-posix',
-      signature: 'posix-runner-output-limit-20260615',
+      signature: 'posix-runner-macos-rss-bytes-20260618',
       linkArgs: []
     };
   }

@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -27,6 +28,7 @@ describe('native runner platform selection', () => {
 
       expect(config?.sourceFile).toBe('oijudge-runner-posix.cpp');
       expect(config?.helperFile).toBe('oijudge-runner-posix');
+      expect(config?.signature).toBe('posix-runner-macos-rss-bytes-20260618');
       expect(config?.linkArgs).toEqual([]);
     }
   });
@@ -47,6 +49,14 @@ describe('native runner platform selection', () => {
     expect(args.staticArgs).not.toContain('-lshell32');
     expect(args.dynamicArgs).not.toContain('-lpsapi');
     expect(args.dynamicArgs).not.toContain('-lshell32');
+  });
+
+  it('keeps ru_maxrss units platform-correct in the POSIX helper', () => {
+    const source = readFileSync(path.join(process.cwd(), 'resources', 'runner', 'oijudge-runner-posix.cpp'), 'utf8');
+
+    expect(source).toContain('#ifdef __APPLE__');
+    expect(source).toContain('uint64_t memoryBytes = static_cast<uint64_t>(usage.ru_maxrss);');
+    expect(source).toContain('uint64_t memoryBytes = static_cast<uint64_t>(usage.ru_maxrss) * 1024ULL;');
   });
 
   it('reports unsupported platforms so callers can keep the runProcess fallback', async () => {

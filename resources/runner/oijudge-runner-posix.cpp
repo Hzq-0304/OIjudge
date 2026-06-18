@@ -235,7 +235,11 @@ int main(int argc, char** argv) {
   uint64_t timeMs = killedByTimeout ? options.hardKillLimitMs : actualTimeMs;
   if (options.outputLimitBytes > 0 && outputBytes == 0) outputBytes = std::max(fileSizeBytes(options.stdoutPath), fileSizeBytes(options.fileOutputPath));
   bool timedOut = !outputLimitExceeded && (killedByTimeout || actualTimeMs > options.timeLimitMs);
+#ifdef __APPLE__
+  uint64_t memoryBytes = static_cast<uint64_t>(usage.ru_maxrss);
+#else
   uint64_t memoryBytes = static_cast<uint64_t>(usage.ru_maxrss) * 1024ULL;
+#endif
 
   std::cout << "{";
   if (killedByTimeout || outputLimitExceeded || !WIFEXITED(status)) std::cout << "\"exitCode\":null";
