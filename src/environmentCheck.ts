@@ -50,6 +50,9 @@ export type EnvironmentCheckOptions = {
   compilerCandidates?: string[];
   runNativeRunner?: typeof runNativeProcess;
   killProcess?: (child: ChildProcess) => void | Promise<void>;
+  discoverCompiler?: typeof discoverCompiler;
+  compileCpp?: typeof compileCpp;
+  runCompiledProbe?: typeof runCompiledProbe;
 };
 
 type ProcessRunResult = {
@@ -68,7 +71,8 @@ type CheckContext = {
   helloExe?: string;
 };
 
-const DEFAULT_TIMEOUT_MS = 5000;
+export const ENVIRONMENT_CHECK_RUN_TIMEOUT_MS = 5000;
+export const ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS = 15_000;
 const STOP_CHECK_TIMEOUT_MS = 4000;
 
 export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {}): Promise<EnvironmentCheckReport> {
@@ -114,7 +118,8 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
   });
 
   await runCheck(items, 'compiler', 'Compiler discovery', async () => {
-    const compiler = await discoverCompiler({
+    const findCompiler = options.discoverCompiler ?? discoverCompiler;
+    const compiler = await findCompiler({
       platform,
       configuredCompiler: options.configuredCompiler,
       candidates: options.compilerCandidates
@@ -138,12 +143,20 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
     const sourcePath = path.join(context.tempRoot!, 'hello.cpp');
     const exePath = executablePath(path.join(context.tempRoot!, 'hello'), platform);
     await fs.writeFile(sourcePath, helloSource(), 'utf8');
-    const result = await compileCpp(context.compiler!.command, sourcePath, exePath, context.tempRoot!);
+    const compile = options.compileCpp ?? compileCpp;
+    const result = await compile(context.compiler!.command, sourcePath, exePath, context.tempRoot!);
     if (result.code !== 0 || !(await exists(exePath))) {
       return {
         status: 'fail',
         summary: `Compiler exited with code ${formatExitCode(result.code)}.`,
-        details: truncateText(result.stderr || result.stdout)
+        details: compileFailureDetails(
+          context.compiler!.command,
+          buildCompileArgs(sourcePath, exePath),
+          context.tempRoot!,
+          sourcePath,
+          exePath,
+          result
+        )
       };
     }
     context.helloExe = exePath;
@@ -155,7 +168,15 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
   });
 
   await runDependentCheck(items, context, 'run-executable', 'Run executable', async () => {
-    const result = await runCompiledProbe(context, context.helloExe!, '', context.tempRoot!);
+    if (!context.helloExe) {
+      return {
+        status: 'warn',
+        summary: 'Skipped because C++17 compile failed.',
+        suggestion: 'Fix C++17 compile first.'
+      };
+    }
+    const runProbe = options.runCompiledProbe ?? runCompiledProbe;
+    const result = await runProbe(context, context.helloExe!, '', context.tempRoot!);
     const stdout = normalizeStdout(result.stdout);
     if (result.code !== 0 || stdout !== '6') {
       return {
@@ -220,6 +241,13 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
       };
     }
     const runNative = options.runNativeRunner ?? runNativeProcess;
+    if (!context.helloExe) {
+      return {
+        status: 'warn',
+        summary: 'Skipped because C++17 compile failed.',
+        suggestion: 'Fix C++17 compile first.'
+      };
+    }
     const workspaceFolder = makeWorkspaceFolder(context.tempRoot!);
     const config = makeNativeRunnerConfig(context.compiler!.command);
     const result = await runNative({
@@ -229,7 +257,7 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
       args: [],
       stdin: '',
       cwd: context.tempRoot!,
-      timeoutMs: DEFAULT_TIMEOUT_MS
+      timeoutMs: ENVIRONMENT_CHECK_RUN_TIMEOUT_MS
     });
     if (!result) {
       return {
@@ -347,7 +375,7 @@ export async function discoverCompiler(input: {
     }
     seen.add(candidate);
     try {
-      const result = await runProcessWithTimeout(candidate, ['--version'], '', process.cwd(), DEFAULT_TIMEOUT_MS, withCompilerPathEnv(candidate));
+      const result = await runProcessWithTimeout(candidate, ['--version'], '', process.cwd(), ENVIRONMENT_CHECK_RUN_TIMEOUT_MS, withCompilerPathEnv(candidate));
       if (result.code === 0) {
         return {
           command: candidate,
@@ -491,7 +519,14 @@ async function compileFixture(context: CheckContext, fileName: string, source: s
 }
 
 async function compileCpp(compiler: string, sourcePath: string, exePath: string, cwd: string): Promise<ProcessRunResult> {
-  return runProcessWithTimeout(compiler, buildCompileArgs(sourcePath, exePath), '', cwd, DEFAULT_TIMEOUT_MS, withCompilerPathEnv(compiler));
+  return runProcessWithTimeout(
+    compiler,
+    buildCompileArgs(sourcePath, exePath),
+    '',
+    cwd,
+    ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS,
+    withCompilerPathEnv(compiler)
+  );
 }
 
 function runCompiledProbe(context: CheckContext, command: string, input: string, cwd: string): Promise<ProcessRunResult> {
@@ -500,7 +535,7 @@ function runCompiledProbe(context: CheckContext, command: string, input: string,
     [],
     input,
     cwd,
-    DEFAULT_TIMEOUT_MS,
+    ENVIRONMENT_CHECK_RUN_TIMEOUT_MS,
     withCompilerPathEnv(context.compiler!.command)
   );
 }
@@ -596,6 +631,9 @@ async function runStopProcessProbe(
 }
 
 export const environmentCheckTestHooks = {
+  discoverCompiler,
+  compileCpp,
+  runCompiledProbe,
   runStopProcessProbe
 };
 
@@ -627,7 +665,7 @@ function makeNativeRunnerConfig(compiler: string): OITestConfig {
   return {
     version: 1,
     compiler: { command: compiler, args: [] },
-    limits: { timeMs: DEFAULT_TIMEOUT_MS, memoryMb: 256 },
+    limits: { timeMs: ENVIRONMENT_CHECK_RUN_TIMEOUT_MS, memoryMb: 256 },
     samples: []
   };
 }
@@ -693,6 +731,33 @@ function processDetails(result: ProcessRunResult): string {
     `stdout: ${truncateText(result.stdout)}`,
     `stderr: ${truncateText(result.stderr)}`
   ].join('\n');
+}
+
+function compileFailureDetails(
+  compiler: string,
+  args: string[],
+  cwd: string,
+  sourcePath: string,
+  exePath: string,
+  result: ProcessRunResult
+): string {
+  return [
+    `compiler: ${compiler}`,
+    `args: ${args.map(quoteArg).join(' ')}`,
+    `cwd: ${cwd}`,
+    `source: ${sourcePath}`,
+    `output: ${exePath}`,
+    `exitCode: ${formatExitCode(result.code)}`,
+    `signal: ${result.signal ?? ''}`,
+    `timedOut: ${result.timedOut}`,
+    `timeMs: ${result.timeMs}`,
+    `stdout: ${truncateText(result.stdout)}`,
+    `stderr: ${truncateText(result.stderr)}`
+  ].join('\n');
+}
+
+function quoteArg(value: string): string {
+  return /\s/u.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
 function normalizeStdout(value: string): string {
