@@ -2129,7 +2129,7 @@ async function stopStressTestCommand(): Promise<void> {
     vscode.window.showInformationMessage(t('stress.notRunning'));
     return;
   }
-  stressRunController.cancel();
+  await stressRunController.cancel();
   vscode.window.showInformationMessage(t('stress.stopped'));
 }
 

@@ -5,7 +5,8 @@ import type * as vscode from 'vscode';
 import { promises as fs } from 'fs';
 import { withCompilerPathEnv } from './compilerRuntime';
 import { getNativeRunnerUnavailableReason, isNativeRunnerPlatform, runNativeProcess } from './nativeRunner';
-import { killProcessTree } from './stressRunController';
+import { killProcessTree } from './processTree';
+import type { KillProcessTreeResult } from './processTree';
 import { OITestConfig } from './types';
 
 export type EnvironmentCheckStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -62,6 +63,14 @@ type ProcessRunResult = {
   signal: NodeJS.Signals | null;
   timedOut: boolean;
   timeMs: number;
+  cleanup?: KillProcessTreeResult;
+};
+
+type StopProcessProbeResult = {
+  started: boolean;
+  closed: boolean;
+  timedOut: boolean;
+  killResult?: KillProcessTreeResult;
 };
 
 type CheckContext = {
@@ -311,22 +320,39 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
 
   await runDependentCheck(items, context, 'stop-process', 'Stop process support', async () => {
     const exePath = await compileFixture(context, 'sleep_probe.cpp', sleepProbeSource());
-    const stopped = await runStopProcessProbe(
+    const stopResult = await runStopProcessProbe(
       exePath,
       context.tempRoot!,
-      options.killProcess ?? killEnvironmentCheckProcessTree,
+      options.killProcess ?? ((child) => killProcessTree(child, { detached: process.platform !== 'win32' })),
       withCompilerPathEnv(context.compiler!.command)
     );
-    if (!stopped) {
+    if (!stopResult.closed || stopResult.killResult?.ok === false) {
       return {
         status: 'fail',
-        summary: 'Probe process did not stop within the timeout.',
+        summary: stopResult.closed
+          ? 'Probe process stopped, but cleanup reported a failure.'
+          : 'Probe process did not stop within the timeout.',
+        details: [
+          `started: ${stopResult.started}`,
+          `killMethod: ${stopResult.killResult?.method ?? 'none'}`,
+          `closed: ${stopResult.closed}`,
+          `timedOut: ${stopResult.timedOut}`,
+          `cleanupOk: ${stopResult.killResult?.ok ?? false}`,
+          `cleanupMessage: ${stopResult.killResult?.message ?? 'none'}`
+        ].join('\n'),
         suggestion: 'Check whether the OS allows OI Judge to terminate child processes.'
       };
     }
     return {
       status: 'pass',
-      summary: 'A long-running child process was stopped successfully.'
+      summary: 'A long-running child process was stopped successfully.',
+      details: [
+        `started: ${stopResult.started}`,
+        `killMethod: ${stopResult.killResult?.method ?? 'none'}`,
+        `closed: ${stopResult.closed}`,
+        `timedOut: ${stopResult.timedOut}`,
+        `cleanupOk: ${stopResult.killResult?.ok ?? false}`
+      ].join('\n')
     };
   });
 
@@ -554,15 +580,29 @@ function runProcessWithTimeout(
       cwd,
       env,
       shell: false,
-      windowsHide: true
+      windowsHide: true,
+      detached: process.platform !== 'win32'
     });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let timedOut = false;
     let settled = false;
+    let cleanup: KillProcessTreeResult | undefined;
+    let cleanupPromise: Promise<KillProcessTreeResult> | undefined;
+
+    const stopProcess = () => {
+      if (!cleanupPromise) {
+        cleanupPromise = killProcessTree(child, { detached: process.platform !== 'win32' }).then((result) => {
+          cleanup = result;
+          return result;
+        });
+      }
+      return cleanupPromise;
+    };
+
     const timer = setTimeout(() => {
       timedOut = true;
-      killProcessTree(child);
+      stopProcess();
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
@@ -575,19 +615,27 @@ function runProcessWithTimeout(
       clearTimeout(timer);
       reject(error);
     });
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timer);
+      if (cleanupPromise) {
+        cleanup = await cleanupPromise.catch((error) => ({
+          ok: false,
+          method: 'none' as const,
+          message: formatError(error)
+        }));
+      }
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
         stderr: Buffer.concat(stderrChunks).toString('utf8'),
         code,
         signal,
         timedOut,
-        timeMs: elapsedMs(started)
+        timeMs: elapsedMs(started),
+        cleanup
       });
     });
     child.stdin.end(input);
@@ -597,12 +645,13 @@ function runProcessWithTimeout(
 async function runStopProcessProbe(
   command: string,
   cwd: string,
-  killProcess: (child: ChildProcess) => void | Promise<void>,
+  killProcess: (child: ChildProcess) => void | Promise<void> | KillProcessTreeResult | Promise<KillProcessTreeResult>,
   env?: NodeJS.ProcessEnv
-): Promise<boolean> {
-  const child = spawn(command, [], { cwd, env, shell: false, windowsHide: true });
+): Promise<StopProcessProbeResult> {
+  const child = spawn(command, [], { cwd, env, shell: false, windowsHide: true, detached: process.platform !== 'win32' });
   let closed = false;
   let stdout = '';
+  let killResult: KillProcessTreeResult | undefined;
   const closePromise = new Promise<void>((resolve) => {
     child.on('close', () => {
       closed = true;
@@ -618,12 +667,17 @@ async function runStopProcessProbe(
   });
   try {
     await waitUntil(() => stdout.includes('started') || closed, 2000);
-    await killProcess(child);
-    await promiseWithTimeout(closePromise, STOP_CHECK_TIMEOUT_MS);
-    return closed;
+    killResult = await normalizeKillResult(await killProcess(child));
+    await promiseWithTimeout(closePromise, STOP_CHECK_TIMEOUT_MS).catch(() => undefined);
+    return {
+      started: stdout.includes('started'),
+      closed,
+      timedOut: !closed,
+      killResult
+    };
   } finally {
     if (!closed) {
-      await killProcess(child);
+      killResult = killResult ?? await normalizeKillResult(await killProcess(child));
       child.kill('SIGKILL');
       await promiseWithTimeout(closePromise, 1000).catch(() => undefined);
     }
@@ -636,30 +690,6 @@ export const environmentCheckTestHooks = {
   runCompiledProbe,
   runStopProcessProbe
 };
-
-async function killEnvironmentCheckProcessTree(child: ChildProcess): Promise<void> {
-  const pid = child.pid;
-  if (!pid) {
-    return;
-  }
-
-  if (process.platform !== 'win32') {
-    killProcessTree(child);
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
-      windowsHide: true,
-      stdio: 'ignore'
-    });
-    killer.on('error', () => {
-      child.kill('SIGKILL');
-      resolve();
-    });
-    killer.on('close', () => resolve());
-  });
-}
 
 function makeNativeRunnerConfig(compiler: string): OITestConfig {
   return {
@@ -728,6 +758,7 @@ function processDetails(result: ProcessRunResult): string {
     `signal: ${result.signal ?? ''}`,
     `timedOut: ${result.timedOut}`,
     `timeMs: ${result.timeMs}`,
+    ...(result.cleanup ? [`cleanup: ${result.cleanup.method} ok=${result.cleanup.ok} exited=${result.cleanup.alreadyExited ?? false} timedOut=${result.cleanup.timedOut ?? false} message=${truncateText(result.cleanup.message ?? '')}`] : []),
     `stdout: ${truncateText(result.stdout)}`,
     `stderr: ${truncateText(result.stderr)}`
   ].join('\n');
@@ -751,6 +782,7 @@ function compileFailureDetails(
     `signal: ${result.signal ?? ''}`,
     `timedOut: ${result.timedOut}`,
     `timeMs: ${result.timeMs}`,
+    ...(result.cleanup ? [`cleanup: ${result.cleanup.method} ok=${result.cleanup.ok} exited=${result.cleanup.alreadyExited ?? false} timedOut=${result.cleanup.timedOut ?? false} message=${truncateText(result.cleanup.message ?? '')}`] : []),
     `stdout: ${truncateText(result.stdout)}`,
     `stderr: ${truncateText(result.stderr)}`
   ].join('\n');
@@ -762,6 +794,12 @@ function quoteArg(value: string): string {
 
 function normalizeStdout(value: string): string {
   return value.replace(/\r\n/g, '\n').trim();
+}
+
+function normalizeKillResult(
+  result: void | KillProcessTreeResult
+): KillProcessTreeResult | undefined {
+  return result ?? undefined;
 }
 
 function firstLine(value: string): string {

@@ -1,4 +1,6 @@
-import { ChildProcess, spawn } from 'child_process';
+import type { ChildProcess } from 'child_process';
+import { killProcessTree } from './processTree';
+import type { KillProcessTreeResult } from './processTree';
 import { ProcessTracker } from './runner';
 
 export class StressRunCancelledError extends Error {
@@ -13,18 +15,23 @@ export type StressRunController = ProcessTracker & {
   readonly cancellationRequested: boolean;
   start(): boolean;
   finish(): void;
-  cancel(): void;
+  cancel(): Promise<KillProcessTreeResult[]>;
   throwIfCancelled(): void;
 };
 
-export function createStressRunController(): StressRunController {
-  return new DefaultStressRunController();
+export function createStressRunController(
+  stopProcessTree: (child: ChildProcess) => Promise<KillProcessTreeResult> = (child) =>
+    killProcessTree(child, { detached: process.platform !== 'win32' })
+): StressRunController {
+  return new DefaultStressRunController(stopProcessTree);
 }
 
 class DefaultStressRunController implements StressRunController {
   private readonly activeProcesses = new Set<ChildProcess>();
   private running = false;
   private cancelled = false;
+
+  constructor(private readonly stopProcessTree: (child: ChildProcess) => Promise<KillProcessTreeResult>) {}
 
   get isRunning(): boolean {
     return this.running;
@@ -50,14 +57,12 @@ class DefaultStressRunController implements StressRunController {
     this.activeProcesses.clear();
   }
 
-  cancel(): void {
+  async cancel(): Promise<KillProcessTreeResult[]> {
     if (!this.running && this.activeProcesses.size === 0) {
-      return;
+      return [];
     }
     this.cancelled = true;
-    for (const child of [...this.activeProcesses]) {
-      killProcessTree(child);
-    }
+    return Promise.all([...this.activeProcesses].map((child) => this.stopProcess(child)));
   }
 
   throwIfCancelled(): void {
@@ -69,31 +74,23 @@ class DefaultStressRunController implements StressRunController {
   registerProcess(child: ChildProcess): void {
     this.activeProcesses.add(child);
     if (this.cancelled) {
-      killProcessTree(child);
+      void this.stopProcess(child);
     }
   }
 
   unregisterProcess(child: ChildProcess): void {
     this.activeProcesses.delete(child);
   }
-}
 
-export function killProcessTree(child: ChildProcess): void {
-  const pid = child.pid;
-  if (!pid) {
-    return;
-  }
-  try {
-    if (process.platform === 'win32') {
-      const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore'
-      });
-      killer.on('error', () => undefined);
-      return;
+  private async stopProcess(child: ChildProcess): Promise<KillProcessTreeResult> {
+    try {
+      return await this.stopProcessTree(child);
+    } catch (error) {
+      return {
+        ok: false,
+        method: 'none',
+        message: error instanceof Error ? error.message : String(error)
+      };
     }
-    child.kill('SIGTERM');
-  } catch {
-    // Stopping stress tests should be best-effort; cleanup continues even if the OS reports ESRCH/EPERM.
   }
 }

@@ -1,3 +1,4 @@
+import type { KillProcessTreeResult } from './processTree';
 import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
 
 export type SampleSourceType = 'managed' | 'external';
@@ -184,6 +185,7 @@ export type ProcessResult = {
   stdinError?: string;
   stdoutError?: string;
   stderrError?: string;
+  cleanup?: KillProcessTreeResult;
   timeMs: number;
   elapsedMs: number;
 };

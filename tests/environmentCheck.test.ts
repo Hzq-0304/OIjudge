@@ -110,6 +110,10 @@ describe('environment check helpers', () => {
       async (child) => {
         await new Promise((resolve) => setTimeout(resolve, 25));
         child.kill();
+        return {
+          ok: true,
+          method: 'child-kill'
+        };
       },
       {
         ...process.env,
@@ -117,7 +121,9 @@ describe('environment check helpers', () => {
       }
     );
 
-    expect(stopped).toBe(true);
+    expect(stopped.closed).toBe(true);
+    expect(stopped.timedOut).toBe(false);
+    expect(stopped.killResult?.method).toBe('child-kill');
   });
 
   it('reports compile diagnostics and skips hello executable checks after C++17 compile failure', async () => {

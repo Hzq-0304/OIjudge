@@ -1,5 +1,7 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
+import { killProcessTree } from './processTree';
+import type { KillProcessTreeResult } from './processTree';
 import { ProcessResult } from './types';
 
 export type ProcessTracker = {
@@ -25,7 +27,8 @@ export function runProcess(
       cwd,
       env,
       shell: false,
-      windowsHide: true
+      windowsHide: true,
+      detached: process.platform !== 'win32'
     });
     processTracker?.registerProcess(child);
     const stdoutChunks: Buffer[] = [];
@@ -38,6 +41,19 @@ export function runProcess(
     let stdinError: string | undefined;
     let stdoutError: string | undefined;
     let stderrError: string | undefined;
+    let cleanup: KillProcessTreeResult | undefined;
+    let cleanupPromise: Promise<KillProcessTreeResult> | undefined;
+
+    const stopChild = () => {
+      if (!cleanupPromise) {
+        cleanupPromise = killProcessTree(child, { detached: process.platform !== 'win32' })
+          .then((result) => {
+            cleanup = result;
+            return result;
+          });
+      }
+      return cleanupPromise;
+    };
 
     const maxOutputBytes = typeof outputLimitBytes === 'number' && Number.isFinite(outputLimitBytes) && outputLimitBytes > 0
       ? Math.floor(outputLimitBytes)
@@ -46,7 +62,7 @@ export function runProcess(
     const timer = setTimeout(() => {
       killedByTimeout = true;
       timeoutTimeMs = elapsedMs(startedAt);
-      child.kill();
+      stopChild();
     }, hardKillLimitMs);
     const fileOutputTimer = maxOutputBytes !== undefined && fileOutputPath
       ? setInterval(() => {
@@ -60,7 +76,7 @@ export function runProcess(
           if (stat.size > maxOutputBytes) {
             outputBytes = stat.size;
             outputLimitExceeded = true;
-            child.kill();
+            stopChild();
           }
         });
       }, 10)
@@ -79,14 +95,14 @@ export function runProcess(
       if (remaining <= 0) {
         outputBytes += chunk.length;
         outputLimitExceeded = true;
-        child.kill();
+        stopChild();
         return;
       }
       if (chunk.length > remaining) {
         stdoutChunks.push(chunk.subarray(0, remaining));
         outputBytes += chunk.length;
         outputLimitExceeded = true;
-        child.kill();
+        stopChild();
         return;
       }
       stdoutChunks.push(chunk);
@@ -114,7 +130,7 @@ export function runProcess(
     child.stdin.on('error', (error) => {
       stdinError = formatError(error);
     });
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
       if (settled) {
         return;
       }
@@ -123,6 +139,13 @@ export function runProcess(
       clearTimeout(timer);
       if (fileOutputTimer) {
         clearInterval(fileOutputTimer);
+      }
+      if (cleanupPromise) {
+        cleanup = await cleanupPromise.catch((error) => ({
+          ok: false,
+          method: 'none' as const,
+          message: formatError(error)
+        }));
       }
       const actualTimeMs = killedByTimeout && timeoutTimeMs !== undefined ? timeoutTimeMs : elapsedMs(startedAt);
       const timedOut = !outputLimitExceeded && (killedByTimeout || actualTimeMs > timeoutMs);
@@ -141,6 +164,7 @@ export function runProcess(
         stdinError,
         stdoutError,
         stderrError,
+        cleanup,
         timeMs,
         elapsedMs: Math.round(timeMs)
       });

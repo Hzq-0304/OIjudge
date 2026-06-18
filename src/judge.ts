@@ -1074,6 +1074,13 @@ function formatRunResultOutput(
     ...(result.outputLimitExceeded !== undefined ? [`Output limit exceeded: ${result.outputLimitExceeded}`] : []),
     ...(result.outputBytes !== undefined ? [`Output bytes: ${result.outputBytes}`] : []),
     ...(result.outputLimitBytes !== undefined ? [`Output limit: ${result.outputLimitBytes} bytes`] : []),
+    ...(result.cleanup ? [
+      `Cleanup method: ${result.cleanup.method}`,
+      `Cleanup ok: ${result.cleanup.ok}`,
+      `Cleanup already exited: ${result.cleanup.alreadyExited ?? false}`,
+      `Cleanup timed out: ${result.cleanup.timedOut ?? false}`,
+      ...(result.cleanup.message ? [`Cleanup message: ${result.cleanup.message}`] : [])
+    ] : []),
     `Time: ${formatMs(result.timeMs)} ms`,
     `Memory: ${formatMemoryKiB(result.memoryKiB)}`
   ];
