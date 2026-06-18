@@ -111,6 +111,30 @@ describe('sample tree add entry', () => {
     expect(actionCommands).not.toContain('oijudger.batchAddSamples');
   });
 
+  it('shows current-code stress and stop stress entries in problem actions', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNode = (await provider.getChildren(problemsRoot))[0];
+    const actionsGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'actions');
+    const actionNodes = await provider.getChildren(actionsGroup);
+
+    expect(actionNodes.map((node) => node.command?.command)).toEqual([
+      'oijudger.runProblemSamples',
+      'oijudger.testCurrentCode',
+      'oijudger.runSamplesWithProgram',
+      'oijudger.stressTestCurrentCode',
+      'oijudger.runStressTest',
+      'oijudger.stopStressTest',
+      'oijudger.openProblemResultPanel'
+    ]);
+    expect(actionNodes.find((node) => node.command?.command === 'oijudger.stopStressTest')?.icon?.id).toBe('debug-stop');
+    expect(actionNodes.find((node) => node.command?.command === 'oijudger.stressTestCurrentCode')?.label).toBe('Stress Test Current Code');
+  });
+
   it('moves statement actions under the statement group', async () => {
     const workspaceFolder = await createWorkspace();
     await createProblem(workspaceFolder, 'A');

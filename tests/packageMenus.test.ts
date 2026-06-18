@@ -516,6 +516,64 @@ describe('package tree sample add menu', () => {
     });
   });
 
+  it('contributes current-code stress test and stop stress commands', () => {
+    const commands = packageJson.contributes.commands;
+    const commandIds = commands.map((entry) => entry.command);
+    const currentCodeCommand = commands.find((entry) => entry.command === 'oijudger.stressTestCurrentCode');
+    const stopCommand = commands.find((entry) => entry.command === 'oijudger.stopStressTest');
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const currentCodeMenus = contextMenus.filter((entry) => entry.command === 'oijudger.stressTestCurrentCode');
+    const stopMenus = contextMenus.filter((entry) => entry.command === 'oijudger.stopStressTest');
+
+    expect(commandIds).toEqual(expect.arrayContaining([
+      'oijudger.runStressTest',
+      'oijudger.stressTestCurrentCode',
+      'oijudger.stopStressTest'
+    ]));
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
+      'onCommand:oijudger.stressTestCurrentCode',
+      'onCommand:oijudger.stopStressTest'
+    ]));
+    expect(currentCodeCommand).toMatchObject({
+      title: '%commands.stressTestCurrentCode.title%',
+      icon: '$(beaker)'
+    });
+    expect(stopCommand).toMatchObject({
+      title: '%commands.stopStressTest.title%',
+      icon: '$(debug-stop)'
+    });
+    expect(resolveNls(currentCodeCommand?.title)).toBe('OI Judge: Stress Test Current Code');
+    expect(resolveNls(stopCommand?.title)).toBe('OI Judge: Stop Stress Test');
+    expect(resolveNls(currentCodeCommand?.title, packageNlsZhCn)).toBe('OI Judge: 对拍当前代码');
+    expect(resolveNls(stopCommand?.title, packageNlsZhCn)).toBe('OI Judge: 停止对拍');
+    expect(registeredCommands()).toEqual(expect.arrayContaining([
+      'oijudger.stressTestCurrentCode',
+      'oijudger.stopStressTest'
+    ]));
+    expect(packageJson.contributes.menus.commandPalette).not.toContainEqual({
+      command: 'oijudger.stressTestCurrentCode',
+      when: 'false'
+    });
+    expect(packageJson.contributes.menus.commandPalette).not.toContainEqual({
+      command: 'oijudger.stopStressTest',
+      when: 'false'
+    });
+    expect(currentCodeMenus).toEqual([
+      {
+        command: 'oijudger.stressTestCurrentCode',
+        when: 'view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)',
+        group: '3_run@2.5'
+      }
+    ]);
+    expect(stopMenus).toEqual([
+      {
+        command: 'oijudger.stopStressTest',
+        when: 'view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker) && oijudger.stressRunning',
+        group: '3_run@3.5'
+      }
+    ]);
+  });
+
   it('contributes stress records view and management commands', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const stressView = packageJson.contributes.views.oijudger.find((entry) =>

@@ -1,6 +1,11 @@
-import { spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import { ProcessResult } from './types';
+
+export type ProcessTracker = {
+  registerProcess(child: ChildProcess): void;
+  unregisterProcess(child: ChildProcess): void;
+};
 
 export function runProcess(
   command: string,
@@ -11,7 +16,8 @@ export function runProcess(
   env?: NodeJS.ProcessEnv,
   hardKillLimitMs = timeoutMs,
   outputLimitBytes?: number,
-  fileOutputPath?: string
+  fileOutputPath?: string,
+  processTracker?: ProcessTracker
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint();
@@ -21,6 +27,7 @@ export function runProcess(
       shell: false,
       windowsHide: true
     });
+    processTracker?.registerProcess(child);
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let killedByTimeout = false;
@@ -97,6 +104,7 @@ export function runProcess(
         return;
       }
       settled = true;
+      processTracker?.unregisterProcess(child);
       clearTimeout(timer);
       if (fileOutputTimer) {
         clearInterval(fileOutputTimer);
@@ -111,6 +119,7 @@ export function runProcess(
         return;
       }
       settled = true;
+      processTracker?.unregisterProcess(child);
       clearTimeout(timer);
       if (fileOutputTimer) {
         clearInterval(fileOutputTimer);

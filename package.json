@@ -119,6 +119,8 @@
     "onCommand:oijudger.setSampleScore",
     "onCommand:oijudger.clearSampleScore",
     "onCommand:oijudger.runStressTest",
+    "onCommand:oijudger.stressTestCurrentCode",
+    "onCommand:oijudger.stopStressTest",
     "onCommand:oijudger.refreshStressRecords",
     "onCommand:oijudger.openStressFile",
     "onCommand:oijudger.addStressCaseToSamples",
@@ -254,6 +256,16 @@
         "command": "oijudger.runStressTest",
         "title": "%commands.runStressTest.title%",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "oijudger.stressTestCurrentCode",
+        "title": "%commands.stressTestCurrentCode.title%",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "oijudger.stopStressTest",
+        "title": "%commands.stopStressTest.title%",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "oijudger.createSubtask",
@@ -1170,6 +1182,16 @@
           "command": "oijudger.copyTestcaseFreopenInput",
           "when": "view == oijudger.samplesView && (viewItem == sample || viewItem == sampleChecker || viewItem == sampleWa || viewItem == sampleWaChecker || viewItem == sampleMissing || viewItem == sampleAnswerPending || viewItem == sampleWithGeneratedOutput)",
           "group": "3_run@4"
+        },
+        {
+          "command": "oijudger.stressTestCurrentCode",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "3_run@2.5"
+        },
+        {
+          "command": "oijudger.stopStressTest",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker) && oijudger.stressRunning",
+          "group": "3_run@3.5"
         }
       ],
       "commandPalette": [

@@ -25,6 +25,8 @@
   "commands.exportProblemPackage.title": "OI Judge: Export Problem Package",
   "commands.importProblemPackage.title": "OI Judge: Import Problem Package",
   "commands.runStressTest.title": "OI Judge: Run Stress Test",
+  "commands.stressTestCurrentCode.title": "OI Judge: Stress Test Current Code",
+  "commands.stopStressTest.title": "OI Judge: Stop Stress Test",
   "commands.createSubtask.title": "OI Judge: Create Subtask",
   "commands.renameSubtask.title": "OI Judge: Rename Subtask",
   "commands.deleteSubtask.title": "OI Judge: Delete Subtask",

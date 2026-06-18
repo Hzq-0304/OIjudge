@@ -3,8 +3,11 @@ import type * as vscode from 'vscode';
 import {
   createRecentEditorFileFromDocument,
   isStrictCppFilePath,
+  resolveProblemGeneratorPathForStress,
+  resolveProblemStdPathForStress,
   resolveCurrentCodeDocument
 } from '../src/extension';
+import { ProblemConfig } from '../src/types';
 
 function document(fsPath: string, scheme = 'file'): vscode.TextDocument {
   return {
@@ -77,4 +80,71 @@ describe('Test Current Code editor resolution', () => {
     });
     expect(createRecentEditorFileFromDocument(untitled, 7)).toBeUndefined();
   });
+
+  it('reports configured generator and STD files as missing when paths do not exist', () => {
+    const workspaceFolder = workspace('E:/work');
+    const problem = problemConfig({
+      setter: {
+        stdProgram: 'std.cpp',
+        generator: {
+          enabled: true,
+          generators: [{
+            id: 'generator',
+            name: 'gen.cpp',
+            source: { path: 'gen.cpp' }
+          }]
+        }
+      }
+    });
+
+    expect(resolveProblemGeneratorPathForStress(workspaceFolder, problem)).toEqual({
+      ok: false,
+      reason: 'notFound'
+    });
+    expect(resolveProblemStdPathForStress(workspaceFolder, problem)).toEqual({
+      ok: false,
+      reason: 'notFound'
+    });
+  });
+
+  it('reports missing generator and STD configuration without guessing files', () => {
+    const workspaceFolder = workspace('E:/work');
+    const problem = problemConfig();
+
+    expect(resolveProblemGeneratorPathForStress(workspaceFolder, problem)).toEqual({
+      ok: false,
+      reason: 'missing'
+    });
+    expect(resolveProblemStdPathForStress(workspaceFolder, problem)).toEqual({
+      ok: false,
+      reason: 'missing'
+    });
+  });
 });
+
+function workspace(fsPath: string): vscode.WorkspaceFolder {
+  return {
+    uri: { fsPath, scheme: 'file' } as vscode.Uri,
+    name: 'work',
+    index: 0
+  };
+}
+
+function problemConfig(overrides: Partial<ProblemConfig> = {}): ProblemConfig {
+  return {
+    version: 1,
+    id: 'a',
+    name: 'A',
+    standard: 'c++17',
+    compiler: {
+      command: 'g++',
+      args: ['${file}', '-o', '${output}']
+    },
+    limits: {
+      timeMs: 1000,
+      memoryMb: 256
+    },
+    samples: [],
+    ...overrides
+  };
+}

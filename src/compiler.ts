@@ -5,14 +5,15 @@ import { getOITestDir } from './config';
 import { findCompiler } from './compilerDetection';
 import { envPathIncludesDir, getCompilerDir, withCompilerPathEnv } from './compilerRuntime';
 import { t } from './i18n';
-import { runProcess } from './runner';
+import { ProcessTracker, runProcess } from './runner';
 import { CompileResult, CompileStackReport, OITestConfig, ProcessResult } from './types';
 
 export async function compileSource(
   workspaceFolder: vscode.WorkspaceFolder,
   sourcePath: string,
   config: OITestConfig,
-  output: vscode.OutputChannel
+  output: vscode.OutputChannel,
+  processTracker?: ProcessTracker
 ): Promise<CompileResult | undefined> {
   const problemId = (config as { id?: string }).id;
   const buildDir = problemId
@@ -60,7 +61,7 @@ export async function compileSource(
 
   let result: ProcessResult;
   try {
-    result = await runProcess(compilerCommand, args, '', workspaceFolder.uri.fsPath, 60_000, env);
+    result = await runProcess(compilerCommand, args, '', workspaceFolder.uri.fsPath, 60_000, env, 60_000, undefined, undefined, processTracker);
   } catch (error) {
     const message = formatSpawnError(error);
     output.appendLine('Compile failed to start.');

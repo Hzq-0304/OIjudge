@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { promises as fs } from 'fs';
+import { existsSync } from 'fs';
 import {
   addExternalSample,
   addSample,
@@ -65,6 +66,7 @@ import {
   getSampleGeneratedAnswerStatus,
   getProblem,
   getProblemGenerator,
+  getProblemGeneratorProgram,
   getProblemGeneratorInput,
   getProblemGeneratorInputs,
   getProblemGenerators,
@@ -133,6 +135,7 @@ import {
   runStandaloneStressTest,
   StressTestMode
 } from './stressTest';
+import { createStressRunController } from './stressRunController';
 import {
   StressTreeNode,
   StressRecordsTreeProvider
@@ -148,6 +151,8 @@ import { CompileResult, FileIoConfig, IoMode, JudgeMode, JudgeReport, PlainCheck
 
 const output = vscode.window.createOutputChannel('OI Judge');
 const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+const stressStopStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+const stressRunController = createStressRunController();
 let activeProblemId: string | undefined;
 let recentEditorFile: RecentEditorFile | undefined;
 let problemSamplesRunInProgress = false;
@@ -318,13 +323,41 @@ export function getStressStandalonePickerTitle(): string {
   return t('stress.selectStandalone');
 }
 
+export function resolveProblemGeneratorPathForStress(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): { ok: true; path: string } | { ok: false; reason: 'missing' | 'notFound' } {
+  const generatorRef = getProblemGeneratorProgram(problem);
+  if (!generatorRef) {
+    return { ok: false, reason: 'missing' };
+  }
+  const generatorPath = resolveProblemReferencePath(workspaceFolder, generatorRef);
+  return existsSync(generatorPath) ? { ok: true, path: generatorPath } : { ok: false, reason: 'notFound' };
+}
+
+export function resolveProblemStdPathForStress(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problem: ProblemConfig
+): { ok: true; path: string } | { ok: false; reason: 'missing' | 'notFound' } {
+  const stdRef = problem.setter?.stdProgram;
+  if (!stdRef) {
+    return { ok: false, reason: 'missing' };
+  }
+  const stdPath = resolveProblemReferencePath(workspaceFolder, stdRef);
+  return existsSync(stdPath) ? { ok: true, path: stdPath } : { ok: false, reason: 'notFound' };
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const sampleTreeProvider = new SampleTreeProvider();
   const stressRecordsTreeProvider = new StressRecordsTreeProvider();
   statusBar.command = 'oijudger.refreshView';
   statusBar.show();
+  stressStopStatusBar.command = 'oijudger.stopStressTest';
+  stressStopStatusBar.text = t('stress.stopStatusBar');
+  stressStopStatusBar.tooltip = t('stress.stopTooltip');
   void updateStatusBar();
   void updateSetterModeContext();
+  void setStressRunningContext(false);
   context.subscriptions.push(
     vscode.window.createTreeView('oijudger.samplesView', {
       treeDataProvider: sampleTreeProvider,
@@ -591,6 +624,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.runStressTest', async (problemArg?: unknown) => {
       await runStressTestCommand(readProblemId(problemArg), stressRecordsTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.stressTestCurrentCode', async (problemArg?: unknown) => {
+      await stressTestCurrentCodeCommand(readProblemId(problemArg), stressRecordsTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.stopStressTest', async () => {
+      await stopStressTestCommand();
     }),
     vscode.commands.registerCommand('oijudger.refreshStressRecords', () => {
       stressRecordsTreeProvider.refresh();
@@ -2001,75 +2040,221 @@ function getTestcaseExportGeneratedMessage(format: TestcaseExportFormat | undefi
   return t('export.testcases.luoguGenerated');
 }
 
+async function beginStressRun(): Promise<boolean> {
+  if (!stressRunController.start()) {
+    vscode.window.showWarningMessage(t('stress.alreadyRunning'));
+    return false;
+  }
+  await setStressRunningContext(true);
+  stressStopStatusBar.text = t('stress.stopStatusBar');
+  stressStopStatusBar.tooltip = t('stress.stopTooltip');
+  stressStopStatusBar.show();
+  return true;
+}
+
+async function endStressRun(): Promise<void> {
+  stressRunController.finish();
+  stressStopStatusBar.hide();
+  await setStressRunningContext(false);
+}
+
+async function setStressRunningContext(value: boolean): Promise<void> {
+  await vscode.commands.executeCommand('setContext', 'oijudger.stressRunning', value);
+}
+
+async function stopStressTestCommand(): Promise<void> {
+  if (!stressRunController.isRunning) {
+    vscode.window.showInformationMessage(t('stress.notRunning'));
+    return;
+  }
+  stressRunController.cancel();
+  vscode.window.showInformationMessage(t('stress.stopped'));
+}
+
 async function runStressTestCommand(
   problemId: string | undefined,
   stressRecordsTreeProvider?: StressRecordsTreeProvider
 ): Promise<void> {
-  const context = await getProblemContext(problemId, true);
-  if (!context) {
+  if (!(await beginStressRun())) {
     return;
   }
-  const mode = await pickStressTestMode();
-  if (!mode) {
-    return;
-  }
-
-  if (mode === 'standalone') {
-    const program = await pickCppFile(getStressStandalonePickerTitle());
-    if (!program) {
+  try {
+    const context = await getProblemContext(problemId, true);
+    if (!context) {
       return;
     }
-    const result = await runStandaloneStressTest({
+    const mode = await pickStressTestMode();
+    if (!mode) {
+      return;
+    }
+
+    if (mode === 'standalone') {
+      const program = await pickCppFile(getStressStandalonePickerTitle());
+      if (!program) {
+        return;
+      }
+      const result = await runStandaloneStressTest({
+        workspaceFolder: context.workspaceFolder,
+        config: context.problem,
+        programPath: program.fsPath,
+        output,
+        controller: stressRunController
+      });
+      stressRecordsTreeProvider?.refresh();
+      if (!result) {
+        vscode.window.showWarningMessage(t('stress.compileFailed'));
+        return;
+      }
+      if (result.cancelled) {
+        return;
+      }
+      vscode.window.showInformationMessage(t('stress.standaloneFinished'));
+      return;
+    }
+
+    const generator = await pickCppFile(t('stress.selectGenerator'));
+    if (!generator) {
+      return;
+    }
+    const std = await pickCppFile(t('stress.selectStd'));
+    if (!std) {
+      return;
+    }
+    const solution = await pickStressSolutionFile();
+    if (!solution) {
+      return;
+    }
+    const rounds = await pickStressRounds();
+    if (!rounds) {
+      return;
+    }
+
+    const result = await runGeneratorStdStressTest({
       workspaceFolder: context.workspaceFolder,
       config: context.problem,
-      programPath: program.fsPath,
-      output
+      generatorPath: generator.fsPath,
+      stdPath: std.fsPath,
+      solutionPath: solution.fsPath,
+      rounds,
+      output,
+      controller: stressRunController,
+      source: 'manual'
     });
+    stressRecordsTreeProvider?.refresh();
     if (!result) {
       vscode.window.showWarningMessage(t('stress.compileFailed'));
       return;
     }
+    if (result.cancelled) {
+      return;
+    }
+    if (result.failedAt !== undefined) {
+      vscode.window.showWarningMessage(t('stress.failed', { round: result.failedAt }));
+      return;
+    }
+    vscode.window.showInformationMessage(t('stress.finished', { count: result.passed }));
+  } finally {
+    await endStressRun();
+  }
+}
+
+async function stressTestCurrentCodeCommand(
+  problemId: string | undefined,
+  stressRecordsTreeProvider?: StressRecordsTreeProvider
+): Promise<void> {
+  if (!(await beginStressRun())) {
+    return;
+  }
+  try {
+    const resolution = resolveCurrentCodeDocument(
+      vscode.window.activeTextEditor,
+      recentEditorFile,
+      vscode.workspace.textDocuments
+    );
+    if (!resolution.ok) {
+      vscode.window.showErrorMessage(t(getStressCurrentCodeResolutionMessageKey(resolution.reason)));
+      return;
+    }
+
+    const solutionPath = resolution.document.uri.fsPath;
+    if (!(await exists(solutionPath))) {
+      vscode.window.showErrorMessage(t('stress.currentCode.missing'));
+      return;
+    }
+    if (resolution.document.isDirty) {
+      const saved = await resolution.document.save();
+      if (!saved) {
+        vscode.window.showErrorMessage(t('stress.currentCode.saveFailed'));
+        return;
+      }
+    }
+
+    const context = await getProblemContext(problemId, true);
+    if (!context) {
+      vscode.window.showErrorMessage(t('stress.currentCode.noProblem'));
+      return;
+    }
+    const generator = resolveProblemGeneratorPathForStress(context.workspaceFolder, context.problem);
+    if (!generator.ok) {
+      vscode.window.showErrorMessage(t(generator.reason === 'missing'
+        ? 'stress.currentCode.noGenerator'
+        : 'stress.currentCode.generatorMissing'));
+      return;
+    }
+    const std = resolveProblemStdPathForStress(context.workspaceFolder, context.problem);
+    if (!std.ok) {
+      vscode.window.showErrorMessage(t(std.reason === 'missing'
+        ? 'stress.currentCode.noStd'
+        : 'stress.currentCode.stdMissing'));
+      return;
+    }
+    const rounds = await pickStressRounds();
+    if (!rounds) {
+      return;
+    }
+
+    const result = await runGeneratorStdStressTest({
+      workspaceFolder: context.workspaceFolder,
+      config: context.problem,
+      generatorPath: generator.path,
+      stdPath: std.path,
+      solutionPath,
+      rounds,
+      output,
+      controller: stressRunController,
+      source: 'currentCode'
+    });
     stressRecordsTreeProvider?.refresh();
-    vscode.window.showInformationMessage(t('stress.standaloneFinished'));
-    return;
+    if (!result) {
+      vscode.window.showWarningMessage(t('stress.compileFailed'));
+      return;
+    }
+    if (result.cancelled) {
+      return;
+    }
+    if (result.failedAt !== undefined) {
+      vscode.window.showWarningMessage(t('stress.failed', { round: result.failedAt }));
+      return;
+    }
+    vscode.window.showInformationMessage(t('stress.finished', { count: result.passed }));
+  } finally {
+    await endStressRun();
   }
+}
 
-  const generator = await pickCppFile(t('stress.selectGenerator'));
-  if (!generator) {
-    return;
+function getStressCurrentCodeResolutionMessageKey(
+  reason: Exclude<CurrentCodeDocumentResolution, { ok: true }>['reason']
+): Parameters<typeof t>[0] {
+  switch (reason) {
+    case 'notLocal':
+    case 'noEditor':
+      return 'stress.currentCode.noEditor';
+    case 'notOpen':
+      return 'stress.currentCode.notOpen';
+    case 'notCpp':
+    default:
+      return 'stress.currentCode.notCpp';
   }
-  const std = await pickCppFile(t('stress.selectStd'));
-  if (!std) {
-    return;
-  }
-  const solution = await pickStressSolutionFile();
-  if (!solution) {
-    return;
-  }
-  const rounds = await pickStressRounds();
-  if (!rounds) {
-    return;
-  }
-
-  const result = await runGeneratorStdStressTest({
-    workspaceFolder: context.workspaceFolder,
-    config: context.problem,
-    generatorPath: generator.fsPath,
-    stdPath: std.fsPath,
-    solutionPath: solution.fsPath,
-    rounds,
-    output
-  });
-  if (!result) {
-    vscode.window.showWarningMessage(t('stress.compileFailed'));
-    return;
-  }
-  stressRecordsTreeProvider?.refresh();
-  if (result.failedAt !== undefined) {
-    vscode.window.showWarningMessage(t('stress.failed', { round: result.failedAt }));
-    return;
-  }
-  vscode.window.showInformationMessage(t('stress.finished', { count: result.passed }));
 }
 
 async function pickStressTestMode(): Promise<StressTestMode | undefined> {

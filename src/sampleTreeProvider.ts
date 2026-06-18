@@ -963,7 +963,11 @@ function createSampleActionNodes(
 function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
   return [
     actionNode(t('runDefaultProgram'), 'oijudger.runProblemSamples', 'run-all', problem.id),
+    actionNode(t('testCurrentCode'), 'oijudger.testCurrentCode', 'play', problem.id),
     actionNode(t('runWithProgram'), 'oijudger.runSamplesWithProgram', 'run', problem.id),
+    actionNode(t('stress.currentCode.run'), 'oijudger.stressTestCurrentCode', 'beaker', problem.id),
+    actionNode(t('stress.run'), 'oijudger.runStressTest', 'beaker', problem.id),
+    actionNode(t('stress.stop'), 'oijudger.stopStressTest', 'debug-stop', problem.id),
     actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)
   ];
 }

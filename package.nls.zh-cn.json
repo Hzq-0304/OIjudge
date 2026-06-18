@@ -25,6 +25,8 @@
   "commands.exportProblemPackage.title": "OI Judge: 导出完整题目包",
   "commands.importProblemPackage.title": "OI Judge: 导入完整题目包",
   "commands.runStressTest.title": "OI Judge: 对拍",
+  "commands.stressTestCurrentCode.title": "OI Judge: 对拍当前代码",
+  "commands.stopStressTest.title": "OI Judge: 停止对拍",
   "commands.createSubtask.title": "OI Judge: 新建 Subtask",
   "commands.renameSubtask.title": "OI Judge: 重命名 Subtask",
   "commands.deleteSubtask.title": "OI Judge: 删除 Subtask",
