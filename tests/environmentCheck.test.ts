@@ -171,6 +171,22 @@ describe('environment check helpers', () => {
     expect(runExecutable?.details ?? '').not.toContain('The "file" argument must be of type string');
     expect(runProbeCalled).toBe(false);
   });
+
+  it('keeps closed stdin pipe errors from escaping environment check probe runs', async () => {
+    const result = await environmentCheckTestHooks.runProcessWithTimeout(
+      process.execPath,
+      ['-e', 'process.exit(0);'],
+      'x'.repeat(1024 * 1024),
+      process.cwd(),
+      ENVIRONMENT_CHECK_RUN_TIMEOUT_MS,
+      process.env
+    );
+
+    expect(result.code).toBe(0);
+    if (result.stdinError) {
+      expect(result.stdinError).toMatch(/EPIPE|closed|write/i);
+    }
+  });
 });
 
 function item(status: EnvironmentCheckItem['status']): EnvironmentCheckItem {

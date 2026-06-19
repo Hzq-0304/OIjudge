@@ -64,6 +64,7 @@ type ProcessRunResult = {
   timedOut: boolean;
   timeMs: number;
   cleanup?: KillProcessTreeResult;
+  stdinError?: string;
 };
 
 type StopProcessProbeResult = {
@@ -589,6 +590,7 @@ function runProcessWithTimeout(
     let settled = false;
     let cleanup: KillProcessTreeResult | undefined;
     let cleanupPromise: Promise<KillProcessTreeResult> | undefined;
+    let stdinError: string | undefined;
 
     const stopProcess = () => {
       if (!cleanupPromise) {
@@ -607,6 +609,9 @@ function runProcessWithTimeout(
 
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+    child.stdin.on('error', (error) => {
+      stdinError = formatError(error);
+    });
     child.on('error', (error) => {
       if (settled) {
         return;
@@ -635,10 +640,15 @@ function runProcessWithTimeout(
         signal,
         timedOut,
         timeMs: elapsedMs(started),
-        cleanup
+        cleanup,
+        stdinError
       });
     });
-    child.stdin.end(input);
+    try {
+      child.stdin.end(input);
+    } catch (error) {
+      stdinError = formatError(error);
+    }
   });
 }
 
@@ -688,6 +698,7 @@ export const environmentCheckTestHooks = {
   discoverCompiler,
   compileCpp,
   runCompiledProbe,
+  runProcessWithTimeout,
   runStopProcessProbe
 };
 
@@ -758,6 +769,7 @@ function processDetails(result: ProcessRunResult): string {
     `signal: ${result.signal ?? ''}`,
     `timedOut: ${result.timedOut}`,
     `timeMs: ${result.timeMs}`,
+    ...(result.stdinError ? [`stdinError: ${result.stdinError}`] : []),
     ...(result.cleanup ? [`cleanup: ${result.cleanup.method} ok=${result.cleanup.ok} exited=${result.cleanup.alreadyExited ?? false} timedOut=${result.cleanup.timedOut ?? false} message=${truncateText(result.cleanup.message ?? '')}`] : []),
     `stdout: ${truncateText(result.stdout)}`,
     `stderr: ${truncateText(result.stderr)}`
