@@ -1,10 +1,12 @@
-import { spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getOITestDir } from './config';
 import { findCompiler } from './compilerDetection';
 import { withCompilerPathEnv } from './compilerRuntime';
+import { killProcessTree } from './processTree';
+import type { KillProcessTreeResult } from './processTree';
 import { OITestConfig, ProcessResult } from './types';
 
 type NativeRunResult = {
@@ -21,6 +23,30 @@ type NativeRunResult = {
   stderrError?: string;
   message?: string;
 };
+
+type RunSpawnResult = {
+  stdout: string;
+  stderr: string;
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  command: string;
+  args: string[];
+  cwd: string;
+  timeoutMs: number;
+};
+
+type RunSpawnOptions = {
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+  label?: string;
+  spawnProcess?: typeof spawn;
+  stopProcessTree?: (child: ChildProcess) => Promise<KillProcessTreeResult>;
+};
+
+export const NATIVE_RUNNER_HELPER_BUILD_TIMEOUT_MS = 20_000;
+const NATIVE_RUNNER_HELPER_TIMEOUT_BUFFER_MS = 5_000;
+const DIAGNOSTIC_LINE_LIMIT = 20;
+const DIAGNOSTIC_CHAR_LIMIT = 4000;
 
 let helperUnavailableReason: string | undefined;
 let loggedUnavailableReason: string | undefined;
@@ -66,6 +92,10 @@ export async function runNativeProcess(input: {
 
   try {
     const runnerEnv = withCompilerPathEnv(helper.compilerCommand, input.env);
+    const helperRunTimeoutMs = Math.max(
+      NATIVE_RUNNER_HELPER_BUILD_TIMEOUT_MS,
+      (input.hardKillLimitMs ?? input.timeoutMs) + NATIVE_RUNNER_HELPER_TIMEOUT_BUFFER_MS
+    );
     const helperResult = await runHelper(helper.helperPath, [
       '--exe', input.command,
       '--cwd', input.cwd,
@@ -78,7 +108,7 @@ export async function runNativeProcess(input: {
       ...(input.fileOutputPath ? ['--file-output', input.fileOutputPath] : []),
       '--memory-limit-mib', String(input.config.limits.memoryMb),
       ...input.args.flatMap((arg) => ['--arg', arg])
-    ], input.cwd, runnerEnv);
+    ], input.cwd, runnerEnv, helperRunTimeoutMs);
     if (helperResult.code !== 0) {
       helperUnavailableReason = helperResult.stderr.trim() || helperResult.stdout.trim() || `helper exited with code ${formatExitCode(helperResult.code)}`;
       logNativeRunnerUnavailable(input.output);
@@ -167,12 +197,18 @@ async function ensureNativeRunnerHelper(
 
   await fs.mkdir(path.dirname(helperPath), { recursive: true });
   const { staticArgs, dynamicArgs } = buildNativeRunnerCompileArgs(sourcePath, helperPath, platformConfig);
-  let result = await runSpawn(compilerCommand, staticArgs, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
+  let result = await runSpawn(compilerCommand, staticArgs, workspaceFolder.uri.fsPath, {
+    env: withCompilerPathEnv(compilerCommand),
+    label: 'Native runner helper build'
+  });
   if (result.code !== 0) {
-    const staticError = result.stderr.trim() || result.stdout.trim() || `helper compiler exited with code ${result.code ?? 'null'}`;
-    result = await runSpawn(compilerCommand, dynamicArgs, workspaceFolder.uri.fsPath, withCompilerPathEnv(compilerCommand));
+    const staticError = formatRunSpawnFailure('Native runner helper static build failed.', result);
+    result = await runSpawn(compilerCommand, dynamicArgs, workspaceFolder.uri.fsPath, {
+      env: withCompilerPathEnv(compilerCommand),
+      label: 'Native runner helper build'
+    });
     if (result.code !== 0) {
-      helperUnavailableReason = result.stderr.trim() || result.stdout.trim() || staticError;
+      helperUnavailableReason = formatRunSpawnFailure('Native runner helper dynamic build failed.', result, staticError);
       return undefined;
     }
     output?.appendLine('Native runner: static helper build failed; using PATH-backed helper.');
@@ -254,9 +290,14 @@ async function runHelper(
   command: string,
   args: string[],
   cwd: string,
-  env?: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv | undefined,
+  timeoutMs: number
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
-  const result = await runSpawn(command, args, cwd, env);
+  const result = await runSpawn(command, args, cwd, {
+    env,
+    timeoutMs,
+    label: 'Native runner helper run'
+  });
   return {
     stdout: result.stdout,
     stderr: result.stderr,
@@ -268,29 +309,89 @@ function runSpawn(
   command: string,
   args: string[],
   cwd: string,
-  env?: NodeJS.ProcessEnv
-): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  options: RunSpawnOptions = {}
+): Promise<RunSpawnResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const timeoutMs = options.timeoutMs ?? NATIVE_RUNNER_HELPER_BUILD_TIMEOUT_MS;
+    const runSpawnProcess = options.spawnProcess ?? spawn;
+    const stopProcessTree = options.stopProcessTree ?? ((child: ChildProcess) =>
+      killProcessTree(child, { detached: process.platform !== 'win32' }));
+    const child = runSpawnProcess(command, args, {
       cwd,
-      env,
+      env: options.env,
       shell: false,
       windowsHide: true
     });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let settled = false;
+    const stdout = () => Buffer.concat(stdoutChunks).toString('utf8');
+    const stderr = () => Buffer.concat(stderrChunks).toString('utf8');
+    const finish = (handler: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      child.off('error', onError);
+      child.off('close', onClose);
+      handler();
+    };
+    const buildResult = (code: number | null, signal: NodeJS.Signals | null): RunSpawnResult => ({
+      stdout: stdout(),
+      stderr: stderr(),
+      code,
+      signal,
+      command,
+      args,
+      cwd,
+      timeoutMs
+    });
+    const fail = (summary: string, extra?: string) => {
+      reject(new Error(formatRunSpawnFailure(summary, buildResult(child.exitCode, child.signalCode), extra)));
+    };
+    const onError = (error: Error) => {
+      finish(() => fail(`${options.label ?? 'Native runner helper process'} failed to start.`, formatError(error)));
+    };
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      finish(() => resolve(buildResult(code, signal)));
+    };
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.off('error', onError);
+      child.off('close', onClose);
+      void Promise.resolve()
+        .then(() => stopProcessTree(child))
+        .then((cleanup) => {
+          const message = cleanup.message ? `cleanup: ${cleanup.message}` : `cleanup method: ${cleanup.method}`;
+          reject(new Error(formatRunSpawnFailure(
+            `${options.label ?? 'Native runner helper process'} timed out after ${timeoutMs}ms.`,
+            buildResult(child.exitCode, child.signalCode),
+            message
+          )));
+        })
+        .catch((error) => {
+          reject(new Error(formatRunSpawnFailure(
+            `${options.label ?? 'Native runner helper process'} timed out after ${timeoutMs}ms.`,
+            buildResult(child.exitCode, child.signalCode),
+            `cleanup failed: ${formatError(error)}`
+          )));
+        });
+    }, timeoutMs);
+
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-    child.on('error', reject);
-    child.on('close', (code) => {
-      resolve({
-        stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-        stderr: Buffer.concat(stderrChunks).toString('utf8'),
-        code
-      });
-    });
+    child.once('error', onError);
+    child.once('close', onClose);
   });
 }
+
+export const __nativeRunnerTestHooks = {
+  runSpawn
+};
 
 function parseNativeRunResult(value: string): NativeRunResult | undefined {
   try {
@@ -346,6 +447,36 @@ async function isHelperFresh(
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatRunSpawnFailure(summary: string, result: RunSpawnResult, extra?: string): string {
+  return [
+    summary,
+    `command: ${result.command}`,
+    `args: ${JSON.stringify(result.args)}`,
+    `cwd: ${result.cwd}`,
+    `timeoutMs: ${result.timeoutMs}`,
+    `exitCode: ${formatExitCode(result.code)}`,
+    `signal: ${result.signal ?? 'null'}`,
+    `stdout: ${summarizeDiagnostic(result.stdout)}`,
+    `stderr: ${summarizeDiagnostic(result.stderr)}`,
+    extra ? `details: ${extra}` : undefined
+  ].filter(Boolean).join('\n');
+}
+
+function summarizeDiagnostic(value: string): string {
+  const normalized = value.replace(/\r\n/gu, '\n').trim();
+  if (!normalized) {
+    return '<empty>';
+  }
+  const lines = normalized.split('\n');
+  const lineLimited = lines.length > DIAGNOSTIC_LINE_LIMIT
+    ? `${lines.slice(0, DIAGNOSTIC_LINE_LIMIT).join('\n')}\n... (truncated)`
+    : normalized;
+  if (lineLimited.length <= DIAGNOSTIC_CHAR_LIMIT) {
+    return lineLimited;
+  }
+  return `${lineLimited.slice(0, DIAGNOSTIC_CHAR_LIMIT)}\n... (truncated)`;
 }
 
 function formatExitCode(code: number | null): string {
