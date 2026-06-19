@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { promises as fs } from 'fs';
+import * as crypto from 'crypto';
 import {
   ensureConfig,
   exists,
@@ -755,13 +756,15 @@ function getReportSampleIndex(sample: SampleReport): number | undefined {
 }
 
 export function renderPage(title: string, body: string): string {
+  const nonce = createNonce();
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <title>${escapeHtml(title)}</title>
-  <style>
+  <style nonce="${nonce}">
     body {
       --oj-card-bg: var(--vscode-editorWidget-background);
       --oj-row-bg: var(--vscode-editor-background);
@@ -1157,7 +1160,7 @@ export function renderPage(title: string, body: string): string {
 <body>
   <h1>${escapeHtml(title)}</h1>
   ${body}
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const preparePanel = (panel) => {
@@ -1264,6 +1267,10 @@ export function renderPage(title: string, body: string): string {
   </script>
 </body>
 </html>`;
+}
+
+function createNonce(): string {
+  return crypto.randomBytes(16).toString('base64');
 }
 
 function statusClass(status: string): string {

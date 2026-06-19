@@ -226,6 +226,41 @@ describe('report verdict display', () => {
     expect(html).not.toContain('style.display');
   });
 
+  it('adds a nonce-based CSP without weakening report escaping or expansion hooks', () => {
+    const hostileReport = {
+      ...report(),
+      source: '<script>alert(1)</script>',
+      sourceName: '<img src=x onerror=alert(1)>',
+      samples: [{
+        ...sample('sample-1', 1, 'WA'),
+        stderr: '<script>alert(2)</script>'
+      }],
+      results: []
+    };
+    const html = renderPage('<Report>', renderReportBody(workspace(), hostileReport));
+    const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1];
+    const styleNonce = html.match(/<style nonce="([^"]+)">/)?.[1];
+    const scriptNonce = html.match(/<script nonce="([^"]+)">/)?.[1];
+
+    expect(csp).toBeDefined();
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain('img-src data:');
+    expect(csp).toContain(`style-src 'nonce-${styleNonce}'`);
+    expect(csp).toContain(`script-src 'nonce-${scriptNonce}'`);
+    expect(csp).not.toContain('unsafe-inline');
+    expect(csp).not.toMatch(/https?:|cdn/iu);
+    expect(styleNonce).toBeTruthy();
+    expect(scriptNonce).toBe(styleNonce);
+    expect(html).toContain(`nonce="${styleNonce}"`);
+    expect(html).toContain('togglePanel');
+    expect(html).toContain('addEventListener');
+    expect(html).toContain('&lt;Report&gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x onerror=alert(1)>');
+  });
+
   it('fades and drifts expanded content without blur, scale, or filter animation', () => {
     const html = renderPage('Report', renderReportBody(workspace(), report(), 'A', problemWithSubtask()));
     const driftOffset = cssPxValue(html, 'top');
