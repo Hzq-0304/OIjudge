@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 5.2.1
+
+- 加固报告页 Content-Security-Policy。
+- 为报告页内联 script/style 添加 nonce。
+- 保持报告页视觉与展开/收起交互行为不变。
+
 ## 5.2.0 Pre-release / 5.2.0 预发布
 
 - 新增跨平台回归测试，覆盖 Windows、macOS 和 Linux 上的 Judge、Stress、Report UI 与打包 smoke 流程 / Add cross-platform regression coverage for Judge, Stress, Report UI, and packaging smoke checks on Windows, macOS, and Linux.
