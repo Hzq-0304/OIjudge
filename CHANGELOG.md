@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 5.2.0 Pre-release / 5.2.0 预发布
+
+- 新增跨平台回归测试，覆盖 Windows、macOS 和 Linux 上的 Judge、Stress、Report UI 与打包 smoke 流程 / Add cross-platform regression coverage for Judge, Stress, Report UI, and packaging smoke checks on Windows, macOS, and Linux.
+- 新增 Environment Check / 环境自检命令，用于诊断编译器、C++17 编译、程序运行、stdin/stdout、文件 IO、native runner 和进程停止能力 / Add Environment Check diagnostics for compiler discovery, C++17 compilation, execution, stdin/stdout, file IO, native runner, and process stop support.
+- 修复 macOS native runner memory 单位换算，保持 Linux/macOS 内存统计语义一致 / Fix macOS native runner memory unit handling and keep memory reporting consistent across Linux and macOS.
+- 修复 Windows compiler discovery 中 `where` / `which` 探测可能卡住的问题，并优先使用已配置 compiler / Fix possible hangs in Windows compiler discovery probes and prefer configured compilers.
+- 修复 `runProcess` timeout 后的进程树清理，避免超时进程残留 / Fix process tree cleanup after `runProcess` timeouts to avoid leftover child processes.
+- 修复 Stress stop / Stop Stress Test 的进程树回收，提升重复停止操作的稳定性 / Fix process tree cleanup for Stress stop / Stop Stress Test and make repeated stops safer.
+- 修复 native runner helper build 可能无限挂住的问题，增加 timeout、进程树清理和截断诊断日志 / Fix possible native runner helper build hangs with timeout, process tree cleanup, and bounded diagnostics.
+- 稳定 Windows / macOS / Linux 跨平台行为，并补充 report UI / cross-platform / packaging smoke 测试 / Stabilize Windows, macOS, and Linux behavior with report UI, cross-platform, and packaging smoke coverage.
+
 - 新增环境自检命令，帮助诊断编译器、C++17、程序运行、stdin/stdout、文件 IO、native runner、用时内存和停止进程能力 / Add environment check command to diagnose compiler, C++17, execution, stdin/stdout, file IO, native runner, timing, memory, and process stop support.
 
 - 新增跨平台回归测试，覆盖 Judge 多样例组、对拍流程、停止对拍和报告 UI smoke test / Add cross-platform regression tests for judge sample groups, stress workflows, stop action, and report UI smoke checks.

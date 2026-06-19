@@ -5,6 +5,7 @@ src/**
 tests/**
 vitest.config.ts
 .git/**
+.github/**
 .gitignore
 tsconfig.json
 node_modules/**
