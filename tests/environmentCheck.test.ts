@@ -84,7 +84,7 @@ describe('environment check helpers', () => {
 
   it('uses a wider timeout for compiler probes than executable probes', () => {
     expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBeGreaterThan(ENVIRONMENT_CHECK_RUN_TIMEOUT_MS);
-    expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBeGreaterThanOrEqual(15_000);
+    expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBeGreaterThanOrEqual(30_000);
     expect(ENVIRONMENT_CHECK_RUN_TIMEOUT_MS).toBe(5_000);
   });
 

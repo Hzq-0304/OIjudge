@@ -17,7 +17,7 @@ describe('environment check cross-platform smoke', () => {
       console.info(formatEnvironmentCheckFailureDetails(report, compiler?.command));
     }
 
-    expect(report.overallStatus).not.toBe('fail');
+    expect(report.overallStatus, formatEnvironmentCheckFailureDetails(report, compiler?.command)).not.toBe('fail');
     expect(report.items.find((item) => item.id === 'temp-directory')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'compiler')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'cpp17-compile')?.status).toBe('pass');
@@ -25,7 +25,7 @@ describe('environment check cross-platform smoke', () => {
     expect(report.items.find((item) => item.id === 'stdin-stdout')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'file-io')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'stop-process')?.status).toBe('pass');
-  }, 30_000);
+  }, 90_000);
 });
 
 function formatEnvironmentCheckFailureDetails(

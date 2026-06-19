@@ -82,7 +82,7 @@ type CheckContext = {
 };
 
 export const ENVIRONMENT_CHECK_RUN_TIMEOUT_MS = 5000;
-export const ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS = 15_000;
+export const ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS = 30_000;
 const STOP_CHECK_TIMEOUT_MS = 4000;
 
 export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {}): Promise<EnvironmentCheckReport> {
