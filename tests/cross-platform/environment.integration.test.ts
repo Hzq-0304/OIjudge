@@ -25,7 +25,7 @@ describe('environment check cross-platform smoke', () => {
     expect(report.items.find((item) => item.id === 'stdin-stdout')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'file-io')?.status).toBe('pass');
     expect(report.items.find((item) => item.id === 'stop-process')?.status).toBe('pass');
-  }, 90_000);
+  }, 150_000);
 });
 
 function formatEnvironmentCheckFailureDetails(

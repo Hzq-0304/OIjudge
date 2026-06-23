@@ -82,7 +82,7 @@ type CheckContext = {
 };
 
 export const ENVIRONMENT_CHECK_RUN_TIMEOUT_MS = 5000;
-export const ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS = 30_000;
+export const ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS = 60_000;
 const STOP_CHECK_TIMEOUT_MS = 4000;
 
 export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {}): Promise<EnvironmentCheckReport> {
@@ -158,7 +158,9 @@ export async function runEnvironmentCheck(options: EnvironmentCheckOptions = {})
     if (result.code !== 0 || !(await exists(exePath))) {
       return {
         status: 'fail',
-        summary: `Compiler exited with code ${formatExitCode(result.code)}.`,
+        summary: result.timedOut
+          ? `Compiler timed out after ${ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS}ms.`
+          : `Compiler exited with code ${formatExitCode(result.code)}.`,
         details: compileFailureDetails(
           context.compiler!.command,
           buildCompileArgs(sourcePath, exePath),

@@ -84,7 +84,7 @@ describe('environment check helpers', () => {
 
   it('uses a wider timeout for compiler probes than executable probes', () => {
     expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBeGreaterThan(ENVIRONMENT_CHECK_RUN_TIMEOUT_MS);
-    expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBeGreaterThanOrEqual(30_000);
+    expect(ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS).toBe(60_000);
     expect(ENVIRONMENT_CHECK_RUN_TIMEOUT_MS).toBe(5_000);
   });
 
@@ -157,6 +157,7 @@ describe('environment check helpers', () => {
     const compile = report.items.find((item) => item.id === 'cpp17-compile');
     const runExecutable = report.items.find((item) => item.id === 'run-executable');
     expect(compile?.status).toBe('fail');
+    expect(compile?.summary).toBe(`Compiler timed out after ${ENVIRONMENT_CHECK_COMPILE_TIMEOUT_MS}ms.`);
     expect(compile?.details).toContain('compiler: mock-g++');
     expect(compile?.details).toContain('args:');
     expect(compile?.details).toContain('cwd:');
