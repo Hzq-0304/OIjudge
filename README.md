@@ -158,6 +158,12 @@ Judge Mode:
 - If you run `OI Judge: Set Checker` while a problem is still in a text compare mode, OI Judge asks whether to switch to custom checker first.
 - Switching back to a text compare mode does not delete the saved checker configuration, so you can switch back later without reselecting the checker.
 
+### Function-style Judge
+
+Function-style judge supports grader-based tasks where the grader provides `main()` and the contestant solution implements required functions. OI Judge compiles the grader and solution together, then runs the generated executable against normal samples and uses the existing text compare or checker flow.
+
+Configure a problem with `mode: "function"` and `functionStyle.grader` / `functionStyle.solution`, then run `OI Judge: Run Function-style Judge`.
+
 I/O Mode:
 
 - Each problem can use either `Standard IO` or `File IO`.

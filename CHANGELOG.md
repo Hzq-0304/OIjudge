@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 新增函数式交互评测模式 / Add Function-style Judge mode.
+- 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
+
 ## 5.3.0
 
 - 新增保存失败用例为样例功能，可从评测报告或对拍记录保存失败输入、期望输出和实际输出，方便反复调试 / Add support for saving failed cases as samples from judge reports and stress records, including input, expected output, and actual output for repeated debugging.

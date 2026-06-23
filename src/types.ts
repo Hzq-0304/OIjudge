@@ -4,6 +4,7 @@ import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
 export type SampleSourceType = 'managed' | 'external';
 export type CheckerType = 'none' | 'testlib' | 'plain';
 export type JudgeMode = 'strictText' | 'trimTrailingWhitespace' | 'checker';
+export type JudgeRunMode = 'standard' | 'function';
 export type IoMode = 'stdio' | 'fileio';
 export type TestlibMode = 'auto' | 'managed' | 'custom';
 export type PlainCheckerVerdictPosition = 'firstLine' | 'lastLine';
@@ -125,6 +126,8 @@ export interface ProblemGeneratorInputConfig {
 
 export type OITestConfig = {
   version: 1;
+  mode?: JudgeRunMode;
+  functionStyle?: FunctionStyleConfig;
   compile?: {
     command: string;
     args: string[];
@@ -144,6 +147,22 @@ export type OITestConfig = {
   checker?: CheckerConfig;
   setter?: SetterConfig;
   samples: SampleConfig[];
+};
+
+export type FunctionStyleConfig = {
+  grader?: string;
+  solution?: string;
+  sources?: string[];
+  headers?: string[];
+  compileArgs?: string[];
+};
+
+export type FunctionStyleReport = {
+  grader: string;
+  solution: string;
+  sources?: string[];
+  headers?: string[];
+  compileArgs?: string[];
 };
 
 export type StackConfig = {
@@ -194,6 +213,8 @@ export type CompileReport = {
   status: 'OK' | 'CE';
   timeMs: number;
   stack?: CompileStackReport;
+  mode?: JudgeRunMode;
+  functionStyle?: FunctionStyleReport;
   stdout?: string;
   stderr?: string;
   message?: string;
@@ -301,6 +322,8 @@ export type JudgeReport = {
   generatedAt: string;
   source: string;
   sourceName?: string;
+  mode?: JudgeRunMode;
+  functionStyle?: FunctionStyleReport;
   compile?: CompileReport;
   totalTimeMs?: number;
   timeLimitMs: number;

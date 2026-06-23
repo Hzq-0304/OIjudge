@@ -22,7 +22,7 @@ import {
 import { compileSource } from './compiler';
 import { ensureCompilerConfigured, findCompiler, pickCompilerPath, selectCompiler } from './compilerDetection';
 import { t } from './i18n';
-import { runAllSamples } from './judge';
+import { runAllSamples, runFunctionStyleJudge } from './judge';
 import {
   PlainCheckerProtocolValidationIssue,
   resolvePlainCheckerOptions,
@@ -705,6 +705,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.runSamplesWithProgram', async (problemArg?: unknown) => {
       await runProblemSamplesCommand(readProblemId(problemArg), sampleTreeProvider, true, context);
+    }),
+    vscode.commands.registerCommand('oijudger.runFunctionStyleJudge', async (problemArg?: unknown) => {
+      await runFunctionStyleJudgeCommand(readProblemId(problemArg), sampleTreeProvider, context);
     }),
     vscode.commands.registerCommand('oijudger.testCurrentCode', async () => {
       await testCurrentCodeCommand(sampleTreeProvider, context);
@@ -1576,6 +1579,60 @@ async function testCurrentCodeCommand(
     sourcePathOverride: sourcePath,
     skipOpenDocumentSave: true
   });
+}
+
+async function runFunctionStyleJudgeCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider,
+  extensionContext: vscode.ExtensionContext
+): Promise<void> {
+  if (problemSamplesRunInProgress) {
+    vscode.window.showErrorMessage(t('judgeAlreadyRunning'));
+    return;
+  }
+
+  problemSamplesRunInProgress = true;
+  try {
+    const context = await getProblemContext(problemId, true);
+    if (!context) {
+      return;
+    }
+
+    let problem = await ensureProblemCompiler(context.workspaceFolder, context.problem);
+    if (!problem) {
+      return;
+    }
+
+    if (problem.samples.length === 0) {
+      vscode.window.showWarningMessage(t('noSamples'));
+      return;
+    }
+
+    if (problem.mode !== 'function' || !problem.functionStyle?.grader || !problem.functionStyle?.solution) {
+      vscode.window.showErrorMessage(t('functionStyle.missingConfig'));
+      return;
+    }
+
+    const runningSampleIds = problem.samples.map((sample) => sample.id);
+    await withSamplesRunning(sampleTreeProvider, problem.id, runningSampleIds, async () => {
+      const report = await runFunctionStyleJudge(context.workspaceFolder, problem, output, {
+        onSampleComplete: async (partialReport, sampleReport) => {
+          await saveProblemReport(context.workspaceFolder, problem.id, partialReport);
+          sampleTreeProvider.clearSamplesRunning(problem.id, [sampleReport.id]);
+          sampleTreeProvider.refresh();
+        }
+      });
+      if (report) {
+        await saveProblemReport(context.workspaceFolder, problem.id, report);
+        await openProblemReport(extensionContext, problem.id);
+      }
+      activeProblemId = problem.id;
+      sampleTreeProvider.refresh();
+      await updateStatusBar(problem.id);
+    });
+  } finally {
+    problemSamplesRunInProgress = false;
+  }
 }
 
 async function runProblemSampleCommand(

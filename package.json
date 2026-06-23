@@ -60,6 +60,7 @@
     "onCommand:oijudger.batchAddSamples",
     "onCommand:oijudger.runProblemSamples",
     "onCommand:oijudger.runSamplesWithProgram",
+    "onCommand:oijudger.runFunctionStyleJudge",
     "onCommand:oijudger.testCurrentCode",
     "onCommand:oijudger.runProblemSample",
     "onCommand:oijudger.setProblemTimeLimit",
@@ -348,6 +349,11 @@
         "command": "oijudger.runSamplesWithProgram",
         "title": "%commands.runSamplesWithProgram.title%",
         "icon": "$(run)"
+      },
+      {
+        "command": "oijudger.runFunctionStyleJudge",
+        "title": "%commands.runFunctionStyleJudge.title%",
+        "icon": "$(play)"
       },
       {
         "command": "oijudger.testCurrentCode",

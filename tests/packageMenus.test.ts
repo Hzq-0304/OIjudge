@@ -184,6 +184,19 @@ describe('package tree sample add menu', () => {
     expect(menu?.when).not.toContain('setter');
   });
 
+  it('contributes the Function-style Judge command without adding default keybindings', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.runFunctionStyleJudge');
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.runFunctionStyleJudge');
+    expect(command).toMatchObject({
+      icon: '$(play)',
+      title: '%commands.runFunctionStyleJudge.title%'
+    });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Run Function-style Judge');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 运行函数式交互评测');
+    expect(packageJson.contributes.keybindings?.some((entry) => entry.command === 'oijudger.runFunctionStyleJudge')).toBe(false);
+  });
+
   it('contributes setter STD answer generation and generator menus behind setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const menuCommands = packageJson.contributes.menus['view/item/context'].filter((entry) =>

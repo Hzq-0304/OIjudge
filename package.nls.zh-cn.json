@@ -43,6 +43,7 @@
   "commands.batchAddSamples.title": "OI Judge: 批量添加样例",
   "commands.runProblemSamples.title": "OI Judge: 运行题目样例",
   "commands.runSamplesWithProgram.title": "OI Judge: 选择程序评测",
+  "commands.runFunctionStyleJudge.title": "OI Judge: 运行函数式交互评测",
   "commands.testCurrentCode.title": "OI Judge: 测试当前代码",
   "commands.runProblemSample.title": "OI Judge: 运行该测试点",
   "commands.setProblemTimeLimit.title": "OI Judge: 设置题目时间限制",

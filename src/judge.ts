@@ -7,6 +7,7 @@ import { compileSource } from './compiler';
 import { withCompilerPathEnv } from './compilerRuntime';
 import { isOutputAccepted, TextCompareMode } from './comparator';
 import { exists, getOiJudgeDataRelPath, getReportPath, resolveWorkspacePath, toPosixPath } from './config';
+import { compileFunctionStyleJudge, resolveFunctionStyleConfig } from './functionStyleJudge';
 import { t } from './i18n';
 import { runNativeProcess } from './nativeRunner';
 import { runProcess } from './runner';
@@ -63,6 +64,10 @@ type FileIoOutput = {
   outputLimitBytes?: number;
 };
 
+type RunCompiledSamplesOptions = {
+  runCwd: string;
+};
+
 export async function runAllSamples(
   workspaceFolder: vscode.WorkspaceFolder,
   sourcePath: string,
@@ -94,9 +99,67 @@ export async function runAllSamples(
     return report;
   }
 
+  return runCompiledSamples(workspaceFolder, sourcePath, config, output, compile, totalStartedAt, options, {
+    runCwd: path.dirname(sourcePath)
+  });
+}
+
+export async function runFunctionStyleJudge(
+  workspaceFolder: vscode.WorkspaceFolder,
+  config: OITestConfig,
+  output: vscode.OutputChannel,
+  options: RunAllSamplesOptions = {}
+): Promise<JudgeReport | undefined> {
+  const totalStartedAt = process.hrtime.bigint();
+  const resolved = await resolveFunctionStyleConfig(workspaceFolder, config.functionStyle);
+  const sourcePath = resolved.ok ? resolved.config.solution : workspaceFolder.uri.fsPath;
+  const runCwd = resolved.ok ? path.dirname(resolved.config.grader) : workspaceFolder.uri.fsPath;
+
+  output.clear();
+  output.show(true);
+  output.appendLine('OI Judge');
+  output.appendLine('Mode: Function-style Judge');
+  output.appendLine(`Time limit: ${config.limits.timeMs} ms`);
+  output.appendLine(`Memory limit: ${config.limits.memoryMb} MB`);
+  output.appendLine(`I/O mode: ${getIoMode(config) === 'fileio' ? 'File IO' : 'Standard IO'}`);
+  output.appendLine('');
+
+  const compile = await compileFunctionStyleJudge(workspaceFolder, config, output);
+  if (!compile) {
+    return undefined;
+  }
+  if (compile.status === 'CE' || !compile.executablePath) {
+    const report = createCompileErrorJudgeReport(sourcePath, config, compile, totalStartedAt);
+    await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
+    await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    output.appendLine('');
+    output.appendLine('Summary: Function-style compile failed');
+    output.appendLine(`Report: ${getOiJudgeDataRelPath('outputs', 'report.json')}`);
+    return report;
+  }
+
+  return runCompiledSamples(workspaceFolder, sourcePath, config, output, compile, totalStartedAt, options, {
+    runCwd
+  });
+}
+
+async function runCompiledSamples(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sourcePath: string,
+  config: OITestConfig,
+  output: vscode.OutputChannel,
+  compile: CompileResult,
+  totalStartedAt: bigint,
+  options: RunAllSamplesOptions,
+  compiledOptions: RunCompiledSamplesOptions
+): Promise<JudgeReport> {
   const samples: SampleReport[] = [];
   const problemId = (config as { id?: string }).id;
-  const runCwd = path.dirname(sourcePath);
+  const runCwd = compiledOptions.runCwd;
+  const executablePath = compile.executablePath;
+  if (!executablePath) {
+    return createCompileErrorJudgeReport(sourcePath, config, compile, totalStartedAt);
+  }
   const judgeMode = getJudgeMode(config);
   const activeChecker = judgeMode === 'checker' && config.checker?.enabled && config.checker.type !== 'none'
     ? config.checker
@@ -127,7 +190,7 @@ export async function runAllSamples(
       const sampleReport = createCheckerErrorSampleReport(
         workspaceFolder,
         sourcePath,
-        compile.executablePath,
+        executablePath,
         runCwd,
         sample,
         problemId,
@@ -143,7 +206,7 @@ export async function runAllSamples(
       const sampleReport = await judgeSample(
         workspaceFolder,
         sourcePath,
-        compile.executablePath,
+        executablePath,
         runCwd,
         sample,
         config.limits.timeMs,
@@ -231,10 +294,14 @@ function createJudgeReport(
     generatedAt: new Date().toISOString(),
     source: sourcePath,
     sourceName: sourcePath.replace(/^.*[\\/]/u, ''),
+    mode: config.mode === 'function' ? 'function' : undefined,
+    functionStyle: compile.functionStyle,
     compile: {
       status: compile.status,
       timeMs: compile.timeMs,
-      stack: compile.stack
+      stack: compile.stack,
+      mode: compile.mode,
+      functionStyle: compile.functionStyle
     },
     totalTimeMs: elapsedMs(totalStartedAt),
     judgeMode: getJudgeMode(config),
@@ -287,10 +354,14 @@ function createCompileErrorJudgeReport(
     generatedAt: new Date().toISOString(),
     source: sourcePath,
     sourceName: sourcePath.replace(/^.*[\\/]/u, ''),
+    mode: config.mode === 'function' ? 'function' : undefined,
+    functionStyle: compile.functionStyle,
     compile: {
       status: 'CE',
       timeMs: compile.timeMs,
       stack: compile.stack,
+      mode: compile.mode,
+      functionStyle: compile.functionStyle,
       stdout: compile.stdout,
       stderr: compile.stderr,
       message: compile.message,

@@ -34,6 +34,14 @@ type JudgeReportViewModel = {
   maxMemoryKiB?: number;
   source: string;
   sourceName: string;
+  runMode?: string;
+  functionStyle?: {
+    grader: string;
+    solution: string;
+    sources?: string[];
+    headers?: string[];
+    compileArgs?: string[];
+  };
   judgeMode: string;
   ioMode: string;
   generatedAt: string;
@@ -234,7 +242,9 @@ export function renderReportBody(
     </section>
     <section class="metaStrip">
       <div><span>${escapeHtml(t('problem'))}</span><strong>${escapeHtml(problem?.name ?? '-')}</strong></div>
+      ${viewModel.runMode ? `<div><span>${escapeHtml(t('mode'))}</span><strong>${escapeHtml(viewModel.runMode)}</strong></div>` : ''}
       <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(viewModel.sourceName)}</strong></div>
+      ${renderFunctionStyleMeta(viewModel)}
       <div><span>${escapeHtml(t('judgeMode'))}</span><strong>${escapeHtml(viewModel.judgeMode)}</strong></div>
       <div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(viewModel.ioMode)}</strong></div>
       <div><span>${escapeHtml(t('timeLimit'))}</span><strong>${report.timeLimitMs} ms</strong></div>
@@ -331,12 +341,36 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
     maxMemoryKiB: getMaxMemoryKiB(report.samples),
     source: report.source,
     sourceName: report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''),
+    runMode: report.mode === 'function' ? 'Function-style Judge' : undefined,
+    functionStyle: report.functionStyle,
     judgeMode: formatJudgeMode(report),
     ioMode: formatIoMode(report),
     generatedAt: new Date(report.generatedAt).toLocaleString(),
     hasFailedCases: testcases.some((testcase) => getReportCaseSortRank(testcase) < 2),
     testcaseSections
   };
+}
+
+function renderFunctionStyleMeta(viewModel: JudgeReportViewModel): string {
+  const config = viewModel.functionStyle;
+  if (!config) {
+    return '';
+  }
+
+  const rows = [
+    `<div><span>Grader</span><strong>${escapeHtml(config.grader)}</strong></div>`,
+    `<div><span>Solution</span><strong>${escapeHtml(config.solution)}</strong></div>`
+  ];
+  if (config.sources?.length) {
+    rows.push(`<div><span>Extra Sources</span><strong>${escapeHtml(config.sources.join(', '))}</strong></div>`);
+  }
+  if (config.headers?.length) {
+    rows.push(`<div><span>Headers</span><strong>${escapeHtml(config.headers.join(', '))}</strong></div>`);
+  }
+  if (config.compileArgs?.length) {
+    rows.push(`<div><span>Compile Args</span><strong>${escapeHtml(config.compileArgs.join(' '))}</strong></div>`);
+  }
+  return rows.join('');
 }
 
 export function sortCasesForReportDisplay<T extends { status: string }>(cases: readonly T[]): T[] {
