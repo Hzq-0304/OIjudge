@@ -241,6 +241,10 @@ Stress Test:
 - Failed cases are saved under `.vscode/.OIJudge/stress/` with input, STD output, tested output, stderr files, and `summary.json`.
 - The `Stress Records` view can open saved files, add a failed case to samples, rerun a failed case, refresh records, and reveal the session folder.
 
+### Save Failed Cases as Samples
+
+When a judge report or stress test record contains a failed case, use **Save as Sample** to save the input and expected output into the `samples/` directory for repeated debugging.
+
 Environment Check:
 
 - Run `OI Judge: Check Environment` from the Command Palette or the OI Judge sidebar toolbar.

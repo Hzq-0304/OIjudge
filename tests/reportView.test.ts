@@ -184,6 +184,8 @@ describe('report verdict display', () => {
     expect(html).toContain('class="detail-code"');
     expect(html).toContain('class="detail-action" data-command="input"');
     expect(html).toContain('class="detail-action" data-command="diff"');
+    expect(html).toContain('class="detail-action" data-command="saveFailedCaseAsSample"');
+    expect(html).toContain('Save as Sample');
     expect(html).toMatch(/class="case-detail-inner">\s*<section class="detailBlock detail-section"/);
     expect(html).not.toContain('detail-card');
     expect(html).not.toContain('testcaseDetails');

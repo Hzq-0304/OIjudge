@@ -103,6 +103,7 @@
   "commands.setSampleName.title": "OI Judge: 设置样例名称",
   "commands.refreshStressRecords.title": "OI Judge: 刷新对拍记录",
   "commands.openStressFile.title": "OI Judge: 打开对拍文件",
+  "commands.saveFailedCaseAsSample.title": "OI Judge: 保存失败用例为样例",
   "commands.addStressCaseToSamples.title": "OI Judge: 加入样例",
   "commands.rerunStressCase.title": "OI Judge: 重新运行该用例",
   "commands.revealStressSessionFolder.title": "OI Judge: 打开所在文件夹",

@@ -610,6 +610,7 @@ describe('package tree sample add menu', () => {
     const managementCommands = [
       'oijudger.refreshStressRecords',
       'oijudger.openStressFile',
+      'oijudger.saveFailedCaseAsSample',
       'oijudger.addStressCaseToSamples',
       'oijudger.rerunStressCase',
       'oijudger.revealStressSessionFolder'
@@ -628,8 +629,14 @@ describe('package tree sample add menu', () => {
       when: 'view == oijudger.stressRecordsView',
       group: 'navigation@1'
     });
-    expect(contextMenus.find((entry) => entry.command === 'oijudger.addStressCaseToSamples')?.when)
+    expect(contextMenus.find((entry) => entry.command === 'oijudger.saveFailedCaseAsSample')?.when)
       .toBe('view == oijudger.stressRecordsView && viewItem == stressFailedCase');
+    expect(resolveNls(packageJson.contributes.commands.find((entry) =>
+      entry.command === 'oijudger.saveFailedCaseAsSample'
+    )?.title)).toBe('OI Judge: Save Failed Case as Sample');
+    expect(resolveNls(packageJson.contributes.commands.find((entry) =>
+      entry.command === 'oijudger.saveFailedCaseAsSample'
+    )?.title, packageNlsZhCn)).toBe('OI Judge: 保存失败用例为样例');
     expect(contextMenus.find((entry) => entry.command === 'oijudger.rerunStressCase')?.when)
       .toBe('view == oijudger.stressRecordsView && viewItem == stressFailedCase');
     expect(contextMenus.find((entry) => entry.command === 'oijudger.openStressFile')?.when)

@@ -138,6 +138,12 @@ import {
 import { createStressRunController } from './stressRunController';
 import { formatEnvironmentCheckReport, runEnvironmentCheck } from './environmentCheck';
 import {
+  buildFailedCaseBaseName,
+  failedCaseSampleBaseNameExists,
+  FailedCaseToSave,
+  saveFailedCaseAsSampleFiles
+} from './failedCaseSamples';
+import {
   StressTreeNode,
   StressRecordsTreeProvider
 } from './stressRecordsTreeProvider';
@@ -643,8 +649,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('oijudger.openStressFile', async (node?: StressTreeNode) => {
       await openStressFileCommand(node);
     }),
+    vscode.commands.registerCommand('oijudger.saveFailedCaseAsSample', async (arg?: unknown) => {
+      await saveFailedCaseAsSampleCommand(arg, sampleTreeProvider);
+    }),
     vscode.commands.registerCommand('oijudger.addStressCaseToSamples', async (node?: StressTreeNode) => {
-      await addStressCaseToSamplesCommand(node, sampleTreeProvider);
+      await saveFailedCaseAsSampleCommand(node, sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.rerunStressCase', async (node?: StressTreeNode) => {
       await rerunStressCaseCommand(node);
@@ -2409,8 +2418,21 @@ async function revealStressSessionFolderCommand(node: StressTreeNode | undefined
   await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(dir));
 }
 
-async function addStressCaseToSamplesCommand(
-  node: StressTreeNode | undefined,
+async function saveFailedCaseAsSampleCommand(
+  arg: unknown,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  if (isStressFailedCaseNode(arg)) {
+    await saveStressFailedCaseAsSample(arg, sampleTreeProvider);
+    return;
+  }
+  if (isReportFailedCaseRequest(arg)) {
+    await saveReportFailedCaseAsSample(arg, sampleTreeProvider);
+  }
+}
+
+async function saveStressFailedCaseAsSample(
+  node: StressTreeNode,
   sampleTreeProvider: SampleTreeProvider
 ): Promise<void> {
   if (!node?.session?.failedCase) {
@@ -2426,8 +2448,10 @@ async function addStressCaseToSamplesCommand(
     vscode.window.showWarningMessage(t('stress.fileMissing', { path: inputPath ?? '-' }));
     return;
   }
-  if (!stdOutputPath || !(await stressFileExists(stdOutputPath))) {
-    vscode.window.showWarningMessage(t('stress.addCase.missingStdOutput'));
+  const expected = stdOutputPath && await stressFileExists(stdOutputPath)
+    ? await fs.readFile(stdOutputPath, 'utf8')
+    : undefined;
+  if (expected === undefined && !await confirmSaveInputOnly()) {
     return;
   }
 
@@ -2435,27 +2459,179 @@ async function addStressCaseToSamplesCommand(
   if (!target) {
     return;
   }
-  const sample = await addProblemSample(
-    context.workspaceFolder,
-    context.problem.id,
-    await fs.readFile(inputPath, 'utf8'),
-    await fs.readFile(stdOutputPath, 'utf8'),
-    { decodeEscapes: false }
-  );
+  const testOutputPath = resolveStressFile(node.session, node.session.failedCase.testOutput);
+  const saved = await saveFailedCaseWithPrompts({
+    source: 'stress',
+    round: node.session.failedCase.round,
+    name: node.session.failedCase.name,
+    input: await fs.readFile(inputPath, 'utf8'),
+    expected,
+    actual: testOutputPath && await stressFileExists(testOutputPath) ? await fs.readFile(testOutputPath, 'utf8') : undefined
+  }, context.workspaceFolder);
+  if (!saved) {
+    return;
+  }
+  const sample = saved.answerPath
+    ? await addExternalProblemSample(
+      context.workspaceFolder,
+      context.problem.id,
+      saved.inputPath,
+      saved.answerPath
+    )
+    : undefined;
+  if (sample && target.subtaskId) {
+    await moveProblemSampleToSubtask(context.workspaceFolder, context.problem.id, sample.id, target.subtaskId);
+  }
+  sampleTreeProvider.refresh();
+  await showFailedCaseSavedMessage(saved.inputPath, saved.actualPath, Boolean(sample));
+}
+
+async function saveReportFailedCaseAsSample(
+  request: { problemId: string; sampleId: number },
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(request.problemId, true);
+  if (!context) {
+    return;
+  }
+  const reportPath = getProblemReportPath(context.workspaceFolder, context.problem.id);
+  if (!(await exists(reportPath))) {
+    vscode.window.showWarningMessage(t('noReport'));
+    return;
+  }
+  const report = JSON.parse(await fs.readFile(reportPath, 'utf8')) as JudgeReport;
+  const sample = report.samples.find((entry) => entry.index === request.sampleId);
   if (!sample) {
     vscode.window.showWarningMessage(t('sampleNotFound'));
     return;
   }
-  if (target.subtaskId) {
-    await moveProblemSampleToSubtask(context.workspaceFolder, context.problem.id, sample.id, target.subtaskId);
+  const inputPath = resolveWorkspacePath(context.workspaceFolder, sample.input);
+  const answerPath = resolveWorkspacePath(context.workspaceFolder, sample.answer);
+  const actualPath = resolveWorkspacePath(context.workspaceFolder, sample.output ?? sample.actualOutput);
+  if (!(await exists(inputPath))) {
+    vscode.window.showWarningMessage(t('stress.fileMissing', { path: inputPath }));
+    return;
+  }
+  const expected = await readOptionalText(answerPath);
+  if (expected === undefined && !await confirmSaveInputOnly()) {
+    return;
+  }
+  const saved = await saveFailedCaseWithPrompts({
+    source: 'judge',
+    name: sample.name || `case-${sample.index}`,
+    input: await fs.readFile(inputPath, 'utf8'),
+    expected,
+    actual: await readOptionalText(actualPath)
+  }, context.workspaceFolder);
+  if (!saved) {
+    return;
+  }
+  if (saved.answerPath) {
+    const added = await addExternalProblemSample(
+      context.workspaceFolder,
+      context.problem.id,
+      saved.inputPath,
+      saved.answerPath
+    );
+    if (!added) {
+      vscode.window.showWarningMessage(t('sampleNotFound'));
+      return;
+    }
   }
   sampleTreeProvider.refresh();
-  const subtaskName = target.subtaskName;
-  vscode.window.showInformationMessage(
-    subtaskName
-      ? t('stress.addCase.doneSubtask', { subtask: subtaskName })
-      : t('stress.addCase.done')
+  await showFailedCaseSavedMessage(saved.inputPath, saved.actualPath, Boolean(saved.answerPath));
+}
+
+async function saveFailedCaseWithPrompts(
+  failedCase: FailedCaseToSave,
+  workspaceFolder: vscode.WorkspaceFolder
+): Promise<{ inputPath: string; answerPath?: string; actualPath?: string } | undefined> {
+  const samplesDir = path.join(workspaceFolder.uri.fsPath, 'samples');
+  if (!(await exists(samplesDir))) {
+    const create = t('saveFailedCase.createSamplesDir');
+    const choice = await vscode.window.showWarningMessage(
+      t('saveFailedCase.samplesDirMissing', { path: samplesDir }),
+      { modal: true },
+      create,
+      t('cancel')
+    );
+    if (choice !== create) {
+      return undefined;
+    }
+  }
+
+  const baseName = buildFailedCaseBaseName(failedCase);
+  let overwrite = false;
+  if (await failedCaseSampleBaseNameExists(samplesDir, baseName)) {
+    const generate = t('saveFailedCase.generateNewName');
+    const overwriteChoice = t('saveFailedCase.overwrite');
+    const choice = await vscode.window.showWarningMessage(
+      t('saveFailedCase.nameConflict', { name: baseName }),
+      { modal: true },
+      generate,
+      overwriteChoice,
+      t('cancel')
+    );
+    if (choice === t('cancel') || !choice) {
+      return undefined;
+    }
+    overwrite = choice === overwriteChoice;
+  }
+
+  return saveFailedCaseAsSampleFiles(failedCase, {
+    samplesDir,
+    overwrite,
+    saveActual: true
+  });
+}
+
+async function confirmSaveInputOnly(): Promise<boolean> {
+  const inputOnly = t('saveFailedCase.inputOnly');
+  const choice = await vscode.window.showWarningMessage(
+    t('saveFailedCase.expectedMissingConfirm'),
+    { modal: true },
+    inputOnly,
+    t('cancel')
   );
+  return choice === inputOnly;
+}
+
+async function showFailedCaseSavedMessage(inputPath: string, actualPath: string | undefined, addedAsSample: boolean): Promise<void> {
+  const openFolder = t('openFolder');
+  const copyPath = t('saveFailedCase.copyPath');
+  const message = addedAsSample
+    ? t('saveFailedCase.saved')
+    : t('saveFailedCase.savedInputOnly');
+  const choice = await vscode.window.showInformationMessage(message, openFolder, copyPath);
+  if (choice === openFolder) {
+    await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(path.dirname(inputPath)));
+  } else if (choice === copyPath) {
+    await vscode.env.clipboard.writeText(actualPath ?? inputPath);
+  }
+}
+
+async function readOptionalText(filePath: string | undefined): Promise<string | undefined> {
+  if (!filePath || !(await exists(filePath))) {
+    return undefined;
+  }
+  return fs.readFile(filePath, 'utf8');
+}
+
+function isStressFailedCaseNode(value: unknown): value is StressTreeNode {
+  return typeof value === 'object'
+    && value !== null
+    && (value as StressTreeNode).type === 'stressFailedCase'
+    && Boolean((value as StressTreeNode).session?.failedCase);
+}
+
+function isReportFailedCaseRequest(value: unknown): value is { problemId: string; sampleId: number } {
+  const request = value as { source?: unknown; problemId?: unknown; sampleId?: unknown };
+  return typeof value === 'object'
+    && value !== null
+    && request.source === 'report'
+    && typeof request.problemId === 'string'
+    && typeof request.sampleId === 'number'
+    && Number.isFinite(request.sampleId);
 }
 
 async function rerunStressCaseCommand(node: StressTreeNode | undefined): Promise<void> {

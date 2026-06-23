@@ -103,6 +103,7 @@
   "commands.setSampleName.title": "OI Judge: Set Sample Name",
   "commands.refreshStressRecords.title": "OI Judge: Refresh Stress Records",
   "commands.openStressFile.title": "OI Judge: Open Stress File",
+  "commands.saveFailedCaseAsSample.title": "OI Judge: Save Failed Case as Sample",
   "commands.addStressCaseToSamples.title": "OI Judge: Add to Samples",
   "commands.rerunStressCase.title": "OI Judge: Rerun This Case",
   "commands.revealStressSessionFolder.title": "OI Judge: Reveal Session Folder",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增保存失败用例为样例功能 / Add support for saving failed cases as samples.
+
 ## 5.2.2
 
 - 新增平台支持说明文档，并在 README 中加入平台支持与环境自检排障入口 / Add platform support documentation and link platform support and environment check troubleshooting from README.

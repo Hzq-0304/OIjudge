@@ -552,7 +552,8 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
       output: 'oijudger.openSampleUserOutput',
       diff: 'oijudger.openSampleDiff',
       copyFreopen: 'oijudger.copyTestcaseFreopenInput',
-      delete: 'oijudger.deleteSample'
+      delete: 'oijudger.deleteSample',
+      saveFailedCaseAsSample: 'oijudger.saveFailedCaseAsSample'
     };
     const command = commandMap[typed.command];
     if (command) {
@@ -561,6 +562,14 @@ function createPanel(context: vscode.ExtensionContext, title: string, problemId?
           problemId,
           sampleId: typed.sampleId,
           sourceViewColumn: panel.viewColumn
+        });
+        return;
+      }
+      if (typed.command === 'saveFailedCaseAsSample') {
+        await vscode.commands.executeCommand(command, {
+          source: 'report',
+          problemId,
+          sampleId: typed.sampleId
         });
         return;
       }
@@ -679,10 +688,13 @@ function renderReportActionButtons(
   const diffButton = status === 'WA'
     ? `\n    <button class="detail-action" data-command="diff" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('report.showDiff'))}</button>`
     : '';
+  const saveButton = status !== 'AC' && status !== 'Skipped' && status !== 'Not Run'
+    ? `\n    <button class="detail-action" data-command="saveFailedCaseAsSample" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('saveFailedCaseAsSample.short'))}</button>`
+    : '';
   return `<div class="buttons">
     <button class="detail-action" data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}
+    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}${saveButton}
   </div>`;
 }
 

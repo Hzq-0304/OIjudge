@@ -124,6 +124,7 @@
     "onCommand:oijudger.stopStressTest",
     "onCommand:oijudger.refreshStressRecords",
     "onCommand:oijudger.openStressFile",
+    "onCommand:oijudger.saveFailedCaseAsSample",
     "onCommand:oijudger.addStressCaseToSamples",
     "onCommand:oijudger.rerunStressCase",
     "onCommand:oijudger.revealStressSessionFolder",
@@ -649,6 +650,11 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "oijudger.saveFailedCaseAsSample",
+        "title": "%commands.saveFailedCaseAsSample.title%",
+        "icon": "$(save)"
+      },
+      {
         "command": "oijudger.addStressCaseToSamples",
         "title": "%commands.addStressCaseToSamples.title%",
         "icon": "$(add)"
@@ -1160,7 +1166,7 @@
           "group": "inline@1"
         },
         {
-          "command": "oijudger.addStressCaseToSamples",
+          "command": "oijudger.saveFailedCaseAsSample",
           "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
           "group": "inline@1"
         },
@@ -1170,7 +1176,7 @@
           "group": "inline@2"
         },
         {
-          "command": "oijudger.addStressCaseToSamples",
+          "command": "oijudger.saveFailedCaseAsSample",
           "when": "view == oijudger.stressRecordsView && viewItem == stressFailedCase",
           "group": "1_actions@1"
         },
@@ -1447,6 +1453,10 @@
         },
         {
           "command": "oijudger.openStressFile",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.saveFailedCaseAsSample",
           "when": "false"
         },
         {

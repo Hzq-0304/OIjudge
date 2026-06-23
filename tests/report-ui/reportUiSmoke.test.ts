@@ -25,6 +25,8 @@ describe('report UI smoke regression', () => {
     expect(html).toContain('case-detail-panel');
     expect(html).toContain('class="case-summary"');
     expect(html).toContain('data-case-detail');
+    expect(html).toContain('data-command="saveFailedCaseAsSample"');
+    expect(html).toContain('Save as Sample');
     expect(html).toContain('togglePanel');
     expect(html).toContain('prefers-reduced-motion: reduce');
     expect(html).toContain('addEventListener');
