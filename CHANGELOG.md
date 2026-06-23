@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- 新增平台支持说明，整理 Windows、macOS、Linux 的编译器要求、已测试功能和排障建议 / Add platform support documentation for Windows, macOS, and Linux compiler requirements, tested features, and troubleshooting tips.
+## 5.2.2
+
+- 新增平台支持说明文档，并在 README 中加入平台支持与环境自检排障入口 / Add platform support documentation and link platform support and environment check troubleshooting from README.
 
 ## 5.2.1
 

@@ -2,7 +2,7 @@
   "name": "oijudge",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "5.2.1",
+  "version": "5.2.2",
   "publisher": "Hzq",
   "icon": "resources/icons/icon.png",
   "engines": {
