@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- 新增保存失败用例为样例功能 / Add support for saving failed cases as samples.
+## 5.3.0
+
+- 新增保存失败用例为样例功能，可从评测报告或对拍记录保存失败输入、期望输出和实际输出，方便反复调试 / Add support for saving failed cases as samples from judge reports and stress records, including input, expected output, and actual output for repeated debugging.
+- 补充失败用例保存功能的单元测试、报告页 smoke 测试和跨平台文件系统测试 / Add unit, report smoke, and cross-platform filesystem tests for saving failed cases as samples.
+- 放宽环境自检的 C++17 编译超时，提升 Windows CI 和慢速环境下的稳定性 / Relax the Environment Check C++17 compile timeout to improve stability on Windows CI and slower environments.
 
 ## 5.2.2
 
