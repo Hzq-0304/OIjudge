@@ -39,6 +39,8 @@ The current cross-platform regression suite covers:
 - Multiple testcase / subtask reports
 - Report rendering
 - Checker
+- Function-style Judge
+- I/O Interactive Judge
 - Generator + STD
 - Split-file stress test
 - Single-file contest-style stress test
@@ -59,6 +61,12 @@ The current cross-platform regression suite covers:
 - File IO uses the wrong working directory.
 - A program runs forever or cannot be stopped.
 - GitHub Actions and local machines may report slightly different time / memory values.
+
+## I/O Interactive Judge Scope
+
+The current I/O Interactive Judge support is an MVP for the solution + interactor two-process model. The solution stdout is connected to the interactor stdin, the interactor stdout is connected to the solution stdin, and the interactor decides the verdict through its exit code.
+
+This mode is covered by Windows, macOS, and Linux cross-platform regression tests. It does not yet implement multi-role communication problems, and it does not promise full testlib interactive compatibility.
 
 ## Troubleshooting
 

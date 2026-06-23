@@ -1281,6 +1281,7 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
     case 'AC':
       return 'pass-filled';
     case 'WA':
+    case 'PE':
     case 'Missing':
     case 'Output Missing':
       return 'error';
@@ -1293,6 +1294,7 @@ function statusIcon(status: SampleStatus | 'Not Run'): string {
     case 'RE':
     case 'CE':
     case 'Checker Error':
+    case 'Interactor Error':
     case 'Skipped':
     case 'ERR':
       return 'warning';

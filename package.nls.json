@@ -44,6 +44,7 @@
   "commands.runProblemSamples.title": "OI Judge: Run Problem Samples",
   "commands.runSamplesWithProgram.title": "OI Judge: Run With Program",
   "commands.runFunctionStyleJudge.title": "OI Judge: Run Function-style Judge",
+  "commands.runInteractiveJudge.title": "OI Judge: Run I/O Interactive Judge",
   "commands.testCurrentCode.title": "OI Judge: Test Current Code",
   "commands.runProblemSample.title": "OI Judge: Run Sample",
   "commands.setProblemTimeLimit.title": "OI Judge: Set Problem Time Limit",

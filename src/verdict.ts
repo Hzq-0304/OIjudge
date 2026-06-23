@@ -31,6 +31,9 @@ export function formatVerdictAcronym(verdict: VerdictLike | undefined): string {
     case 'Wrong Answer':
     case 'WA':
       return 'WA';
+    case 'PE':
+    case 'Presentation Error':
+      return 'PE';
     case 'Time Limit Exceeded':
     case 'TLE':
       return 'TLE';
@@ -58,6 +61,8 @@ export function formatVerdictAcronym(verdict: VerdictLike | undefined): string {
       return 'SE';
     case 'Checker Error':
       return 'CHECKER';
+    case 'Interactor Error':
+      return 'INTERACTOR';
     case 'Scored':
       return 'SCORED';
     case 'PARTIAL':
@@ -86,6 +91,9 @@ export function formatVerdictFullName(verdict: VerdictLike | undefined): string 
     case 'Wrong Answer':
     case 'WA':
       return 'Wrong Answer';
+    case 'PE':
+    case 'Presentation Error':
+      return 'Presentation Error';
     case 'Time Limit Exceeded':
     case 'TLE':
       return 'Time Limit Exceeded';
@@ -113,6 +121,8 @@ export function formatVerdictFullName(verdict: VerdictLike | undefined): string 
       return 'System Error';
     case 'Checker Error':
       return 'Checker Error';
+    case 'Interactor Error':
+      return 'Interactor Error';
     case 'Scored':
       return 'Scored';
     case 'PARTIAL':

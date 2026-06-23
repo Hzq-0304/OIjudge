@@ -89,6 +89,59 @@ describe('report verdict display', () => {
     expect(html).not.toContain('statusPill verdict-pill verdict-tle">TLE</span>');
   });
 
+  it('renders I/O interactive report metadata and escaped testcase diagnostics', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      mode: 'interactive',
+      source: 'solution.cpp',
+      sourceName: 'solution.cpp',
+      interactive: {
+        solution: 'solution.cpp',
+        interactor: 'interactor.cpp',
+        solutionArgs: ['--contest'],
+        interactorArgs: ['{input}', '{answer}'],
+        transcriptLimitBytes: 128
+      },
+      compile: {
+        status: 'OK',
+        timeMs: 12,
+        mode: 'interactive',
+        interactive: {
+          solution: 'solution.cpp',
+          interactor: 'interactor.cpp'
+        }
+      },
+      summary: { accepted: 0, total: 1, wrongAnswer: 1 },
+      samples: [{
+        ...sample('sample-7', 7, 'WA'),
+        message: 'Wrong Answer reported by interactor.',
+        interactive: {
+          solutionExitCode: 0,
+          interactorExitCode: 1,
+          solutionStderr: 'solution <stderr>',
+          interactorStderr: 'expected <42>, got <43>',
+          transcript: '[interactor -> solution]\n<21>\n[solution -> interactor]\n<43>',
+          transcriptTruncated: true,
+          diagnostics: ['pipe <closed>']
+        }
+      }]
+    });
+
+    expect(html).toContain('I/O Interactive Judge');
+    expect(html).toContain('Solution');
+    expect(html).toContain('Interactor');
+    expect(html).toContain('Solution stderr');
+    expect(html).toContain('Interactor stderr');
+    expect(html).toContain('Transcript');
+    expect(html).toContain('Diagnostics');
+    expect(html).toContain('Transcript truncated.');
+    expect(html).toContain('solution &lt;stderr&gt;');
+    expect(html).toContain('expected &lt;42&gt;, got &lt;43&gt;');
+    expect(html).toContain('&lt;21&gt;');
+    expect(html).not.toContain('solution <stderr>');
+    expect(html).not.toContain('expected <42>, got <43>');
+  });
+
   it('sorts report cases failed first without mutating the input array', () => {
     const cases = [
       { id: 'a', status: 'AC' },

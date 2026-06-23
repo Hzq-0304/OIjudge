@@ -4,7 +4,7 @@ import type { RuntimeErrorSummary } from './runtimeErrorExplainer';
 export type SampleSourceType = 'managed' | 'external';
 export type CheckerType = 'none' | 'testlib' | 'plain';
 export type JudgeMode = 'strictText' | 'trimTrailingWhitespace' | 'checker';
-export type JudgeRunMode = 'standard' | 'function';
+export type JudgeRunMode = 'standard' | 'function' | 'interactive';
 export type IoMode = 'stdio' | 'fileio';
 export type TestlibMode = 'auto' | 'managed' | 'custom';
 export type PlainCheckerVerdictPosition = 'firstLine' | 'lastLine';
@@ -128,6 +128,7 @@ export type OITestConfig = {
   version: 1;
   mode?: JudgeRunMode;
   functionStyle?: FunctionStyleConfig;
+  interactive?: InteractiveConfig;
   compile?: {
     command: string;
     args: string[];
@@ -163,6 +164,26 @@ export type FunctionStyleReport = {
   sources?: string[];
   headers?: string[];
   compileArgs?: string[];
+};
+
+export type InteractiveConfig = {
+  solution?: string;
+  interactor?: string;
+  solutionCompileArgs?: string[];
+  interactorCompileArgs?: string[];
+  solutionArgs?: string[];
+  interactorArgs?: string[];
+  transcriptLimitBytes?: number;
+};
+
+export type InteractiveReport = {
+  solution: string;
+  interactor: string;
+  solutionCompileArgs?: string[];
+  interactorCompileArgs?: string[];
+  solutionArgs?: string[];
+  interactorArgs?: string[];
+  transcriptLimitBytes?: number;
 };
 
 export type StackConfig = {
@@ -215,6 +236,7 @@ export type CompileReport = {
   stack?: CompileStackReport;
   mode?: JudgeRunMode;
   functionStyle?: FunctionStyleReport;
+  interactive?: InteractiveReport;
   stdout?: string;
   stderr?: string;
   message?: string;
@@ -237,7 +259,19 @@ export type CompileStackReport = {
   unsupported?: boolean;
 };
 
-export type SampleStatus = 'AC' | 'WA' | 'TLE' | 'OLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing' | 'Output Missing';
+export type SampleStatus = 'AC' | 'WA' | 'PE' | 'TLE' | 'OLE' | 'MLE' | 'RE' | 'CE' | 'ERR' | 'Interactor Error' | 'Checker Error' | 'Scored' | 'Skipped' | 'Missing' | 'Output Missing';
+
+export type InteractiveSampleReport = {
+  solutionExitCode?: number | null;
+  solutionSignal?: NodeJS.Signals | null;
+  interactorExitCode?: number | null;
+  interactorSignal?: NodeJS.Signals | null;
+  solutionStderr?: string;
+  interactorStderr?: string;
+  transcript?: string;
+  transcriptTruncated?: boolean;
+  diagnostics?: string[];
+};
 
 export type CheckerSampleReport = {
   enabled: boolean;
@@ -314,6 +348,7 @@ export type SampleReport = {
   score?: number;
   scoreTotal?: number;
   checker?: CheckerSampleReport;
+  interactive?: InteractiveSampleReport;
   message?: string;
 };
 
@@ -324,6 +359,7 @@ export type JudgeReport = {
   sourceName?: string;
   mode?: JudgeRunMode;
   functionStyle?: FunctionStyleReport;
+  interactive?: InteractiveReport;
   compile?: CompileReport;
   totalTimeMs?: number;
   timeLimitMs: number;

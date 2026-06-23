@@ -39,6 +39,8 @@ xcode-select --install
 - 多 testcase / subtask
 - report 渲染
 - checker
+- Function-style Judge
+- I/O Interactive Judge
 - generator + std
 - split-file stress test
 - single-file contest-style stress test
@@ -59,6 +61,12 @@ xcode-select --install
 - 文件 IO 工作目录不正确。
 - 程序无限运行 / 无法停止。
 - GitHub Actions 与本机时间/内存差异。
+
+## I/O 交互评测范围
+
+当前 I/O 交互评测是 solution + interactor 双进程模型的 MVP。选手程序 stdout 会连接到 interactor stdin，interactor stdout 会连接到选手程序 stdin，interactor 通过退出码给出 verdict。
+
+该模式已有 Windows、macOS、Linux 跨平台回归测试覆盖。目前不实现多角色通信题，也不承诺完整兼容 testlib interactive。
 
 ## 排障建议
 

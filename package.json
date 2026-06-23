@@ -61,6 +61,7 @@
     "onCommand:oijudger.runProblemSamples",
     "onCommand:oijudger.runSamplesWithProgram",
     "onCommand:oijudger.runFunctionStyleJudge",
+    "onCommand:oijudger.runInteractiveJudge",
     "onCommand:oijudger.testCurrentCode",
     "onCommand:oijudger.runProblemSample",
     "onCommand:oijudger.setProblemTimeLimit",
@@ -354,6 +355,11 @@
         "command": "oijudger.runFunctionStyleJudge",
         "title": "%commands.runFunctionStyleJudge.title%",
         "icon": "$(play)"
+      },
+      {
+        "command": "oijudger.runInteractiveJudge",
+        "title": "%commands.runInteractiveJudge.title%",
+        "icon": "$(debug-start)"
       },
       {
         "command": "oijudger.testCurrentCode",

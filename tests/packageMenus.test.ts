@@ -197,6 +197,19 @@ describe('package tree sample add menu', () => {
     expect(packageJson.contributes.keybindings?.some((entry) => entry.command === 'oijudger.runFunctionStyleJudge')).toBe(false);
   });
 
+  it('contributes the I/O Interactive Judge command without adding default keybindings', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.runInteractiveJudge');
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.runInteractiveJudge');
+    expect(command).toMatchObject({
+      command: 'oijudger.runInteractiveJudge',
+      title: '%commands.runInteractiveJudge.title%',
+      icon: '$(debug-start)'
+    });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Run I/O Interactive Judge');
+    expect(packageJson.contributes.keybindings?.some((entry) => entry.command === 'oijudger.runInteractiveJudge')).toBe(false);
+  });
+
   it('contributes setter STD answer generation and generator menus behind setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const menuCommands = packageJson.contributes.menus['view/item/context'].filter((entry) =>

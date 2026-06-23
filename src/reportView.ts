@@ -42,6 +42,15 @@ type JudgeReportViewModel = {
     headers?: string[];
     compileArgs?: string[];
   };
+  interactive?: {
+    solution: string;
+    interactor: string;
+    solutionCompileArgs?: string[];
+    interactorCompileArgs?: string[];
+    solutionArgs?: string[];
+    interactorArgs?: string[];
+    transcriptLimitBytes?: number;
+  };
   judgeMode: string;
   ioMode: string;
   generatedAt: string;
@@ -245,6 +254,7 @@ export function renderReportBody(
       ${viewModel.runMode ? `<div><span>${escapeHtml(t('mode'))}</span><strong>${escapeHtml(viewModel.runMode)}</strong></div>` : ''}
       <div><span>${escapeHtml(t('program'))}</span><strong>${escapeHtml(viewModel.sourceName)}</strong></div>
       ${renderFunctionStyleMeta(viewModel)}
+      ${renderInteractiveMeta(viewModel)}
       <div><span>${escapeHtml(t('judgeMode'))}</span><strong>${escapeHtml(viewModel.judgeMode)}</strong></div>
       <div><span>${escapeHtml(t('ioMode'))}</span><strong>${escapeHtml(viewModel.ioMode)}</strong></div>
       <div><span>${escapeHtml(t('timeLimit'))}</span><strong>${report.timeLimitMs} ms</strong></div>
@@ -341,8 +351,9 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
     maxMemoryKiB: getMaxMemoryKiB(report.samples),
     source: report.source,
     sourceName: report.sourceName ?? basename(report.source || (problem ? getDefaultProblemSource(problem) : '') || ''),
-    runMode: report.mode === 'function' ? 'Function-style Judge' : undefined,
+    runMode: report.mode === 'function' ? 'Function-style Judge' : report.mode === 'interactive' ? 'I/O Interactive Judge' : undefined,
     functionStyle: report.functionStyle,
+    interactive: report.interactive,
     judgeMode: formatJudgeMode(report),
     ioMode: formatIoMode(report),
     generatedAt: new Date(report.generatedAt).toLocaleString(),
@@ -369,6 +380,34 @@ function renderFunctionStyleMeta(viewModel: JudgeReportViewModel): string {
   }
   if (config.compileArgs?.length) {
     rows.push(`<div><span>Compile Args</span><strong>${escapeHtml(config.compileArgs.join(' '))}</strong></div>`);
+  }
+  return rows.join('');
+}
+
+function renderInteractiveMeta(viewModel: JudgeReportViewModel): string {
+  const config = viewModel.interactive;
+  if (!config) {
+    return '';
+  }
+
+  const rows = [
+    `<div><span>Solution</span><strong>${escapeHtml(config.solution)}</strong></div>`,
+    `<div><span>Interactor</span><strong>${escapeHtml(config.interactor)}</strong></div>`
+  ];
+  if (config.solutionCompileArgs?.length) {
+    rows.push(`<div><span>Solution Compile Args</span><strong>${escapeHtml(config.solutionCompileArgs.join(' '))}</strong></div>`);
+  }
+  if (config.interactorCompileArgs?.length) {
+    rows.push(`<div><span>Interactor Compile Args</span><strong>${escapeHtml(config.interactorCompileArgs.join(' '))}</strong></div>`);
+  }
+  if (config.solutionArgs?.length) {
+    rows.push(`<div><span>Solution Args</span><strong>${escapeHtml(config.solutionArgs.join(' '))}</strong></div>`);
+  }
+  if (config.interactorArgs?.length) {
+    rows.push(`<div><span>Interactor Args</span><strong>${escapeHtml(config.interactorArgs.join(' '))}</strong></div>`);
+  }
+  if (config.transcriptLimitBytes) {
+    rows.push(`<div><span>Transcript Limit</span><strong>${escapeHtml(formatBytesAsMb(config.transcriptLimitBytes))}</strong></div>`);
   }
   return rows.join('');
 }
@@ -1427,6 +1466,9 @@ function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
   if (sample.status === 'CE') {
     return truncateSystemMessage(formatCompileErrorSystemMessage(report));
   }
+  if (sample.interactive) {
+    return truncateSystemMessage(buildInteractiveSystemMessage(sample));
+  }
   if (sample.status === 'WA') {
     return buildWrongAnswerSystemMessage(sample);
   }
@@ -1470,6 +1512,26 @@ function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
   if (sample.compareError) {
     lines.push(`compareError: ${sample.compareError}`);
   }
+  return lines.join('\n') || t('report.noDetails');
+}
+
+function buildInteractiveSystemMessage(sample: SampleReport): string {
+  const details = sample.interactive;
+  if (!details) {
+    return sample.systemMessage || t('report.noDetails');
+  }
+  const lines = [
+    sample.message,
+    `Solution exit code: ${details.solutionExitCode ?? 'null'}`,
+    details.solutionSignal ? `Solution signal: ${details.solutionSignal}` : undefined,
+    `Interactor exit code: ${details.interactorExitCode ?? 'null'}`,
+    details.interactorSignal ? `Interactor signal: ${details.interactorSignal}` : undefined,
+    details.solutionStderr?.trim() ? `\nSolution stderr:\n${details.solutionStderr.trimEnd()}` : undefined,
+    details.interactorStderr?.trim() ? `\nInteractor stderr:\n${details.interactorStderr.trimEnd()}` : undefined,
+    details.transcript ? `\nTranscript:\n${details.transcript.trimEnd()}` : '\nTranscript: <empty>',
+    details.transcriptTruncated ? '\nTranscript truncated.' : undefined,
+    details.diagnostics?.length ? `\nDiagnostics:\n${details.diagnostics.join('\n')}` : undefined
+  ].filter((line): line is string => Boolean(line));
   return lines.join('\n') || t('report.noDetails');
 }
 

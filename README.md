@@ -164,6 +164,26 @@ Function-style judge supports grader-based tasks where the grader provides `main
 
 Configure a problem with `mode: "function"` and `functionStyle.grader` / `functionStyle.solution`, then run `OI Judge: Run Function-style Judge`.
 
+### I/O Interactive Judge
+
+I/O Interactive Judge supports the common solution + interactor model. OI Judge compiles the solution and interactor separately, starts both processes for each testcase, pipes `solution.stdout` to `interactor.stdin` and `interactor.stdout` to `solution.stdin`, and records a bounded transcript for the report.
+
+Configure a problem with `mode: "interactive"` and `interactive.solution` / `interactive.interactor`, then run `OI Judge: Run I/O Interactive Judge`.
+
+```json
+{
+  "mode": "interactive",
+  "interactive": {
+    "solution": "solution.cpp",
+    "interactor": "interactor.cpp",
+    "interactorArgs": ["{input}", "{answer}"],
+    "transcriptLimitBytes": 262144
+  }
+}
+```
+
+The interactor receives the testcase input path through `{input}` and the answer path through `{answer}`. The solution's stdout is protocol traffic, so interactive mode does not run the normal text compare or checker pipeline. Interactor exit code `0` means Accepted, `1` means Wrong Answer, `2` means Presentation Error, and other non-zero codes are reported as Interactor Error.
+
 I/O Mode:
 
 - Each problem can use either `Standard IO` or `File IO`.
