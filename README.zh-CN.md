@@ -244,6 +244,16 @@ int main() {
 - 自检用到的源码、可执行文件、输入输出文件和 native runner helper 都会放在临时目录中，结束后自动清理，不污染用户 workspace。
 - 如果缺少必要工具，报告会给出平台相关建议，例如 Windows 安装 MinGW-w64 并加入 PATH、macOS 安装 Xcode Command Line Tools、Linux 安装 `g++`。
 
+## 平台支持
+
+OI Judge 支持 Windows、macOS 和 Linux。编译器要求、已测试功能和常见问题见：[平台支持说明](docs/platform-support.zh-CN.md)。
+
+如果 OI Judge 在你的机器上无法正常运行，请先执行：
+
+`OI Judge: 检查运行环境`
+
+然后复制环境检查报告并反馈给维护者。
+
 ## 测试点导出
 
 - `OI Judge: Export Testcases` 可以复制或移动样例输入/输出文件，并写出 `.OIJudge/config.json` 导出记录。

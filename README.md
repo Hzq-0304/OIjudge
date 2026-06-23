@@ -249,6 +249,16 @@ Environment Check:
 - Probe sources, executables, inputs, outputs, and native runner helper files are created under a temporary directory and cleaned up after the check.
 - If a required tool is missing, the report includes platform-specific suggestions such as installing MinGW-w64 on Windows, Xcode Command Line Tools on macOS, or `g++` on Linux.
 
+### Platform Support
+
+OI Judge supports Windows, macOS, and Linux. See [Platform Support](docs/platform-support.md) for compiler requirements, tested features, and troubleshooting tips.
+
+If OI Judge does not work on your machine, run:
+
+`OI Judge: Check Environment`
+
+and share the generated report.
+
 Testcase export:
 
 - `OI Judge: Export Testcases` copies or moves sample input/output files and writes an `.OIJudge/config.json` export record.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增平台支持说明，整理 Windows、macOS、Linux 的编译器要求、已测试功能和排障建议 / Add platform support documentation for Windows, macOS, and Linux compiler requirements, tested features, and troubleshooting tips.
+
 ## 5.2.1
 
 - 加固报告页 Content-Security-Policy。
