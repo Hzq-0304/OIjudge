@@ -179,6 +179,10 @@ I/O 交互评测适用于常见的 solution + interactor 双进程模型。OI Ju
 
 Interactor 可以通过 `{input}` 获取测试点输入文件路径，通过 `{answer}` 获取答案文件路径。选手程序 stdout 是交互协议内容，因此 I/O 交互评测不会再走普通文本比较或 checker。Interactor exit code `0` 表示 Accepted，`1` 表示 Wrong Answer，`2` 表示 Presentation Error，其它非零值报告为 Interactor Error。
 
+#### 最小猜数交互器
+
+典型交互题可以通过 `{input}` 将原始测试点输入文件传给交互器。例如猜数交互器可以读取 `n secret`，先把 `n` 发给选手程序，再对每次 flush 后的猜测返回 `1`、`-1` 或 `0`，并用退出码给出结果：`0` 表示 Accepted，`1` 表示 Wrong Answer，`2` 表示 Presentation Error，`3` 表示 Interactor Error。
+
 ## I/O 模式
 
 - 每个题目可以使用 `Standard IO` 或 `File IO`。

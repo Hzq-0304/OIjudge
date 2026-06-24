@@ -184,6 +184,10 @@ Configure a problem with `mode: "interactive"` and `interactive.solution` / `int
 
 The interactor receives the testcase input path through `{input}` and the answer path through `{answer}`. The solution's stdout is protocol traffic, so interactive mode does not run the normal text compare or checker pipeline. Interactor exit code `0` means Accepted, `1` means Wrong Answer, `2` means Presentation Error, and other non-zero codes are reported as Interactor Error.
 
+#### Minimal guess-number interactor
+
+A typical interactive task can be modeled by passing the original testcase input to the interactor through `{input}`. For example, a guess-number interactor can read `n secret`, send `n` to the solution, answer each flushed guess with `1`, `-1`, or `0`, and return exit code `0` for Accepted, `1` for Wrong Answer, `2` for Presentation Error, and `3` for Interactor Error.
+
 I/O Mode:
 
 - Each problem can use either `Standard IO` or `File IO`.
