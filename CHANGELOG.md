@@ -2,12 +2,15 @@
 
 ## Unreleased
 
-- 新增 testlib-like 交互器参数适配 / Add testlib-like interactor argument support.
-- 支持 I/O 交互评测的 `{output}` placeholder / Add `{output}` placeholder support for I/O Interactive Judge.
-- 支持可选 testlib.h 路径配置 / Add optional testlib.h path configuration.
-- 补充 testlib-like 交互评测可用性测试 / Add usability tests for testlib-like interactive judging.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
+
+## 5.5.0
+
+- 新增 testlib-like 交互器参数适配，支持 Codeforces / Polygon 风格 interactor 参数模式 / Add testlib-like interactor argument support for Codeforces / Polygon style interactors.
+- 支持 I/O 交互评测的 `{output}` placeholder，为每个测试点创建独立临时 interactor output 文件 / Add `{output}` placeholder support for I/O Interactive Judge, creating a per-testcase temporary interactor output file.
+- 支持可选 `testlib.h` 路径配置和 include 目录配置 / Add optional `testlib.h` path and include directory configuration.
+- 补充 testlib-like 交互评测可用性测试，覆盖 fake testlib.h、缺失 testlib.h、output 文件、路径含空格和 AC/WA 场景 / Add usability tests for testlib-like interactive judging, covering fake testlib.h, missing testlib.h, output files, paths with spaces, and AC/WA cases.
 
 ## 5.4.0
 
