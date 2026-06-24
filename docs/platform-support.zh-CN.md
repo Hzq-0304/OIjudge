@@ -1,4 +1,4 @@
-# 平台支持
+﻿# 平台支持
 
 支持平台：
 
@@ -66,7 +66,9 @@ xcode-select --install
 
 当前 I/O 交互评测是 solution + interactor 双进程模型的 MVP。选手程序 stdout 会连接到 interactor stdin，interactor stdout 会连接到选手程序 stdin，interactor 通过退出码给出 verdict。
 
-报告会显示交互 transcript、solution stderr、interactor stderr 和进程诊断信息。可以参考 `examples/interactive/guess-number/` 中的最小可运行猜数示例。
+报告会显示交互 transcript、solution stderr、interactor stderr、`{output}` interactor 输出和进程诊断信息。可以参考 `examples/interactive/guess-number/` 中的最小可运行猜数示例。
+
+testlib-like preset 支持 Codeforces / Polygon 风格交互器常见的 `{input}`、`{output}`、`{answer}` 参数。`useTestlib` 是可选项；启用时需要通过 `testlibHeader` 或 `testlibIncludeDirs` 提供 `testlib.h`。I/O 交互评测不会自动为 interactor 选择内置 `testlib.h`。
 
 该模式已有 Windows、macOS、Linux 跨平台回归测试覆盖。目前不实现多角色通信题，也不承诺完整兼容 testlib interactive。
 
@@ -79,3 +81,4 @@ OI Judge: 检查运行环境
 ```
 
 然后复制环境检查报告并反馈给维护者。
+

@@ -7,9 +7,12 @@ import {
   appendTranscriptChunk,
   buildInteractiveArgs,
   buildInteractiveCompileArgs,
+  buildIncludeArgs,
   DEFAULT_INTERACTIVE_TRANSCRIPT_LIMIT_BYTES,
   isInteractiveMode,
   mapInteractorExitCode,
+  prepareInteractiveRuntimeFiles,
+  resolveInteractorArgs,
   resolveInteractiveConfig
 } from '../src/interactiveJudge';
 import { OITestConfig } from '../src/types';
@@ -82,14 +85,29 @@ describe('I/O interactive judge config and helpers', () => {
   it('builds argv without shell quoting and replaces testcase placeholders', () => {
     const inputPath = path.join('C:', 'workspace with spaces', 'samples', '1.in');
     const answerPath = path.join('C:', 'workspace with spaces', 'samples', '1.out');
+    const outputPath = path.join('C:', 'workspace with spaces', 'outputs', 'interactor output.txt');
 
-    expect(buildInteractiveArgs(['--input', '{input}', '--answer', '{answer}'], inputPath, answerPath)).toEqual([
+    expect(buildInteractiveArgs(['--input', '{input}', '--answer', '{answer}', '--output', '{output}'], inputPath, answerPath, outputPath)).toEqual([
       '--input',
       inputPath,
       '--answer',
-      answerPath
+      answerPath,
+      '--output',
+      outputPath
     ]);
     expect(buildInteractiveArgs(['{input}', '{answer}'], inputPath)).toEqual([inputPath]);
+    expect(buildInteractiveArgs(['${input}', '${output}', '${answer}'], inputPath, answerPath, outputPath)).toEqual([
+      inputPath,
+      outputPath,
+      answerPath
+    ]);
+  });
+
+  it('chooses interactor args from preset while keeping explicit args first', () => {
+    expect(resolveInteractorArgs(undefined, 'simple')).toEqual(['{input}', '{answer}']);
+    expect(resolveInteractorArgs(undefined, 'testlib')).toEqual(['{input}', '{output}', '{answer}']);
+    expect(resolveInteractorArgs(undefined, 'custom')).toEqual([]);
+    expect(resolveInteractorArgs(['--case', '{input}'], 'testlib')).toEqual(['--case', '{input}']);
   });
 
   it('builds compile argv with role-specific compile args and paths with spaces', async () => {
@@ -110,6 +128,112 @@ describe('I/O interactive judge config and helpers', () => {
       workspaceFolder.uri.fsPath
     ]));
     expect(args.indexOf('-DROLE=solution')).toBeGreaterThan(args.indexOf(sourcePath));
+  });
+
+  it('uses testlib preset defaults and records them in report metadata', async () => {
+    const workspaceFolder = await createWorkspace('interactive testlib preset');
+    await writeFile(workspaceFolder, 'solution.cpp');
+    await writeFile(workspaceFolder, 'interactor.cpp');
+
+    const resolved = await resolveInteractiveConfig(workspaceFolder, {
+      solution: 'solution.cpp',
+      interactor: 'interactor.cpp',
+      interactorPreset: 'testlib'
+    });
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    expect(resolved.config.interactorArgs).toEqual(['{input}', '{output}', '{answer}']);
+    expect(resolved.config.report).toMatchObject({
+      interactorPreset: 'testlib',
+      interactorArgs: ['{input}', '{output}', '{answer}']
+    });
+  });
+
+  it('keeps simple preset compatible with the previous default args', async () => {
+    const workspaceFolder = await createWorkspace('interactive simple preset');
+    await writeFile(workspaceFolder, 'solution.cpp');
+    await writeFile(workspaceFolder, 'interactor.cpp');
+
+    const resolved = await resolveInteractiveConfig(workspaceFolder, {
+      solution: 'solution.cpp',
+      interactor: 'interactor.cpp',
+      interactorPreset: 'simple'
+    });
+
+    expect(resolved.ok && resolved.config.interactorArgs).toEqual(['{input}', '{answer}']);
+  });
+
+  it('prepares per-sample output paths and an empty answer file when needed', async () => {
+    const workspaceFolder = await createWorkspace('interactive runtime files');
+    const runDir = path.join(workspaceFolder.uri.fsPath, 'run dir with spaces');
+
+    const first = await prepareInteractiveRuntimeFiles(runDir, 1, undefined, ['{input}', '{output}', '{answer}']);
+    expect(await fs.readFile(first.answerPath!, 'utf8')).toBe('');
+    const second = await prepareInteractiveRuntimeFiles(path.join(workspaceFolder.uri.fsPath, 'run dir two'), 2, path.join(workspaceFolder.uri.fsPath, 'answer.out'), ['{input}', '{output}', '{answer}']);
+
+    expect(first.outputPath).not.toBe(second.outputPath);
+    expect(first.outputPath.startsWith(runDir)).toBe(true);
+    expect(first.emptyAnswerFile).toBe(true);
+    expect(first.answerPath).toBeTruthy();
+    expect(second.emptyAnswerFile).toBe(false);
+    expect(second.answerPath).toContain('answer.out');
+
+    await fs.rm(first.tempDir, { recursive: true, force: true });
+    await fs.rm(second.tempDir, { recursive: true, force: true });
+  });
+
+  it('does not check testlib.h when useTestlib is false', async () => {
+    const workspaceFolder = await createWorkspace('interactive testlib disabled');
+    await writeFile(workspaceFolder, 'solution.cpp');
+    await writeFile(workspaceFolder, 'interactor.cpp');
+
+    const resolved = await resolveInteractiveConfig(workspaceFolder, {
+      solution: 'solution.cpp',
+      interactor: 'interactor.cpp',
+      interactorPreset: 'testlib',
+      useTestlib: false,
+      testlibHeader: 'missing/testlib.h'
+    });
+
+    expect(resolved.ok).toBe(true);
+  });
+
+  it('adds include dirs when testlib.h exists and reports a clear error when missing', async () => {
+    const workspaceFolder = await createWorkspace('interactive testlib include');
+    await writeFile(workspaceFolder, 'solution.cpp');
+    await writeFile(workspaceFolder, 'interactor.cpp');
+    await writeFile(workspaceFolder, path.join('third party', 'testlib.h'));
+
+    const resolved = await resolveInteractiveConfig(workspaceFolder, {
+      solution: 'solution.cpp',
+      interactor: 'interactor.cpp',
+      useTestlib: true,
+      testlibHeader: path.join('third party', 'testlib.h'),
+      testlibIncludeDirs: ['include dir with spaces']
+    });
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const headerDir = path.join(workspaceFolder.uri.fsPath, 'third party');
+    const explicitDir = path.join(workspaceFolder.uri.fsPath, 'include dir with spaces');
+    expect(resolved.config.interactorIncludeArgs).toEqual(expect.arrayContaining(['-I', headerDir, explicitDir]));
+    expect(buildIncludeArgs([explicitDir])).toEqual(['-I', explicitDir]);
+
+    const missing = await resolveInteractiveConfig(workspaceFolder, {
+      solution: 'solution.cpp',
+      interactor: 'interactor.cpp',
+      useTestlib: true,
+      testlibHeader: 'missing-testlib.h'
+    });
+    expect(missing).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('useTestlib is enabled, but testlib.h was not found')
+    });
   });
 
   it('maps interactor exit codes to interactive verdicts', () => {

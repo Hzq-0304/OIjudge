@@ -1,4 +1,4 @@
-# Guess Number I/O Interactive Example
+﻿# Guess Number I/O Interactive Example
 
 This directory is a minimal runnable example for **I/O Interactive Judge**. It models a classic guess-number interactive task with one contestant solution process and one interactor process.
 
@@ -54,4 +54,21 @@ After running `OI Judge: Run I/O Interactive Judge`, open the report and expand 
 - `interactor -> solution`
 - `solution -> interactor`
 
+## testlib-like Args
+
+Codeforces / Polygon style interactors can use the `testlib` preset with `{input}`, `{output}`, and `{answer}`. `{output}` is a temporary file created by OI Judge for interactor logs or checker-style output and is shown in report diagnostics. This example keeps the simpler `{input}` args, but the same protocol can be configured with:
+
+```json
+{
+  "interactive": {
+    "interactorPreset": "testlib",
+    "interactorArgs": ["{input}", "{output}", "{answer}"],
+    "useTestlib": false
+  }
+}
+```
+
+I/O Interactive Judge does not automatically select a bundled `testlib.h` for interactors. If your interactor includes it, add it to your workspace and configure `testlibHeader` or `testlibIncludeDirs`.
+
 Current MVP scope: this example uses the solution + interactor two-process model only. Multi-role communication problems and full testlib interactive compatibility are not implemented.
+

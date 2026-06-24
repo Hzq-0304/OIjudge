@@ -166,23 +166,33 @@ export type FunctionStyleReport = {
   compileArgs?: string[];
 };
 
+export type InteractiveInteractorPreset = 'simple' | 'testlib' | 'custom';
+
 export type InteractiveConfig = {
   solution?: string;
   interactor?: string;
+  interactorPreset?: InteractiveInteractorPreset;
   solutionCompileArgs?: string[];
   interactorCompileArgs?: string[];
   solutionArgs?: string[];
   interactorArgs?: string[];
+  useTestlib?: boolean;
+  testlibHeader?: string;
+  testlibIncludeDirs?: string[];
   transcriptLimitBytes?: number;
 };
 
 export type InteractiveReport = {
   solution: string;
   interactor: string;
+  interactorPreset?: InteractiveInteractorPreset;
   solutionCompileArgs?: string[];
   interactorCompileArgs?: string[];
   solutionArgs?: string[];
   interactorArgs?: string[];
+  useTestlib?: boolean;
+  testlibHeader?: string;
+  testlibIncludeDirs?: string[];
   transcriptLimitBytes?: number;
 };
 
@@ -268,6 +278,10 @@ export type InteractiveSampleReport = {
   interactorSignal?: NodeJS.Signals | null;
   solutionStderr?: string;
   interactorStderr?: string;
+  interactorOutput?: string;
+  interactorOutputPath?: string;
+  interactorOutputTruncated?: boolean;
+  emptyAnswerFile?: boolean;
   transcript?: string;
   transcriptTruncated?: boolean;
   diagnostics?: string[];

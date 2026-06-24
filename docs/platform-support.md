@@ -1,4 +1,4 @@
-# Platform Support
+﻿# Platform Support
 
 Supported platforms:
 
@@ -66,7 +66,9 @@ The current cross-platform regression suite covers:
 
 The current I/O Interactive Judge support is an MVP for the solution + interactor two-process model. The solution stdout is connected to the interactor stdin, the interactor stdout is connected to the solution stdin, and the interactor decides the verdict through its exit code.
 
-Reports show the interaction transcript, solution stderr, interactor stderr, and process diagnostics. See `examples/interactive/guess-number/` for a minimal runnable guess-number example.
+Reports show the interaction transcript, solution stderr, interactor stderr, interactor output from `{output}`, and process diagnostics. See `examples/interactive/guess-number/` for a minimal runnable guess-number example.
+
+The testlib-like preset supports `{input}`, `{output}`, and `{answer}` arguments for Codeforces / Polygon style interactors. `useTestlib` is optional; when it is enabled, provide `testlib.h` through `testlibHeader` or `testlibIncludeDirs`. I/O Interactive Judge does not automatically select a bundled `testlib.h` for interactors.
 
 This mode is covered by Windows, macOS, and Linux cross-platform regression tests. It does not yet implement multi-role communication problems, and it does not promise full testlib interactive compatibility.
 
@@ -79,3 +81,4 @@ OI Judge: Check Environment
 ```
 
 Then copy the generated environment check report and share it with the maintainer.
+

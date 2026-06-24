@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 新增 testlib-like 交互器参数适配 / Add testlib-like interactor argument support.
+- 支持 I/O 交互评测的 `{output}` placeholder / Add `{output}` placeholder support for I/O Interactive Judge.
+- 支持可选 testlib.h 路径配置 / Add optional testlib.h path configuration.
+- 补充 testlib-like 交互评测可用性测试 / Add usability tests for testlib-like interactive judging.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
 

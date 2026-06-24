@@ -98,8 +98,11 @@ describe('report verdict display', () => {
       interactive: {
         solution: 'solution.cpp',
         interactor: 'interactor.cpp',
+        interactorPreset: 'testlib',
         solutionArgs: ['--contest'],
-        interactorArgs: ['{input}', '{answer}'],
+        interactorArgs: ['{input}', '{output}', '{answer}'],
+        useTestlib: true,
+        testlibHeader: 'third_party/testlib.h',
         transcriptLimitBytes: 128
       },
       compile: {
@@ -120,6 +123,7 @@ describe('report verdict display', () => {
           interactorExitCode: 1,
           solutionStderr: 'solution <stderr>',
           interactorStderr: 'expected <42>, got <43>',
+          interactorOutput: 'verdict <log>',
           transcript: '[interactor -> solution]\n<21>\n[solution -> interactor]\n<43>',
           transcriptTruncated: true,
           diagnostics: ['pipe <closed>']
@@ -132,14 +136,20 @@ describe('report verdict display', () => {
     expect(html).toContain('Interactor');
     expect(html).toContain('Solution stderr');
     expect(html).toContain('Interactor stderr');
+    expect(html).toContain('Interactor output');
     expect(html).toContain('Transcript');
     expect(html).toContain('Diagnostics');
     expect(html).toContain('Transcript truncated.');
     expect(html).toContain('solution &lt;stderr&gt;');
     expect(html).toContain('expected &lt;42&gt;, got &lt;43&gt;');
+    expect(html).toContain('verdict &lt;log&gt;');
+    expect(html).toContain('Interactor Preset');
+    expect(html).toContain('testlib');
+    expect(html).toContain('Use testlib.h');
     expect(html).toContain('&lt;21&gt;');
     expect(html).not.toContain('solution <stderr>');
     expect(html).not.toContain('expected <42>, got <43>');
+    expect(html).not.toContain('verdict <log>');
   });
 
   it('sorts report cases failed first without mutating the input array', () => {

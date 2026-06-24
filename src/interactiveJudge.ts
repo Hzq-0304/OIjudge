@@ -20,19 +20,22 @@ import {
   ProcessResult,
   SampleConfig,
   SampleReport,
-  SampleStatus
+  SampleStatus,
+  InteractiveInteractorPreset
 } from './types';
 
 export const DEFAULT_INTERACTIVE_TRANSCRIPT_LIMIT_BYTES = 256 * 1024;
 const INTERACTIVE_COMPILE_TIMEOUT_MS = 60_000;
 const INTERACTIVE_PROCESS_GRACE_MS = 1_000;
 const STDERR_LIMIT_BYTES = 64 * 1024;
+const INTERACTOR_OUTPUT_LIMIT_BYTES = 64 * 1024;
 
 export type ResolvedInteractiveConfig = {
   solution: string;
   interactor: string;
   solutionCompileArgs: string[];
   interactorCompileArgs: string[];
+  interactorIncludeArgs: string[];
   solutionArgs: string[];
   interactorArgs: string[];
   transcriptLimitBytes: number;
@@ -69,9 +72,20 @@ type InteractiveRunResult = {
   interactorSignal?: NodeJS.Signals | null;
   solutionStderr: string;
   interactorStderr: string;
+  interactorOutput: string;
+  interactorOutputPath?: string;
+  interactorOutputTruncated: boolean;
+  emptyAnswerFile: boolean;
   transcript: string;
   transcriptTruncated: boolean;
   diagnostics: string[];
+};
+
+export type InteractiveSampleRuntimeFiles = {
+  tempDir: string;
+  outputPath: string;
+  answerPath?: string;
+  emptyAnswerFile: boolean;
 };
 
 export async function runInteractiveJudge(
@@ -169,8 +183,15 @@ export async function resolveInteractiveConfig(
     };
   }
 
+  const testlib = await resolveTestlibOptions(workspaceFolder, config);
+  if (!testlib.ok) {
+    return { ok: false, message: testlib.message };
+  }
+
   const transcriptLimitBytes = normalizeTranscriptLimit(config.transcriptLimitBytes);
-  const interactorArgs = config.interactorArgs?.length ? [...config.interactorArgs] : ['{input}', '{answer}'];
+  const interactorPreset = normalizeInteractorPreset(config.interactorPreset);
+  const interactorArgs = resolveInteractorArgs(config.interactorArgs, interactorPreset);
+  const interactorIncludeArgs = buildIncludeArgs(testlib.includeDirs);
   return {
     ok: true,
     config: {
@@ -178,16 +199,27 @@ export async function resolveInteractiveConfig(
       interactor,
       solutionCompileArgs: config.solutionCompileArgs ?? [],
       interactorCompileArgs: config.interactorCompileArgs ?? [],
+      interactorIncludeArgs,
       solutionArgs: config.solutionArgs ?? [],
       interactorArgs,
       transcriptLimitBytes,
       report: {
         solution: config.solution,
         interactor: config.interactor,
+        interactorPreset,
         solutionCompileArgs: config.solutionCompileArgs?.length ? [...config.solutionCompileArgs] : undefined,
-        interactorCompileArgs: config.interactorCompileArgs?.length ? [...config.interactorCompileArgs] : undefined,
+        interactorCompileArgs: [
+          ...(config.interactorCompileArgs ?? []),
+          ...interactorIncludeArgs
+        ].length ? [
+          ...(config.interactorCompileArgs ?? []),
+          ...interactorIncludeArgs
+        ] : undefined,
         solutionArgs: config.solutionArgs?.length ? [...config.solutionArgs] : undefined,
-        interactorArgs: config.interactorArgs?.length ? [...config.interactorArgs] : undefined,
+        interactorArgs,
+        useTestlib: config.useTestlib,
+        testlibHeader: config.testlibHeader,
+        testlibIncludeDirs: config.testlibIncludeDirs?.length ? [...config.testlibIncludeDirs] : undefined,
         transcriptLimitBytes
       }
     }
@@ -197,15 +229,42 @@ export async function resolveInteractiveConfig(
 export function buildInteractiveArgs(
   args: readonly string[],
   inputPath: string,
-  answerPath?: string
+  answerPath?: string,
+  outputPath?: string
 ): string[] {
   return args
     .map((arg) => arg
+      .replace(/\$\{input\}/g, inputPath)
+      .replace(/\$\{answer\}/g, answerPath ?? '')
+      .replace(/\$\{output\}/g, outputPath ?? '')
       .replace(/\{input\}/g, inputPath)
       .replace(/\{answer\}/g, answerPath ?? '')
-      .replace(/\$\{input\}/g, inputPath)
-      .replace(/\$\{answer\}/g, answerPath ?? ''))
+      .replace(/\{output\}/g, outputPath ?? ''))
     .filter((arg) => arg.length > 0);
+}
+
+export function resolveInteractorArgs(
+  explicitArgs: readonly string[] | undefined,
+  preset: InteractiveInteractorPreset
+): string[] {
+  if (explicitArgs?.length) {
+    return [...explicitArgs];
+  }
+  if (preset === 'testlib') {
+    return ['{input}', '{output}', '{answer}'];
+  }
+  if (preset === 'custom') {
+    return [];
+  }
+  return ['{input}', '{answer}'];
+}
+
+export function normalizeInteractorPreset(value: InteractiveInteractorPreset | undefined): InteractiveInteractorPreset {
+  return value === 'testlib' || value === 'custom' ? value : 'simple';
+}
+
+export function buildIncludeArgs(includeDirs: readonly string[]): string[] {
+  return includeDirs.flatMap((dir) => ['-I', dir]);
 }
 
 export function mapInteractorExitCode(code: number | null | undefined): InteractiveVerdictMapping {
@@ -271,7 +330,10 @@ async function compileInteractivePrograms(
       }
     };
   }
-  const interactor = await compileInteractiveProgram(workspaceFolder, config, interactive, 'interactor', interactive.interactor, interactive.interactorCompileArgs, output);
+  const interactor = await compileInteractiveProgram(workspaceFolder, config, interactive, 'interactor', interactive.interactor, [
+    ...interactive.interactorCompileArgs,
+    ...interactive.interactorIncludeArgs
+  ], output);
   if (!interactor) {
     return undefined;
   }
@@ -421,19 +483,27 @@ async function runInteractiveSample(
 
   output.appendLine(`Run interactive sample ${sample.index}: ${sample.name}`);
   const answerPath = fileStatus.answerMissing ? undefined : fileStatus.answerPath;
-  const result = await runInteractiveProcesses(
-    executables.solution,
-    executables.interactor,
-    {
-      cwd: workspaceFolder.uri.fsPath,
-      inputPath: fileStatus.inputPath,
-      answerPath,
-      solutionArgs: interactive.solutionArgs,
-      interactorArgs: interactive.interactorArgs,
-      timeoutMs: config.limits.timeMs,
-      transcriptLimitBytes: interactive.transcriptLimitBytes
-    }
-  );
+  const runtimeFiles = await prepareInteractiveRuntimeFiles(outputPaths.runDirPath, sample.index, answerPath, interactive.interactorArgs);
+  let result: InteractiveRunResult;
+  try {
+    result = await runInteractiveProcesses(
+      executables.solution,
+      executables.interactor,
+      {
+        cwd: workspaceFolder.uri.fsPath,
+        inputPath: fileStatus.inputPath,
+        answerPath: runtimeFiles.answerPath,
+        outputPath: runtimeFiles.outputPath,
+        emptyAnswerFile: runtimeFiles.emptyAnswerFile,
+        solutionArgs: interactive.solutionArgs,
+        interactorArgs: interactive.interactorArgs,
+        timeoutMs: config.limits.timeMs,
+        transcriptLimitBytes: interactive.transcriptLimitBytes
+      }
+    );
+  } finally {
+    await fs.rm(runtimeFiles.tempDir, { recursive: true, force: true });
+  }
   const verdict = classifyInteractiveRun(result);
   const stderrText = [
     result.solutionStderr.trim() ? `[solution stderr]\n${result.solutionStderr.trimEnd()}` : '',
@@ -477,11 +547,44 @@ async function runInteractiveSample(
       interactorSignal: result.interactorSignal,
       solutionStderr: result.solutionStderr,
       interactorStderr: result.interactorStderr,
+      interactorOutput: result.interactorOutput,
+      interactorOutputPath: result.interactorOutputPath,
+      interactorOutputTruncated: result.interactorOutputTruncated,
+      emptyAnswerFile: result.emptyAnswerFile,
       transcript: result.transcript,
       transcriptTruncated: result.transcriptTruncated,
       diagnostics: result.diagnostics
     },
     message: verdict.message
+  };
+}
+
+export async function prepareInteractiveRuntimeFiles(
+  runDirPath: string,
+  sampleIndex: number,
+  answerPath: string | undefined,
+  interactorArgs: readonly string[]
+): Promise<InteractiveSampleRuntimeFiles> {
+  const tempDir = path.join(runDirPath, 'interactive');
+  await fs.rm(tempDir, { recursive: true, force: true });
+  await fs.mkdir(tempDir, { recursive: true });
+  const outputPath = path.join(tempDir, `interactor-output-${sampleIndex}.txt`);
+  const needsAnswer = interactorArgs.some((arg) => /(?:\$\{answer\}|\{answer\})/u.test(arg));
+  if (!answerPath && needsAnswer) {
+    const emptyAnswerPath = path.join(tempDir, `empty-answer-${sampleIndex}.txt`);
+    await fs.writeFile(emptyAnswerPath, '', 'utf8');
+    return {
+      tempDir,
+      outputPath,
+      answerPath: emptyAnswerPath,
+      emptyAnswerFile: true
+    };
+  }
+  return {
+    tempDir,
+    outputPath,
+    answerPath,
+    emptyAnswerFile: false
   };
 }
 
@@ -492,6 +595,8 @@ async function runInteractiveProcesses(
     cwd: string;
     inputPath: string;
     answerPath?: string;
+    outputPath: string;
+    emptyAnswerFile: boolean;
     solutionArgs: string[];
     interactorArgs: string[];
     timeoutMs: number;
@@ -511,7 +616,7 @@ async function runInteractiveProcesses(
     windowsHide: true,
     detached
   });
-  const interactorChild = spawn(interactor.executablePath!, buildInteractiveArgs(options.interactorArgs, options.inputPath, options.answerPath), {
+  const interactorChild = spawn(interactor.executablePath!, buildInteractiveArgs(options.interactorArgs, options.inputPath, options.answerPath, options.outputPath), {
     cwd: options.cwd,
     env: withCompilerPathEnv(interactor.compilerCommand),
     shell: false,
@@ -565,7 +670,20 @@ async function runInteractiveProcesses(
 
   const [solutionResult, interactorResult] = await Promise.all([solutionClose, interactorClose]);
   clearTimeout(timer);
+  const interactorOutput = await readLimitedTextFile(options.outputPath, INTERACTOR_OUTPUT_LIMIT_BYTES);
   const timeMs = timedOut && timeoutTimeMs !== undefined ? timeoutTimeMs : elapsedMs(startedAt);
+  diagnostics.push(`Interactor output path: ${options.outputPath}`);
+  if (interactorOutput.exists) {
+    diagnostics.push(`Interactor output: ${interactorOutput.text.trimEnd()}`);
+    if (interactorOutput.truncated) {
+      diagnostics.push('Interactor output truncated.');
+    }
+  } else if (options.interactorArgs.some((arg) => /(?:\$\{output\}|\{output\})/u.test(arg))) {
+    diagnostics.push(`Interactor output file was not created: ${options.outputPath}`);
+  }
+  if (options.emptyAnswerFile) {
+    diagnostics.push('Empty temporary answer file was used because the testcase answer file is missing.');
+  }
   return {
     timeMs,
     timedOut,
@@ -575,6 +693,10 @@ async function runInteractiveProcesses(
     interactorSignal: interactorResult.signal,
     solutionStderr: solutionStderr.text(),
     interactorStderr: interactorStderr.text(),
+    interactorOutput: interactorOutput.text,
+    interactorOutputPath: options.outputPath,
+    interactorOutputTruncated: interactorOutput.truncated,
+    emptyAnswerFile: options.emptyAnswerFile,
     transcript: transcriptState.text,
     transcriptTruncated: transcriptState.truncated,
     diagnostics
@@ -629,6 +751,8 @@ function buildInteractiveRunResultText(result: InteractiveRunResult, verdictMess
     result.interactorSignal ? `Interactor signal: ${result.interactorSignal}` : undefined,
     result.solutionStderr.trim() ? `\nSolution stderr:\n${result.solutionStderr.trimEnd()}` : undefined,
     result.interactorStderr.trim() ? `\nInteractor stderr:\n${result.interactorStderr.trimEnd()}` : undefined,
+    result.interactorOutput.trim() ? `\nInteractor output:\n${result.interactorOutput.trimEnd()}` : undefined,
+    result.interactorOutputTruncated ? '\nInteractor output truncated.' : undefined,
     result.transcript ? `\nTranscript:\n${result.transcript.trimEnd()}` : '\nTranscript: <empty>',
     result.transcriptTruncated ? '\nTranscript truncated.' : undefined,
     result.diagnostics.length ? `\nDiagnostics:\n${result.diagnostics.join('\n')}` : undefined
@@ -809,6 +933,22 @@ function createLimitedCollector(limitBytes: number): { append(chunk: Buffer): vo
   };
 }
 
+async function readLimitedTextFile(filePath: string, limitBytes: number): Promise<{ exists: boolean; text: string; truncated: boolean }> {
+  if (!(await exists(filePath))) {
+    return { exists: false, text: '', truncated: false };
+  }
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(limitBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const truncated = bytesRead > limitBytes;
+    const text = buffer.subarray(0, Math.min(bytesRead, limitBytes)).toString('utf8');
+    return { exists: true, text, truncated };
+  } finally {
+    await handle.close();
+  }
+}
+
 function waitForClose(
   child: ChildProcessWithoutNullStreams,
   label: string,
@@ -843,6 +983,65 @@ function normalizeTranscriptLimit(value: number | undefined): number {
 
 function resolveWorkspacePath(workspaceFolder: vscode.WorkspaceFolder, filePath: string): string {
   return path.isAbsolute(filePath) ? filePath : path.resolve(workspaceFolder.uri.fsPath, filePath);
+}
+
+async function resolveTestlibOptions(
+  workspaceFolder: vscode.WorkspaceFolder,
+  config: InteractiveConfig
+): Promise<{ ok: true; includeDirs: string[] } | { ok: false; message: string }> {
+  const includeDirs = uniquePaths((config.testlibIncludeDirs ?? []).map((dir) => resolveWorkspacePath(workspaceFolder, dir)));
+  const headerName = config.testlibHeader ?? 'testlib.h';
+  const headerCandidates = getTestlibHeaderCandidates(workspaceFolder, headerName, includeDirs);
+  const existingHeader = await findExistingPath(headerCandidates);
+  if (existingHeader) {
+    return { ok: true, includeDirs: uniquePaths([...includeDirs, path.dirname(existingHeader)]) };
+  }
+  if (config.useTestlib) {
+    return {
+      ok: false,
+      message: `useTestlib is enabled, but testlib.h was not found. Checked: ${headerCandidates.join(', ')}`
+    };
+  }
+  return { ok: true, includeDirs };
+}
+
+function getTestlibHeaderCandidates(
+  workspaceFolder: vscode.WorkspaceFolder,
+  headerName: string,
+  includeDirs: readonly string[]
+): string[] {
+  if (path.isAbsolute(headerName)) {
+    return [headerName];
+  }
+  if (/[\\/]/u.test(headerName)) {
+    return [resolveWorkspacePath(workspaceFolder, headerName)];
+  }
+  return [
+    resolveWorkspacePath(workspaceFolder, headerName),
+    ...includeDirs.map((dir) => path.join(dir, headerName))
+  ];
+}
+
+async function findExistingPath(candidates: readonly string[]): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await exists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function uniquePaths(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const key = process.platform === 'win32' ? value.toLowerCase() : value;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(value);
+    }
+  }
+  return result;
 }
 
 async function collectMissingFiles(files: Array<{ label: string; filePath: string }>): Promise<Array<{ label: string; filePath: string }>> {

@@ -32,6 +32,9 @@ describe('cross-platform I/O interactive judge regression', () => {
 
     const workspaceFolder = await createCrossPlatformWorkspace('OI Judge Interactive Fixtures With Spaces');
     await expectAcceptedAndWrongAnswer(workspaceFolder, compiler);
+    await expectTestlibLikeInteractorArgs(workspaceFolder, compiler);
+    await expectFakeTestlibHeader(workspaceFolder, compiler);
+    await expectMissingTestlibHeader(workspaceFolder, compiler);
     await expectSolutionRuntimeError(workspaceFolder, compiler);
     await expectInteractorFailure(workspaceFolder, compiler);
     await expectTimeout(workspaceFolder, compiler);
@@ -76,6 +79,103 @@ async function expectAcceptedAndWrongAnswer(
   const wrongReport = await runInteractiveJudge(workspaceFolder, problem, output());
   expect(wrongReport?.samples.map((sample) => sample.status)).toEqual(['WA', 'WA']);
   expect(wrongReport?.summary.wrongAnswer).toBe(2);
+}
+
+async function expectTestlibLikeInteractorArgs(
+  workspaceFolder: Awaited<ReturnType<typeof createCrossPlatformWorkspace>>,
+  compiler: CompilerInfo
+): Promise<void> {
+  const fixtureRoot = await writeFixture(workspaceFolder.uri.fsPath, 'interactive testlib like args', {
+    'solution.cpp': acceptedSolutionSource(),
+    'interactor.cpp': testlibLikeInteractorSource(),
+    'samples with spaces/1.in': '21\n',
+    'samples with spaces/1.out': '42\n',
+    'samples with spaces/2.in': '7\n',
+    'samples with spaces/2.out': '14\n'
+  });
+  const problem = createProblem(compiler, 'interactive-testlib-like', fixtureRoot, {
+    solution: 'solution.cpp',
+    interactor: 'interactor.cpp',
+    interactorPreset: 'testlib',
+    useTestlib: false,
+    transcriptLimitBytes: 4096
+  }, 1000, path.join('samples with spaces', '1.in'), path.join('samples with spaces', '1.out'));
+  problem.samples.push({
+    id: 'interactive-testlib-like-sample-2',
+    index: 2,
+    name: 'interactive-testlib-like sample 2',
+    input: path.join(fixtureRoot, 'samples with spaces', '2.in'),
+    answer: path.join(fixtureRoot, 'samples with spaces', '2.out')
+  });
+
+  const acceptedReport = await runInteractiveJudge(workspaceFolder, problem, output());
+  expect(acceptedReport?.samples.map((sample) => sample.status)).toEqual(['AC', 'AC']);
+  expect(acceptedReport?.interactive?.interactorPreset).toBe('testlib');
+  expect(acceptedReport?.interactive?.interactorArgs).toEqual(['{input}', '{output}', '{answer}']);
+  expect(acceptedReport?.samples[0]?.interactive?.interactorOutput).toContain('verdict log: accepted 42');
+  expect(acceptedReport?.samples[0]?.interactive?.diagnostics?.join('\n')).toContain('Interactor output');
+  expect(acceptedReport?.samples[0]?.interactive?.transcript).toContain('[interactor -> solution]');
+  expect(acceptedReport?.samples[0]?.interactive?.transcript).toContain('[solution -> interactor]');
+  expect(acceptedReport?.samples[0]?.interactive?.interactorOutputPath).toContain('interactor-output-1.txt');
+  expect(acceptedReport?.samples[0]?.interactive?.interactorOutputPath).not.toBe(acceptedReport?.samples[1]?.interactive?.interactorOutputPath);
+
+  await writeText(path.join(workspaceFolder.uri.fsPath, fixtureRoot, 'solution.cpp'), wrongSolutionSource());
+  const wrongReport = await runInteractiveJudge(workspaceFolder, problem, output());
+  expect(wrongReport?.samples.map((sample) => sample.status)).toEqual(['WA', 'WA']);
+  expect(wrongReport?.samples[0]?.interactive?.interactorOutput).toContain('verdict log: wrong answer');
+  const html = renderReportBody(workspaceFolder, wrongReport!, problem.id, problem);
+  expect(html).toContain('Interactor output');
+  expect(html).toContain('Transcript');
+  expect(html).toContain('Solution stderr');
+  expect(html).toContain('Interactor stderr');
+}
+
+async function expectFakeTestlibHeader(
+  workspaceFolder: Awaited<ReturnType<typeof createCrossPlatformWorkspace>>,
+  compiler: CompilerInfo
+): Promise<void> {
+  const fixtureRoot = await writeFixture(workspaceFolder.uri.fsPath, 'interactive fake testlib header', {
+    'solution.cpp': acceptedSolutionSource(),
+    'interactor.cpp': fakeTestlibInteractorSource(),
+    'third party/testlib.h': fakeTestlibHeaderSource(),
+    'samples/1.in': '6\n',
+    'samples/1.out': '12\n'
+  });
+  const problem = createProblem(compiler, 'interactive-fake-testlib', fixtureRoot, {
+    solution: 'solution.cpp',
+    interactor: 'interactor.cpp',
+    interactorPreset: 'testlib',
+    useTestlib: true,
+    testlibHeader: path.join('third party', 'testlib.h')
+  }, 1000);
+
+  const report = await runInteractiveJudge(workspaceFolder, problem, output());
+  expect(report?.compile?.status).toBe('OK');
+  expect(report?.interactive?.useTestlib).toBe(true);
+  expect(report?.compile?.interactive?.interactorCompileArgs?.join(' ')).toContain('-I');
+  expect(report?.samples[0]?.status).toBe('AC');
+}
+
+async function expectMissingTestlibHeader(
+  workspaceFolder: Awaited<ReturnType<typeof createCrossPlatformWorkspace>>,
+  compiler: CompilerInfo
+): Promise<void> {
+  const fixtureRoot = await writeFixture(workspaceFolder.uri.fsPath, 'interactive missing testlib header', {
+    'solution.cpp': acceptedSolutionSource(),
+    'interactor.cpp': fakeTestlibInteractorSource(),
+    'samples/1.in': '6\n',
+    'samples/1.out': '12\n'
+  });
+  const report = await runInteractiveJudge(workspaceFolder, createProblem(compiler, 'interactive-missing-testlib', fixtureRoot, {
+    solution: 'solution.cpp',
+    interactor: 'interactor.cpp',
+    interactorPreset: 'testlib',
+    useTestlib: true,
+    testlibHeader: 'third_party/missing-testlib.h'
+  }, 1000), output());
+
+  expect(report?.compile?.status).toBe('CE');
+  expect(report?.compile?.message).toContain('useTestlib is enabled, but testlib.h was not found');
 }
 
 async function expectSolutionRuntimeError(
@@ -209,7 +309,8 @@ function createProblem(
       ...interactive,
       solution: rel(interactive.solution ?? 'solution.cpp'),
       interactor: rel(interactive.interactor ?? 'interactor.cpp'),
-      interactorArgs: interactive.interactorArgs ?? ['{input}', '{answer}']
+      testlibHeader: interactive.testlibHeader ? rel(interactive.testlibHeader) : undefined,
+      testlibIncludeDirs: interactive.testlibIncludeDirs?.map(rel)
     },
     ...compilerConfig(compiler),
     limits: { timeMs: timeLimitMs, memoryMb: 256 },
@@ -334,6 +435,72 @@ function doublingInteractorSource(): string {
     '}',
     ''
   ].join('\n');
+}
+
+function testlibLikeInteractorSource(): string {
+  return [
+    '#include <fstream>',
+    '#include <iostream>',
+    '#include <string>',
+    'int main(int argc, char** argv) {',
+    '  if (argc < 4) {',
+    '    std::cerr << "missing testlib-like argv\\n";',
+    '    return 3;',
+    '  }',
+    '  std::ifstream input(argv[1]);',
+    '  std::ofstream out(argv[2]);',
+    '  std::ifstream answerFile(argv[3]);',
+    '  int value = 0;',
+    '  input >> value;',
+    '  int expected = value * 2;',
+    '  int answerValue = 0;',
+    '  if (answerFile >> answerValue) {',
+    '    expected = answerValue;',
+    '  }',
+    '  std::cerr << "interactor query " << value << "\\n";',
+    '  std::cout << value << "\\n" << std::flush;',
+    '  int contestant = 0;',
+    '  if (!(std::cin >> contestant)) {',
+    '    out << "verdict log: missing contestant answer\\n";',
+    '    std::cerr << "missing answer from solution\\n";',
+    '    return 3;',
+    '  }',
+    '  if (contestant == expected) {',
+    '    out << "verdict log: accepted " << contestant << "\\n";',
+    '    return 0;',
+    '  }',
+    '  out << "verdict log: wrong answer expected " << expected << " got " << contestant << "\\n";',
+    '  std::cerr << "expected " << expected << " got " << contestant << "\\n";',
+    '  return 1;',
+    '}',
+    ''
+  ].join('\n');
+}
+
+function fakeTestlibHeaderSource(): string {
+  return [
+    '#ifndef FAKE_TESTLIB_H',
+    '#define FAKE_TESTLIB_H',
+    '#include <cstdlib>',
+    '#include <iostream>',
+    'const int OK_EXIT_CODE = 0;',
+    'const int WA_EXIT_CODE = 1;',
+    'const int PE_EXIT_CODE = 2;',
+    'const int FAIL_EXIT_CODE = 3;',
+    'inline void quitf(int code, const char* message) {',
+    '  std::cerr << message << std::endl;',
+    '  std::exit(code);',
+    '}',
+    '#endif',
+    ''
+  ].join('\n');
+}
+
+function fakeTestlibInteractorSource(): string {
+  return testlibLikeInteractorSource()
+    .replace('#include <string>', '#include <string>\n#include "testlib.h"')
+    .replace('return 0;', 'quitf(OK_EXIT_CODE, "accepted by fake testlib");')
+    .replace('return 1;', 'quitf(WA_EXIT_CODE, "wrong answer by fake testlib");');
 }
 
 function failingInteractorSource(): string {

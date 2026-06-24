@@ -1,4 +1,4 @@
-# OI Judge
+﻿# OI Judge
 
 简体中文 | [English](./README.md)
 
@@ -178,6 +178,26 @@ I/O 交互评测适用于常见的 solution + interactor 双进程模型。OI Ju
 ```
 
 Interactor 可以通过 `{input}` 获取测试点输入文件路径，通过 `{answer}` 获取答案文件路径。选手程序 stdout 是交互协议内容，因此 I/O 交互评测不会再走普通文本比较或 checker。Interactor exit code `0` 表示 Accepted，`1` 表示 Wrong Answer，`2` 表示 Presentation Error，其它非零值报告为 Interactor Error。
+
+#### testlib 风格交互器
+
+对于 Codeforces / Polygon 风格的交互器，可以使用 `testlib` preset：
+
+```json
+{
+  "mode": "interactive",
+  "interactive": {
+    "solution": "solution.cpp",
+    "interactor": "interactor.cpp",
+    "interactorPreset": "testlib",
+    "interactorArgs": ["{input}", "{output}", "{answer}"],
+    "useTestlib": true,
+    "testlibHeader": "third_party/testlib.h"
+  }
+}
+```
+
+`{input}` 表示测试点输入文件，`{output}` 表示 OI Judge 为交互器创建的临时输出文件，`{answer}` 表示测试点答案文件。I/O 交互评测不会自动为 interactor 选择内置 `testlib.h`；如果交互器需要它，请在 workspace 中提供，并配置 `testlibHeader` 或 `testlibIncludeDirs`。该 preset 只适配 testlib-like 参数习惯，不承诺完整 testlib 兼容。
 
 #### 最小猜数交互器
 
@@ -513,3 +533,4 @@ npm pack --dry-run
 `test:cross-platform` 用于检查 Judge、对拍、停止对拍和报告产物生成在当前平台上的基本可用性。`test:report-ui` 会运行轻量级报告 HTML smoke test。GitHub Actions 会在 Windows / Linux / macOS 上运行这些跨平台回归测试，并上传结果 JSON 和报告 HTML 作为 artifact。
 
 在 VS Code 中按 F5，并选择 `Run OI Judge Extension`，即可打开扩展开发宿主窗口。
+

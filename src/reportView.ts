@@ -45,10 +45,14 @@ type JudgeReportViewModel = {
   interactive?: {
     solution: string;
     interactor: string;
+    interactorPreset?: string;
     solutionCompileArgs?: string[];
     interactorCompileArgs?: string[];
     solutionArgs?: string[];
     interactorArgs?: string[];
+    useTestlib?: boolean;
+    testlibHeader?: string;
+    testlibIncludeDirs?: string[];
     transcriptLimitBytes?: number;
   };
   judgeMode: string;
@@ -394,6 +398,9 @@ function renderInteractiveMeta(viewModel: JudgeReportViewModel): string {
     `<div><span>Solution</span><strong>${escapeHtml(config.solution)}</strong></div>`,
     `<div><span>Interactor</span><strong>${escapeHtml(config.interactor)}</strong></div>`
   ];
+  if (config.interactorPreset) {
+    rows.push(`<div><span>Interactor Preset</span><strong>${escapeHtml(config.interactorPreset)}</strong></div>`);
+  }
   if (config.solutionCompileArgs?.length) {
     rows.push(`<div><span>Solution Compile Args</span><strong>${escapeHtml(config.solutionCompileArgs.join(' '))}</strong></div>`);
   }
@@ -405,6 +412,15 @@ function renderInteractiveMeta(viewModel: JudgeReportViewModel): string {
   }
   if (config.interactorArgs?.length) {
     rows.push(`<div><span>Interactor Args</span><strong>${escapeHtml(config.interactorArgs.join(' '))}</strong></div>`);
+  }
+  if (config.useTestlib !== undefined) {
+    rows.push(`<div><span>Use testlib.h</span><strong>${config.useTestlib ? 'true' : 'false'}</strong></div>`);
+  }
+  if (config.testlibHeader) {
+    rows.push(`<div><span>testlib.h</span><strong>${escapeHtml(config.testlibHeader)}</strong></div>`);
+  }
+  if (config.testlibIncludeDirs?.length) {
+    rows.push(`<div><span>testlib Include Dirs</span><strong>${escapeHtml(config.testlibIncludeDirs.join(', '))}</strong></div>`);
   }
   if (config.transcriptLimitBytes) {
     rows.push(`<div><span>Transcript Limit</span><strong>${escapeHtml(formatBytesAsMb(config.transcriptLimitBytes))}</strong></div>`);
@@ -1528,6 +1544,8 @@ function buildInteractiveSystemMessage(sample: SampleReport): string {
     details.interactorSignal ? `Interactor signal: ${details.interactorSignal}` : undefined,
     details.solutionStderr?.trim() ? `\nSolution stderr:\n${details.solutionStderr.trimEnd()}` : undefined,
     details.interactorStderr?.trim() ? `\nInteractor stderr:\n${details.interactorStderr.trimEnd()}` : undefined,
+    details.interactorOutput?.trim() ? `\nInteractor output:\n${details.interactorOutput.trimEnd()}` : undefined,
+    details.interactorOutputTruncated ? '\nInteractor output truncated.' : undefined,
     details.transcript ? `\nTranscript:\n${details.transcript.trimEnd()}` : '\nTranscript: <empty>',
     details.transcriptTruncated ? '\nTranscript truncated.' : undefined,
     details.diagnostics?.length ? `\nDiagnostics:\n${details.diagnostics.join('\n')}` : undefined

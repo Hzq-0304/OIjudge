@@ -1,4 +1,4 @@
-# OI Judge
+﻿# OI Judge
 
 [简体中文](./README.zh-CN.md) | English
 
@@ -183,6 +183,26 @@ Configure a problem with `mode: "interactive"` and `interactive.solution` / `int
 ```
 
 The interactor receives the testcase input path through `{input}` and the answer path through `{answer}`. The solution's stdout is protocol traffic, so interactive mode does not run the normal text compare or checker pipeline. Interactor exit code `0` means Accepted, `1` means Wrong Answer, `2` means Presentation Error, and other non-zero codes are reported as Interactor Error.
+
+#### testlib-like interactors
+
+For Codeforces / Polygon style interactors, use the `testlib` preset:
+
+```json
+{
+  "mode": "interactive",
+  "interactive": {
+    "solution": "solution.cpp",
+    "interactor": "interactor.cpp",
+    "interactorPreset": "testlib",
+    "interactorArgs": ["{input}", "{output}", "{answer}"],
+    "useTestlib": true,
+    "testlibHeader": "third_party/testlib.h"
+  }
+}
+```
+
+`{input}` is the testcase input file, `{output}` is a temporary file created by OI Judge for the interactor, and `{answer}` is the testcase answer file. I/O Interactive Judge does not automatically select a bundled `testlib.h` for interactors; provide the header in your workspace and set `testlibHeader` or `testlibIncludeDirs` explicitly. This preset improves compatibility with testlib-like argument conventions, but it does not promise full testlib compatibility.
 
 #### Minimal guess-number interactor
 
@@ -971,3 +991,4 @@ npm pack --dry-run
 `test:cross-platform` checks judge, stress-test, stop-stress, and report artifact generation on the current platform. `test:report-ui` runs a lightweight report HTML smoke test. GitHub Actions runs these checks on Windows, Linux, and macOS and uploads result JSON plus report HTML artifacts.
 
 Press F5 in VSCode and choose `Run OI Judge Extension` to open the Extension Development Host.
+
