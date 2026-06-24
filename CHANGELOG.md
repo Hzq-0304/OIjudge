@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- 修复禁用 useTestlib 时仍自动探测 testlib.h 并注入 include 目录的问题 / Fix testlib.h auto-detection and include injection when useTestlib is disabled.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
+
+## 5.5.1
+
+- 修复 `useTestlib: false` 时仍自动探测 `testlibHeader` 并注入 include dir 的问题，避免禁用 testlib 后编译环境被意外改变 / Fix `useTestlib: false` still probing `testlibHeader` and injecting include directories, preventing unexpected compile environment changes when testlib is disabled.
 
 ## 5.5.0
 
