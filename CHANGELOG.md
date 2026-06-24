@@ -2,13 +2,16 @@
 
 ## Unreleased
 
-- 新增 I/O 交互评测猜数示例 / Add guess-number example for I/O Interactive Judge.
-- 补充 I/O 交互评测使用文档 / Document I/O Interactive Judge usage.
-- 补充猜数交互题回归测试 / Add guess-number interactive regression tests.
-- 新增 I/O 交互评测 MVP / Add MVP support for I/O Interactive Judge.
-- 补充 I/O 交互评测的跨平台回归测试 / Add cross-platform regression tests for I/O Interactive Judge.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
+
+## 5.4.0
+
+- 新增 I/O 交互评测 MVP，支持 solution 与 interactor 双进程实时 stdin/stdout 管道通信，并由 interactor 通过退出码给出 verdict / Add MVP support for I/O Interactive Judge with live stdin/stdout pipes between solution and interactor, using interactor exit codes for verdicts.
+- 新增 I/O 交互评测回归测试，覆盖 AC、WA、Runtime Error、Interactor Fail、timeout、多测试点、路径含空格、stderr 分离和 transcript 截断 / Add I/O Interactive Judge regression tests covering AC, WA, Runtime Error, interactor fail, timeout, multiple testcases, paths with spaces, separated stderr, and transcript truncation.
+- 补充猜数交互题回归测试，覆盖多轮实时交互、flush、协议错误、timeout 和 transcript 顺序 / Add guess-number interactive regression tests covering multi-round live interaction, flushing, protocol errors, timeout, and transcript ordering.
+- 新增猜数交互题示例目录，包含 AC、WA、timeout solution、interactor、samples 和示例配置 / Add a guess-number interactive example with AC, WA, and timeout solutions, an interactor, samples, and example config.
+- 补充 I/O 交互评测使用文档和平台支持说明 / Document I/O Interactive Judge usage and platform support notes.
 
 ## 5.3.0
 
