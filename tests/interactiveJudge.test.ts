@@ -189,16 +189,25 @@ describe('I/O interactive judge config and helpers', () => {
     const workspaceFolder = await createWorkspace('interactive testlib disabled');
     await writeFile(workspaceFolder, 'solution.cpp');
     await writeFile(workspaceFolder, 'interactor.cpp');
+    await writeFile(workspaceFolder, path.join('third party', 'testlib.h'));
 
     const resolved = await resolveInteractiveConfig(workspaceFolder, {
       solution: 'solution.cpp',
       interactor: 'interactor.cpp',
       interactorPreset: 'testlib',
       useTestlib: false,
-      testlibHeader: 'missing/testlib.h'
+      testlibHeader: path.join('third party', 'testlib.h'),
+      testlibIncludeDirs: ['manual include']
     });
 
     expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    expect(resolved.config.interactorIncludeArgs).toEqual([
+      '-I',
+      path.join(workspaceFolder.uri.fsPath, 'manual include')
+    ]);
   });
 
   it('adds include dirs when testlib.h exists and reports a clear error when missing', async () => {

@@ -990,19 +990,20 @@ async function resolveTestlibOptions(
   config: InteractiveConfig
 ): Promise<{ ok: true; includeDirs: string[] } | { ok: false; message: string }> {
   const includeDirs = uniquePaths((config.testlibIncludeDirs ?? []).map((dir) => resolveWorkspacePath(workspaceFolder, dir)));
+  if (!config.useTestlib) {
+    return { ok: true, includeDirs };
+  }
+
   const headerName = config.testlibHeader ?? 'testlib.h';
   const headerCandidates = getTestlibHeaderCandidates(workspaceFolder, headerName, includeDirs);
   const existingHeader = await findExistingPath(headerCandidates);
   if (existingHeader) {
     return { ok: true, includeDirs: uniquePaths([...includeDirs, path.dirname(existingHeader)]) };
   }
-  if (config.useTestlib) {
-    return {
-      ok: false,
-      message: `useTestlib is enabled, but testlib.h was not found. Checked: ${headerCandidates.join(', ')}`
-    };
-  }
-  return { ok: true, includeDirs };
+  return {
+    ok: false,
+    message: `useTestlib is enabled, but testlib.h was not found. Checked: ${headerCandidates.join(', ')}`
+  };
 }
 
 function getTestlibHeaderCandidates(
