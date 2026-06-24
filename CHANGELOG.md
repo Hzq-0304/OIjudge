@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 新增 I/O 交互评测猜数示例 / Add guess-number example for I/O Interactive Judge.
+- 补充 I/O 交互评测使用文档 / Document I/O Interactive Judge usage.
 - 补充猜数交互题回归测试 / Add guess-number interactive regression tests.
 - 新增 I/O 交互评测 MVP / Add MVP support for I/O Interactive Judge.
 - 补充 I/O 交互评测的跨平台回归测试 / Add cross-platform regression tests for I/O Interactive Judge.

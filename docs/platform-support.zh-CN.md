@@ -66,6 +66,8 @@ xcode-select --install
 
 当前 I/O 交互评测是 solution + interactor 双进程模型的 MVP。选手程序 stdout 会连接到 interactor stdin，interactor stdout 会连接到选手程序 stdin，interactor 通过退出码给出 verdict。
 
+报告会显示交互 transcript、solution stderr、interactor stderr 和进程诊断信息。可以参考 `examples/interactive/guess-number/` 中的最小可运行猜数示例。
+
 该模式已有 Windows、macOS、Linux 跨平台回归测试覆盖。目前不实现多角色通信题，也不承诺完整兼容 testlib interactive。
 
 ## 排障建议

@@ -183,6 +183,10 @@ Interactor 可以通过 `{input}` 获取测试点输入文件路径，通过 `{a
 
 典型交互题可以通过 `{input}` 将原始测试点输入文件传给交互器。例如猜数交互器可以读取 `n secret`，先把 `n` 发给选手程序，再对每次 flush 后的猜测返回 `1`、`-1` 或 `0`，并用退出码给出结果：`0` 表示 Accepted，`1` 表示 Wrong Answer，`2` 表示 Presentation Error，`3` 表示 Interactor Error。
 
+#### 示例
+
+可以参考 `examples/interactive/guess-number/` 中的最小猜数交互题。交互器通过 `{input}` 接收测试点输入文件路径，通过 stdin/stdout 与选手程序通信，并使用退出码给出评测结果。
+
 ## I/O 模式
 
 - 每个题目可以使用 `Standard IO` 或 `File IO`。

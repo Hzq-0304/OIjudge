@@ -66,6 +66,8 @@ The current cross-platform regression suite covers:
 
 The current I/O Interactive Judge support is an MVP for the solution + interactor two-process model. The solution stdout is connected to the interactor stdin, the interactor stdout is connected to the solution stdin, and the interactor decides the verdict through its exit code.
 
+Reports show the interaction transcript, solution stderr, interactor stderr, and process diagnostics. See `examples/interactive/guess-number/` for a minimal runnable guess-number example.
+
 This mode is covered by Windows, macOS, and Linux cross-platform regression tests. It does not yet implement multi-role communication problems, and it does not promise full testlib interactive compatibility.
 
 ## Troubleshooting

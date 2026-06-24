@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "mode": "interactive",
+  "interactive": {
+    "solution": "solution.cpp",
+    "interactor": "interactor.cpp",
+    "interactorArgs": ["{input}"],
+    "transcriptLimitBytes": 262144
+  },
+  "compiler": {
+    "command": "g++",
+    "args": ["-std=c++17", "-O2", "-pipe", "${file}", "-o", "${output}"]
+  },
+  "limits": {
+    "timeMs": 2000,
+    "memoryMb": 256
+  },
+  "judgeMode": "trimTrailingWhitespace",
+  "samples": [
+    {
+      "id": "guess-1",
+      "index": 1,
+      "name": "100 / secret 73",
+      "input": "samples/1.in",
+      "answer": "samples/1.in"
+    },
+    {
+      "id": "guess-2",
+      "index": 2,
+      "name": "50 / secret 1",
+      "input": "samples/2.in",
+      "answer": "samples/2.in"
+    },
+    {
+      "id": "guess-3",
+      "index": 3,
+      "name": "999 / secret 999",
+      "input": "samples/3.in",
+      "answer": "samples/3.in"
+    }
+  ]
+}

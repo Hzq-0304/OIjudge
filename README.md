@@ -188,6 +188,10 @@ The interactor receives the testcase input path through `{input}` and the answer
 
 A typical interactive task can be modeled by passing the original testcase input to the interactor through `{input}`. For example, a guess-number interactor can read `n secret`, send `n` to the solution, answer each flushed guess with `1`, `-1`, or `0`, and return exit code `0` for Accepted, `1` for Wrong Answer, `2` for Presentation Error, and `3` for Interactor Error.
 
+#### Example
+
+See `examples/interactive/guess-number/` for a minimal guess-number interactive task. The interactor receives the testcase input path through `{input}`, communicates with the solution through stdin/stdout, and decides the verdict with its exit code.
+
 I/O Mode:
 
 - Each problem can use either `Standard IO` or `File IO`.
