@@ -28,6 +28,7 @@ import {
 import { isSetterModeEnabled } from './setterMode';
 import { CheckerConfig, CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
+import { SubtaskSkipDecision, SubtaskSkipScheduler, validateSubtaskSkipConfig } from './subtaskSkip';
 
 type RunClassification = 'OLE' | 'TLE' | 'MLE' | 'RE' | undefined;
 
@@ -170,6 +171,34 @@ async function runCompiledSamples(
   }
   output.appendLine('');
 
+  const subtaskValidation = validateSubtaskSkipConfig(config);
+  if (subtaskValidation.errors.length > 0) {
+    for (const sample of config.samples) {
+      const sampleReport = createSkippedSampleReport(
+        workspaceFolder,
+        sample,
+        problemId,
+        getIoMode(config),
+        {
+          reason: 'config_error',
+          message: `Subtask configuration error: ${subtaskValidation.errors.join(' ')}`
+        }
+      );
+      output.appendLine(`[Skipped] ${sample.name}`);
+      output.appendLine(`  ${sampleReport.message}`);
+      samples.push(sampleReport);
+      await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
+    }
+    const report = createJudgeReport(sourcePath, config, compile, totalStartedAt, activeChecker, samples);
+    await fs.mkdir(path.dirname(getReportPath(workspaceFolder)), { recursive: true });
+    await fs.writeFile(getReportPath(workspaceFolder), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    output.appendLine('');
+    output.appendLine('Summary: Subtask configuration error');
+    output.appendLine(`Report: ${problemId ? getOiJudgeDataRelPath('problems', problemId, 'outputs', 'report.json') : getOiJudgeDataRelPath('outputs', 'report.json')}`);
+    return report;
+  }
+  const subtaskScheduler = new SubtaskSkipScheduler(config);
+
   const checkerCompile = problemId && activeChecker
     ? await compileChecker(workspaceFolder, problemId, config, output)
     : undefined;
@@ -202,25 +231,33 @@ async function runCompiledSamples(
       await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
     }
   } else {
-    for (const sample of config.samples) {
-      const sampleReport = await judgeSample(
-        workspaceFolder,
-        sourcePath,
-        executablePath,
-        runCwd,
-        sample,
-        config.limits.timeMs,
-        config.limits.memoryMb,
-        getIoMode(config),
-        getFileIoConfig(config),
-        output,
-        problemId,
-        compile.stack,
-        compile.compilerCommand,
-        checkerContext,
-        Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id]),
-        getTextCompareMode(judgeMode)
-      );
+    for (const sample of subtaskScheduler.getSchedule()) {
+      const skipDecision = subtaskScheduler.decide(sample);
+      const sampleReport = skipDecision
+        ? createSkippedSampleReport(workspaceFolder, sample, problemId, getIoMode(config), skipDecision)
+        : await judgeSample(
+          workspaceFolder,
+          sourcePath,
+          executablePath,
+          runCwd,
+          sample,
+          config.limits.timeMs,
+          config.limits.memoryMb,
+          getIoMode(config),
+          getFileIoConfig(config),
+          output,
+          problemId,
+          compile.stack,
+          compile.compilerCommand,
+          checkerContext,
+          Boolean((config as { setter?: { generatedAnswers?: Record<string, string> } }).setter?.generatedAnswers?.[sample.id]),
+          getTextCompareMode(judgeMode)
+        );
+      if (skipDecision) {
+        output.appendLine(`[Skipped] ${sample.name}`);
+        output.appendLine(`  ${sampleReport.message}`);
+      }
+      subtaskScheduler.record(sample, sampleReport);
       samples.push(sampleReport);
       await notifySampleComplete(options, sourcePath, config, compile, totalStartedAt, activeChecker, samples, sampleReport);
     }
@@ -280,6 +317,7 @@ function createJudgeReport(
   const wrongAnswer = samples.filter((sample) => sample.status === 'WA').length;
   const scored = samples.filter((sample) => sample.status === 'Scored').length;
   const checkerError = samples.filter((sample) => sample.status === 'Checker Error').length;
+  const skipped = samples.filter((sample) => sample.status === 'Skipped').length;
   const score = calculateJudgeScore(config, samples);
   const effectiveScores = calculateEffectiveSampleScores(config);
   for (const sample of samples) {
@@ -316,7 +354,8 @@ function createJudgeReport(
       total: samples.length,
       wrongAnswer,
       scored,
-      checkerError
+      checkerError,
+      skipped
     },
     score: {
       earned: score.earnedScore,
@@ -1099,6 +1138,39 @@ function createCheckerErrorSampleReport(
   );
 }
 
+function createSkippedSampleReport(
+  workspaceFolder: vscode.WorkspaceFolder,
+  sample: SampleConfig,
+  problemId: string | undefined,
+  ioMode: IoMode,
+  decision: SubtaskSkipDecision
+): SampleReport {
+  const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
+  return createSampleReport(
+    workspaceFolder,
+    sample,
+    'Skipped',
+    0,
+    0,
+    outputPaths.outputRel,
+    outputPaths.stderrRel,
+    outputPaths.diffRel,
+    {
+      killedByTimeout: false,
+      ioMode,
+      skip: {
+        reason: decision.reason,
+        subtaskId: decision.subtask?.id,
+        subtaskName: decision.subtask?.name,
+        dependencyId: decision.dependency?.id,
+        dependencyName: decision.dependency?.name
+      }
+    },
+    decision.message,
+    0
+  );
+}
+
 async function saveTextOutput(filePath: string, text: string): Promise<void> {
   await fs.mkdir(resolveDirname(filePath), { recursive: true });
   await fs.writeFile(filePath, text, 'utf8');
@@ -1184,7 +1256,7 @@ function createSampleReport(
   outputRel: string,
   stderrRel: string,
   diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'outputLimitExceeded' | 'outputBytes' | 'outputLimitBytes' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo'>> = {},
+  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'outputLimitExceeded' | 'outputBytes' | 'outputLimitBytes' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo' | 'skip'>> = {},
   message?: string,
   score?: number,
   checker?: CheckerSampleReport

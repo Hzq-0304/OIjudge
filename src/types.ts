@@ -35,6 +35,14 @@ export type SampleConfig = {
   score?: number;
 };
 
+export type SubtaskSkipReason = 'previous_case_failed' | 'dependency_failed' | 'config_error';
+
+export type SubtaskSkipConfig = {
+  enabled?: boolean;
+  skipRemainingCasesOnFailure?: boolean;
+  skipDependentSubtasks?: boolean;
+};
+
 export type SubtaskResultStatus = 'passed' | 'failed' | 'notRun';
 
 export type SubtaskRunResult = {
@@ -49,6 +57,8 @@ export type SubtaskConfig = {
   name: string;
   sampleIds: string[];
   scoringMode?: 'sum' | 'bundle';
+  dependsOn?: string[];
+  skipRemainingCasesOnFailure?: boolean;
   generatorId?: string;
   generatorInput?: string;
   lastResult?: SubtaskRunResult;
@@ -147,6 +157,8 @@ export type OITestConfig = {
   fileIo?: FileIoConfig;
   checker?: CheckerConfig;
   setter?: SetterConfig;
+  subtaskSkip?: SubtaskSkipConfig;
+  subtasks?: SubtaskConfig[];
   samples: SampleConfig[];
 };
 
@@ -363,6 +375,13 @@ export type SampleReport = {
   scoreTotal?: number;
   checker?: CheckerSampleReport;
   interactive?: InteractiveSampleReport;
+  skip?: {
+    reason: SubtaskSkipReason;
+    subtaskId?: string;
+    subtaskName?: string;
+    dependencyId?: string;
+    dependencyName?: string;
+  };
   message?: string;
 };
 
@@ -389,6 +408,7 @@ export type JudgeReport = {
     wrongAnswer?: number;
     scored?: number;
     checkerError?: number;
+    skipped?: number;
   };
   score?: {
     earned: number;

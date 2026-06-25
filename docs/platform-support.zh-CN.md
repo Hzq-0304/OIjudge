@@ -62,6 +62,12 @@ xcode-select --install
 - 程序无限运行 / 无法停止。
 - GitHub Actions 与本机时间/内存差异。
 
+## Subtask Skip 与子任务依赖
+
+普通 Judge 支持 Subtask Skip 与子任务依赖。该能力默认关闭以保持旧配置兼容。启用后，失败的 `bundle` 子任务可以跳过剩余测试点；带有 `dependsOn` 的子任务会在任一前置子任务未通过时直接跳过。Skipped 测试点计 `0` 分，且不会启动程序。
+
+依赖模型刻意保持简单：dependency 必须指向存在的 Subtask，并且必须出现在当前 Subtask 之前。不存在的 id 和依赖环会作为配置错误报告。该功能不改变 I/O 交互评测调度。
+
 ## I/O 交互评测范围
 
 当前 I/O 交互评测是 solution + interactor 双进程模型的 MVP。选手程序 stdout 会连接到 interactor stdin，interactor stdout 会连接到选手程序 stdin，interactor 通过退出码给出 verdict。

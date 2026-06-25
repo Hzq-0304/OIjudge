@@ -281,6 +281,34 @@ int main() {
 - 每个样例可以设置测试点分值。未设置分值的样例会自动平分剩余分值。
 - `sum` Subtask 按通过的样例累计得分。
 - `bundle` Subtask 只有全部样例通过时才获得该 Subtask 的全部分数。
+- 可以通过配置启用 Subtask Skip：当 `bundle` 子任务已经失败时跳过剩余测试点，也可以在前置子任务未通过时跳过依赖子任务。默认关闭，因此旧配置仍会运行全部测试点。
+
+```json
+{
+  "subtaskSkip": {
+    "enabled": true,
+    "skipRemainingCasesOnFailure": true,
+    "skipDependentSubtasks": true
+  },
+  "subtasks": [
+    {
+      "id": "subtask1",
+      "name": "Subtask 1",
+      "sampleIds": ["sample-1", "sample-2"],
+      "scoringMode": "bundle"
+    },
+    {
+      "id": "subtask2",
+      "name": "Subtask 2",
+      "sampleIds": ["sample-3", "sample-4"],
+      "scoringMode": "bundle",
+      "dependsOn": ["subtask1"]
+    }
+  ]
+}
+```
+
+如果 `subtask1` 中某个测试点失败，该 `bundle` 子任务剩余测试点会显示为 `Skipped`。如果 `subtask1` 未通过，依赖它的 `subtask2` 会直接跳过，并在报告中显示依赖失败原因。不存在的 dependency id 和依赖环会作为配置错误报告，不会死循环。
 
 ## Stress Test / 对拍
 

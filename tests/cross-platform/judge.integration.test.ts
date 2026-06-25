@@ -101,6 +101,36 @@ describe('cross-platform judge regression', () => {
     await writeJsonArtifact('cross-platform-baseline/local-baseline.json', result);
     console.warn(`Cross-platform judge result JSON: ${resultPath}`);
   }, 120_000);
+
+  it('skips remaining bundle subtask cases without executing them', async () => {
+    const compiler = await findCppCompiler();
+    if (!compiler) {
+      const skipped = await writeJsonArtifact(`cross-platform-subtask-skip-${process.platform}.json`, {
+        platform: process.platform,
+        arch: process.arch,
+        node: process.version,
+        skipped: true,
+        reason: 'No g++ or clang++ compiler found in PATH.'
+      });
+      console.warn(`Subtask skip regression skipped; result JSON: ${skipped}`);
+      return;
+    }
+
+    const workspaceFolder = await createCrossPlatformWorkspace('OI Judge Subtask Skip Fixture');
+    const fixtureDir = path.join(workspaceFolder.uri.fsPath, 'subtask skip fixture');
+    const solutionPath = await writeText(path.join(fixtureDir, 'subtask-skip.cpp'), subtaskSkipSolution());
+    const problem = await createSubtaskSkipProblem(workspaceFolder.uri.fsPath, compiler.command);
+
+    const report = await runAllSamples(workspaceFolder, solutionPath, problem, output());
+
+    expect(report?.samples.map((sample) => sample.status)).toEqual(['AC', 'WA', 'Skipped', 'Skipped']);
+    expect(report?.summary.skipped).toBe(2);
+    expect(report?.score).toEqual({ earned: 0, total: 40 });
+    expect(report?.samples[2]?.skip?.reason).toBe('previous_case_failed');
+    expect(report?.samples[3]?.skip?.reason).toBe('previous_case_failed');
+    await expect(fs.access(resolveReportPath(workspaceFolder.uri.fsPath, report?.samples[2]?.actualOutput ?? ''))).rejects.toThrow();
+    await expect(fs.access(resolveReportPath(workspaceFolder.uri.fsPath, report?.samples[3]?.actualOutput ?? ''))).rejects.toThrow();
+  }, 120_000);
 });
 
 async function createSumArrayProblem(root: string, compilerCommand: string): Promise<ProblemConfig> {
@@ -194,6 +224,59 @@ int main() {
   return 0;
 }
 `;
+}
+
+async function createSubtaskSkipProblem(root: string, compilerCommand: string): Promise<ProblemConfig> {
+  const sampleDir = path.join(root, 'subtask skip fixture', 'samples');
+  const values = [1, 2, 3, 4];
+  for (const value of values) {
+    await writeText(path.join(sampleDir, `sample-${value}.in`), `${value}\n`);
+    await writeText(path.join(sampleDir, `sample-${value}.out`), `${value}\n`);
+  }
+
+  return {
+    version: 1,
+    id: 'subtask-skip',
+    name: 'subtask-skip',
+    standard: 'c++17',
+    ...compilerConfig({ command: compilerCommand, version: compilerCommand }),
+    limits: { timeMs: 3000, memoryMb: 256 },
+    judgeMode: 'trimTrailingWhitespace',
+    subtaskSkip: { enabled: true, skipRemainingCasesOnFailure: true },
+    samples: values.map((value) => ({
+      id: `sample-${value}`,
+      index: value,
+      name: `subtask-skip-${value}`,
+      input: path.join('subtask skip fixture', 'samples', `sample-${value}.in`),
+      answer: path.join('subtask skip fixture', 'samples', `sample-${value}.out`),
+      actualOutput: getOiJudgeDataRelPath('problems', 'subtask-skip', 'outputs', `sample-${value}.out`),
+      score: 10
+    })),
+    subtasks: [
+      { id: 'subtask-1', name: 'Subtask 1', sampleIds: values.map((value) => `sample-${value}`), scoringMode: 'bundle' }
+    ],
+    score: { total: 40 }
+  };
+}
+
+function subtaskSkipSolution(): string {
+  return `#include <iostream>
+using namespace std;
+int main() {
+  int x;
+  if (!(cin >> x)) return 0;
+  if (x == 2) {
+    cout << 999 << '\\n';
+    return 0;
+  }
+  cout << x << '\\n';
+  return 0;
+}
+`;
+}
+
+function resolveReportPath(root: string, relativePath: string): string {
+  return path.join(root, ...relativePath.split('/'));
 }
 
 function subtaskCaseOrder(html: string, subtaskName: string): number[] {

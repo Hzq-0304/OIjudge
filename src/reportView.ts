@@ -79,6 +79,7 @@ type JudgeReportTestcaseViewModel = {
   sampleIndex?: number;
   hasCheckerOutput: boolean;
   defaultOpen: boolean;
+  skipReason?: string;
 };
 
 type JudgeReportTestcaseSectionViewModel =
@@ -90,12 +91,14 @@ type JudgeReportTestcaseSectionViewModel =
       kind: 'subtask';
       id: string;
       name: string;
-      status: 'AC' | 'PARTIAL' | 'WA';
+      status: 'AC' | 'PARTIAL' | 'WA' | 'Skipped';
       statusText: string;
       scoreEarned: number;
       scoreTotal: number;
       passedCount: number;
+      skippedCount: number;
       totalCount: number;
+      skipReason?: string;
       defaultOpen: boolean;
       testcases: JudgeReportTestcaseViewModel[];
     };
@@ -338,7 +341,8 @@ function buildJudgeReportViewModel(report: JudgeReport, problem?: ProblemConfig)
       systemMessage: buildSystemMessage(sample, report),
       sampleIndex,
       hasCheckerOutput: false,
-      defaultOpen: false
+      defaultOpen: false,
+      skipReason: sample.skip?.reason
     };
   });
 
@@ -481,8 +485,10 @@ function buildTestcaseSections(
     }
     const subtaskScore = score?.subtaskScores.get(subtask.id) ?? { earned: 0, total: 0 };
     const passedCount = subtaskTestcases.filter((testcase) => testcase.status === 'AC' || testcase.status === 'Scored').length;
+    const skippedCount = subtaskTestcases.filter((testcase) => testcase.status === 'Skipped').length;
     const totalCount = subtaskTestcases.length;
-    const status = subtaskStatus(subtaskScore.earned, subtaskScore.total, passedCount, totalCount);
+    const status = subtaskStatus(subtaskScore.earned, subtaskScore.total, passedCount, skippedCount, totalCount);
+    const skipReason = subtaskTestcases.find((testcase) => testcase.status === 'Skipped')?.systemMessage;
     sections.push({
       kind: 'subtask',
       id: subtask.id,
@@ -492,7 +498,9 @@ function buildTestcaseSections(
       scoreEarned: subtaskScore.earned,
       scoreTotal: subtaskScore.total,
       passedCount,
+      skippedCount,
       totalCount,
+      skipReason,
       defaultOpen: true,
       testcases: sortCasesForReportDisplay(subtaskTestcases)
     });
@@ -505,8 +513,12 @@ function subtaskStatus(
   earned: number,
   total: number,
   passedCount: number,
+  skippedCount: number,
   totalCount: number
-): 'AC' | 'PARTIAL' | 'WA' {
+): 'AC' | 'PARTIAL' | 'WA' | 'Skipped' {
+  if (totalCount > 0 && skippedCount === totalCount) {
+    return 'Skipped';
+  }
   if (totalCount > 0 && passedCount === totalCount && earned >= total) {
     return 'AC';
   }
@@ -516,7 +528,7 @@ function subtaskStatus(
   return 'WA';
 }
 
-function subtaskStatusText(status: 'AC' | 'PARTIAL' | 'WA'): string {
+function subtaskStatusText(status: 'AC' | 'PARTIAL' | 'WA' | 'Skipped'): string {
   return formatVerdictFullName(status);
 }
 
@@ -530,6 +542,7 @@ function renderTestcaseSection(section: JudgeReportTestcaseSectionViewModel, pro
       ${renderVerdictStatus(section.status, section.statusText)}
       <span class="infoCell scoreCell ${scoreClass(section.scoreEarned, section.scoreTotal, section.status)}"><span class="infoLabel">${escapeHtml(t('report.score'))}:</span> ${section.scoreEarned}/${section.scoreTotal}</span>
       <span class="infoCell metricCell"><span class="infoLabel">${escapeHtml(t('report.accepted'))}:</span> ${section.passedCount}/${section.totalCount}</span>
+      ${section.skippedCount ? `<span class="infoCell metricCell"><span class="infoLabel">Skipped:</span> ${section.skippedCount}/${section.totalCount}</span>` : ''}
     </button>
     <div class="subtask-children-panel${section.defaultOpen ? ' expanded' : ''}" data-subtask-children aria-hidden="${section.defaultOpen ? 'false' : 'true'}">
       <div class="subtask-children-inner testcaseGroupBody">
@@ -755,10 +768,13 @@ function renderActionButtons(
   }
   const disabled = problemId && sampleId !== undefined ? '' : ' disabled';
   const sampleValue = sampleId ?? '';
+  const outputButton = status === 'Skipped'
+    ? ''
+    : `\n    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>`;
   return `<div class="buttons">
     <button class="detail-action" data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
     <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>
+    ${outputButton}
     <button class="detail-action" data-command="copyFreopen" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('debug.copyFreopenInput'))}</button>
     <button class="detail-action" data-command="delete" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('delete'))}</button>
   </div>`;
@@ -777,13 +793,15 @@ function renderReportActionButtons(
   const diffButton = status === 'WA'
     ? `\n    <button class="detail-action" data-command="diff" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('report.showDiff'))}</button>`
     : '';
+  const outputButton = status === 'Skipped'
+    ? ''
+    : `\n    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>`;
   const saveButton = status !== 'AC' && status !== 'Skipped' && status !== 'Not Run'
     ? `\n    <button class="detail-action" data-command="saveFailedCaseAsSample" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('saveFailedCaseAsSample.short'))}</button>`
     : '';
   return `<div class="buttons">
     <button class="detail-action" data-command="input" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('input'))}</button>
-    <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>
-    <button class="detail-action" data-command="output" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('runResult'))}</button>${diffButton}${saveButton}
+    <button class="detail-action" data-command="expected" data-sample="${sampleValue}"${disabled}>${escapeHtml(t('expectedOutput'))}</button>${outputButton}${diffButton}${saveButton}
   </div>`;
 }
 
@@ -1120,7 +1138,8 @@ export function renderPage(title: string, body: string): string {
     .verdict-re { color: var(--oj-re); }
     .verdict-partial,
     .verdict-scored { color: var(--vscode-testing-iconQueued, #d29922); }
-    .verdict-not-run { color: var(--oj-muted); }
+    .verdict-not-run,
+    .verdict-skipped { color: var(--oj-muted); }
     .scoreCell.score-failed,
     .scoreCell.score-partial { color: var(--oj-score-failed); }
     .case-detail-panel,
@@ -1219,6 +1238,7 @@ export function renderPage(title: string, body: string): string {
     .status-checker-error,
     .status-output-missing { color: var(--vscode-testing-iconFailed); }
     .status-partial,
+    .status-skipped,
     .status-scored { color: var(--vscode-testing-iconQueued); }
     .status-not-run { color: var(--vscode-descriptionForeground); }
     .path {
@@ -1392,6 +1412,9 @@ function scoreClass(earned: number, total: number, status: string): string {
   if (status === 'Not Run') {
     return 'score-muted';
   }
+  if (status === 'Skipped') {
+    return 'score-muted verdict-skipped';
+  }
   return `score-failed ${verdictClass(status)}`;
 }
 
@@ -1482,6 +1505,9 @@ function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
   if (sample.status === 'CE') {
     return truncateSystemMessage(formatCompileErrorSystemMessage(report));
   }
+  if (sample.status === 'Skipped') {
+    return truncateSystemMessage(buildSkippedSystemMessage(sample));
+  }
   if (sample.interactive) {
     return truncateSystemMessage(buildInteractiveSystemMessage(sample));
   }
@@ -1529,6 +1555,20 @@ function buildSystemMessage(sample: SampleReport, report: JudgeReport): string {
     lines.push(`compareError: ${sample.compareError}`);
   }
   return lines.join('\n') || t('report.noDetails');
+}
+
+function buildSkippedSystemMessage(sample: SampleReport): string {
+  const lines = [sample.message ?? 'Skipped.'];
+  if (sample.skip?.reason) {
+    lines.push(`Reason: ${sample.skip.reason}`);
+  }
+  if (sample.skip?.subtaskName || sample.skip?.subtaskId) {
+    lines.push(`Subtask: ${sample.skip.subtaskName ?? sample.skip.subtaskId}`);
+  }
+  if (sample.skip?.dependencyName || sample.skip?.dependencyId) {
+    lines.push(`Dependency: ${sample.skip.dependencyName ?? sample.skip.dependencyId}`);
+  }
+  return lines.join('\n');
 }
 
 function buildInteractiveSystemMessage(sample: SampleReport): string {

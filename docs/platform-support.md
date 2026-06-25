@@ -62,6 +62,12 @@ The current cross-platform regression suite covers:
 - A program runs forever or cannot be stopped.
 - GitHub Actions and local machines may report slightly different time / memory values.
 
+## Subtask Skip and Dependencies
+
+Subtask Skip is available for ordinary Judge runs. It is disabled by default for compatibility. When enabled, a failed `bundle` Subtask can skip its remaining cases, and a Subtask with `dependsOn` can be skipped when any prerequisite Subtask did not pass. Skipped cases are reported as `Skipped`, score `0`, and are not executed.
+
+The dependency model is intentionally simple: dependencies must refer to existing Subtasks and must appear earlier in the configured Subtask list. Missing ids and cycles are reported as configuration errors. This feature does not change I/O Interactive Judge scheduling.
+
 ## I/O Interactive Judge Scope
 
 The current I/O Interactive Judge support is an MVP for the solution + interactor two-process model. The solution stdout is connected to the interactor stdin, the interactor stdout is connected to the solution stdin, and the interactor decides the verdict through its exit code.

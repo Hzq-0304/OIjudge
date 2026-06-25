@@ -167,6 +167,52 @@ describe('report verdict display', () => {
     expect(cases.map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
   });
 
+  it('renders skipped testcase reasons safely and keeps skipped after real failures', () => {
+    const html = renderReportBody(workspace(), {
+      ...report(),
+      summary: { accepted: 1, total: 4, wrongAnswer: 1, skipped: 2 },
+      samples: [
+        sample('sample-1', 1, 'AC'),
+        sample('sample-2', 2, 'WA'),
+        {
+          ...sample('sample-3', 3, 'Skipped'),
+          message: 'Skipped because dependency <Subtask 1> did not pass.',
+          skip: {
+            reason: 'dependency_failed',
+            subtaskId: 'subtask-2',
+            subtaskName: 'Subtask <2>',
+            dependencyId: 'subtask-1',
+            dependencyName: 'Subtask <1>'
+          }
+        },
+        {
+          ...sample('sample-4', 4, 'Skipped'),
+          message: 'Skipped because a previous case in this subtask failed.',
+          skip: {
+            reason: 'previous_case_failed',
+            subtaskId: 'subtask-2',
+            subtaskName: 'Subtask <2>'
+          }
+        }
+      ]
+    }, 'A', {
+      ...problemWithTwoSubtasks(),
+      subtasks: [
+        { id: 'subtask-1', name: 'Subtask 1', sampleIds: ['sample-1', 'sample-2'], scoringMode: 'bundle' },
+        { id: 'subtask-2', name: 'Subtask 2', sampleIds: ['sample-3', 'sample-4'], scoringMode: 'bundle', dependsOn: ['subtask-1'] }
+      ]
+    });
+
+    expect(renderedCaseOrder(html)).toEqual([2, 1, 3, 4]);
+    expect(html).toContain('statusPill verdict-pill verdict-skipped');
+    expect(html).toContain('Skipped because dependency &lt;Subtask 1&gt; did not pass.');
+    expect(html).toContain('Reason: dependency_failed');
+    expect(html).toContain('Dependency: Subtask &lt;1&gt;');
+    expect(html).toContain('<span class="infoLabel">Skipped:</span> 2/2');
+    expect(html).not.toContain('dependency <Subtask 1>');
+    expect(html).not.toContain('data-command="output" data-sample="3"');
+  });
+
   it('renders failed top-level testcases first while keeping testcase numbers and summary unchanged', () => {
     const html = renderReportBody(workspace(), {
       ...report(),

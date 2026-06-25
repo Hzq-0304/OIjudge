@@ -286,6 +286,34 @@ Subtasks and scoring:
 - Each sample can have a manual testcase score. Samples without a manual score split the remaining score automatically.
 - `sum` Subtasks score each accepted sample independently.
 - `bundle` Subtasks award the whole Subtask score only when all samples in the Subtask pass.
+- Subtask Skip can be enabled from configuration to skip the rest of a failed `bundle` Subtask and to skip dependent Subtasks when prerequisites do not pass. The default is disabled, so existing configs continue to run every testcase.
+
+```json
+{
+  "subtaskSkip": {
+    "enabled": true,
+    "skipRemainingCasesOnFailure": true,
+    "skipDependentSubtasks": true
+  },
+  "subtasks": [
+    {
+      "id": "subtask1",
+      "name": "Subtask 1",
+      "sampleIds": ["sample-1", "sample-2"],
+      "scoringMode": "bundle"
+    },
+    {
+      "id": "subtask2",
+      "name": "Subtask 2",
+      "sampleIds": ["sample-3", "sample-4"],
+      "scoringMode": "bundle",
+      "dependsOn": ["subtask1"]
+    }
+  ]
+}
+```
+
+If a testcase in `subtask1` fails, remaining cases in that `bundle` Subtask are reported as `Skipped`. If `subtask1` does not pass, `subtask2` is skipped with a dependency reason in the report. Missing dependency ids and dependency cycles are reported as configuration errors instead of running indefinitely.
 
 Stress Test:
 
