@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "mode": "interactive",
+  "interactive": {
+    "solution": "solution.cpp",
+    "interactor": "interactor.cpp",
+    "interactorPreset": "testlib",
+    "useTestlib": false,
+    "transcriptLimitBytes": 262144
+  },
+  "compiler": {
+    "command": "g++",
+    "args": ["-std=c++17", "-O2", "-pipe", "${file}", "-o", "${output}"]
+  },
+  "limits": {
+    "timeMs": 2000,
+    "memoryMb": 256
+  },
+  "judgeMode": "trimTrailingWhitespace",
+  "samples": [
+    {
+      "id": "double-1",
+      "index": 1,
+      "name": "21",
+      "input": "samples/1.in",
+      "answer": "samples/1.ans"
+    },
+    {
+      "id": "double-2",
+      "index": 2,
+      "name": "100",
+      "input": "samples/2.in",
+      "answer": "samples/2.ans"
+    }
+  ]
+}

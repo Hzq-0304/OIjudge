@@ -68,7 +68,9 @@ xcode-select --install
 
 报告会显示交互 transcript、solution stderr、interactor stderr、`{output}` interactor 输出和进程诊断信息。可以参考 `examples/interactive/guess-number/` 中的最小可运行猜数示例。
 
-testlib-like preset 支持 Codeforces / Polygon 风格交互器常见的 `{input}`、`{output}`、`{answer}` 参数。`useTestlib` 是可选项；启用时需要通过 `testlibHeader` 或 `testlibIncludeDirs` 提供 `testlib.h`。I/O 交互评测不会自动为 interactor 选择内置 `testlib.h`。
+testlib-like preset 支持 Codeforces / Polygon 风格交互器常见的参数模式：`{input}`、`{output}`、`{answer}`。当 `interactorPreset` 为 `testlib` 且未显式配置 `interactorArgs` 时，OI Judge 会使用 `["{input}", "{output}", "{answer}"]`。`{output}` 是每个测试点独立的临时文件，可供 interactor 写入日志或 verdict 细节。
+
+`useTestlib` 是可选项。设为 `false` 时，OI Judge 不检查 `testlib.h`，也不会自动注入 `testlibHeader` 所在 include 目录；设为 `true` 时，需要通过 `testlibHeader` 或 `testlibIncludeDirs` 提供 `testlib.h`。I/O 交互评测不会为 interactor 内置官方 `testlib.h`。可以参考 `examples/interactive/testlib-like-double/` 中的完整 testlib-like 参数示例和单独的 `testlib.h` 参考配置。
 
 该模式已有 Windows、macOS、Linux 跨平台回归测试覆盖。目前不实现多角色通信题，也不承诺完整兼容 testlib interactive。
 

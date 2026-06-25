@@ -199,6 +199,8 @@ Interactor 可以通过 `{input}` 获取测试点输入文件路径，通过 `{a
 
 `{input}` 表示测试点输入文件，`{output}` 表示 OI Judge 为交互器创建的临时输出文件，`{answer}` 表示测试点答案文件。I/O 交互评测不会自动为 interactor 选择内置 `testlib.h`；如果交互器需要它，请在 workspace 中提供，并配置 `testlibHeader` 或 `testlibIncludeDirs`。该 preset 只适配 testlib-like 参数习惯，不承诺完整 testlib 兼容。
 
+可以参考 `examples/interactive/testlib-like-double/`，其中包含完整的 testlib-like 参数示例，展示 `{input}`、`{output}`、`{answer}` 的用法。默认示例使用 `useTestlib: false`，不需要官方 `testlib.h`；单独的 `oijudge.testlib.config.json` 只作为用户自行提供 `third_party/testlib.h` 时的参考配置。
+
 #### 最小猜数交互器
 
 典型交互题可以通过 `{input}` 将原始测试点输入文件传给交互器。例如猜数交互器可以读取 `n secret`，先把 `n` 发给选手程序，再对每次 flush 后的猜测返回 `1`、`-1` 或 `0`，并用退出码给出结果：`0` 表示 Accepted，`1` 表示 Wrong Answer，`2` 表示 Presentation Error，`3` 表示 Interactor Error。

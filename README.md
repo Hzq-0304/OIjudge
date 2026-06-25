@@ -204,6 +204,8 @@ For Codeforces / Polygon style interactors, use the `testlib` preset:
 
 `{input}` is the testcase input file, `{output}` is a temporary file created by OI Judge for the interactor, and `{answer}` is the testcase answer file. I/O Interactive Judge does not automatically select a bundled `testlib.h` for interactors; provide the header in your workspace and set `testlibHeader` or `testlibIncludeDirs` explicitly. This preset improves compatibility with testlib-like argument conventions, but it does not promise full testlib compatibility.
 
+See `examples/interactive/testlib-like-double/` for a complete testlib-like argument example with `{input}`, `{output}`, and `{answer}`. The default example uses `useTestlib: false` and does not require official `testlib.h`; the separate `oijudge.testlib.config.json` is a reference for users who provide `third_party/testlib.h` themselves.
+
 #### Minimal guess-number interactor
 
 A typical interactive task can be modeled by passing the original testcase input to the interactor through `{input}`. For example, a guess-number interactor can read `n secret`, send `n` to the solution, answer each flushed guess with `1`, `-1`, or `0`, and return exit code `0` for Accepted, `1` for Wrong Answer, `2` for Presentation Error, and `3` for Interactor Error.

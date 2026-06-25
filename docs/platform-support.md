@@ -68,7 +68,9 @@ The current I/O Interactive Judge support is an MVP for the solution + interacto
 
 Reports show the interaction transcript, solution stderr, interactor stderr, interactor output from `{output}`, and process diagnostics. See `examples/interactive/guess-number/` for a minimal runnable guess-number example.
 
-The testlib-like preset supports `{input}`, `{output}`, and `{answer}` arguments for Codeforces / Polygon style interactors. `useTestlib` is optional; when it is enabled, provide `testlib.h` through `testlibHeader` or `testlibIncludeDirs`. I/O Interactive Judge does not automatically select a bundled `testlib.h` for interactors.
+The testlib-like preset supports argument-mode Codeforces / Polygon style interactors with `{input}`, `{output}`, and `{answer}`. If `interactorArgs` is omitted while `interactorPreset` is `testlib`, OI Judge uses `["{input}", "{output}", "{answer}"]`. `{output}` is a per-testcase temporary file for interactor logs or verdict details.
+
+`useTestlib` is optional. When it is `false`, OI Judge does not check `testlib.h` and does not inject the `testlibHeader` include directory. When it is `true`, provide `testlib.h` through `testlibHeader` or `testlibIncludeDirs`; OI Judge does not bundle an official `testlib.h` for I/O interactive interactors. See `examples/interactive/testlib-like-double/` for a complete runnable testlib-like argument example and a separate `testlib.h` reference config.
 
 This mode is covered by Windows, macOS, and Linux cross-platform regression tests. It does not yet implement multi-role communication problems, and it does not promise full testlib interactive compatibility.
 

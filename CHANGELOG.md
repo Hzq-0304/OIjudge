@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 补充 testlib-like 交互评测完整示例和文档 / Add complete testlib-like interactive judging example and documentation.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
 
