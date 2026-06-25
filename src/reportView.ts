@@ -13,8 +13,9 @@ import { getDefaultProblemSource, getProblem, getProblemReportPath } from './pro
 import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import { inferSampleSourceType } from './sampleFiles';
 import { calculateEffectiveSampleScores, calculateJudgeScore } from './scoring';
+import { scoreClass, statusClass, statusLabel, verdictClass } from './report/statusDisplay';
 import { JudgeReport, ProblemConfig, SampleConfig, SampleReport } from './types';
-import { formatVerdictAcronym, formatVerdictFullName } from './verdict';
+import { formatVerdictFullName } from './verdict';
 
 const maxSystemMessageLength = 12_000;
 
@@ -1394,30 +1395,6 @@ function createNonce(): string {
   return crypto.randomBytes(16).toString('base64');
 }
 
-function statusClass(status: string): string {
-  return `status-${status.toLowerCase().replace(/\s+/g, '-')}`;
-}
-
-function verdictClass(status: string): string {
-  return `verdict-${status.toLowerCase().replace(/\s+/g, '-')}`;
-}
-
-function scoreClass(earned: number, total: number, status: string): string {
-  if (status === 'AC' || (status === 'Scored' && total > 0 && earned >= total)) {
-    return 'score-passed';
-  }
-  if (earned > 0 && earned < total) {
-    return `score-partial ${verdictClass(status)}`;
-  }
-  if (status === 'Not Run') {
-    return 'score-muted';
-  }
-  if (status === 'Skipped') {
-    return 'score-muted verdict-skipped';
-  }
-  return `score-failed ${verdictClass(status)}`;
-}
-
 function getOverallStatus(report: JudgeReport, earnedScore: number | undefined): string {
   if (report.samples.some((sample) => sample.status === 'RE')) {
     return 'RE';
@@ -1676,10 +1653,6 @@ function formatTestcaseDuration(testcase: Pick<JudgeReportTestcaseViewModel, 'ti
     : testcase.timeMs;
   const prefix = testcase.killedByTimeout ? '>' : '';
   return timeMs === undefined ? '-' : `${prefix}${Math.round(timeMs)} ms`;
-}
-
-function statusLabel(status: string): string {
-  return formatVerdictAcronym(status);
 }
 
 function escapeHtml(value: string): string {

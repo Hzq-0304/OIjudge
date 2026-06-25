@@ -19,16 +19,17 @@ import {
   toRuntimeErrorSummary
 } from './runtimeErrorExplainer';
 import {
-  getLegacyOutputRel,
-  getProblemSampleOutputPaths,
   getSampleFileStatus,
-  inferSampleSourceType,
-  resolveSamplePath
 } from './sampleFiles';
+import {
+  createSampleReport,
+  createSkippedSampleReport,
+  getSampleOutputPaths
+} from './judge/sampleReport';
 import { isSetterModeEnabled } from './setterMode';
 import { CheckerConfig, CheckerSampleReport, CompileResult, CompileStackReport, FileIoConfig, IoMode, JudgeMode, JudgeReport, OITestConfig, ProcessResult, SampleConfig, SampleReport } from './types';
 import { PlainCheckerParseOptions, resolvePlainCheckerOptions } from './plainCheckerParser';
-import { SubtaskSkipDecision, SubtaskSkipScheduler, validateSubtaskSkipConfig } from './subtaskSkip';
+import { SubtaskSkipScheduler, validateSubtaskSkipConfig } from './subtaskSkip';
 
 type RunClassification = 'OLE' | 'TLE' | 'MLE' | 'RE' | undefined;
 
@@ -1138,39 +1139,6 @@ function createCheckerErrorSampleReport(
   );
 }
 
-function createSkippedSampleReport(
-  workspaceFolder: vscode.WorkspaceFolder,
-  sample: SampleConfig,
-  problemId: string | undefined,
-  ioMode: IoMode,
-  decision: SubtaskSkipDecision
-): SampleReport {
-  const outputPaths = getSampleOutputPaths(workspaceFolder, sample, problemId);
-  return createSampleReport(
-    workspaceFolder,
-    sample,
-    'Skipped',
-    0,
-    0,
-    outputPaths.outputRel,
-    outputPaths.stderrRel,
-    outputPaths.diffRel,
-    {
-      killedByTimeout: false,
-      ioMode,
-      skip: {
-        reason: decision.reason,
-        subtaskId: decision.subtask?.id,
-        subtaskName: decision.subtask?.name,
-        dependencyId: decision.dependency?.id,
-        dependencyName: decision.dependency?.name
-      }
-    },
-    decision.message,
-    0
-  );
-}
-
 async function saveTextOutput(filePath: string, text: string): Promise<void> {
   await fs.mkdir(resolveDirname(filePath), { recursive: true });
   await fs.writeFile(filePath, text, 'utf8');
@@ -1247,54 +1215,6 @@ function formatRunResultOutput(
   return `${lines.join('\n')}\n`;
 }
 
-function createSampleReport(
-  workspaceFolder: vscode.WorkspaceFolder,
-  sample: SampleConfig,
-  status: SampleReport['status'],
-  timeMs: number,
-  compareTimeMs: number,
-  outputRel: string,
-  stderrRel: string,
-  diffRel: string,
-  diagnostics: Partial<Pick<SampleReport, 'source' | 'exe' | 'sourcePath' | 'exePath' | 'cwd' | 'exitCode' | 'signal' | 'killedByTimeout' | 'hardKillLimitMs' | 'outputLimitExceeded' | 'outputBytes' | 'outputLimitBytes' | 'stdinError' | 'stdoutError' | 'stderrError' | 'stderrPreview' | 'memoryBytes' | 'memoryKiB' | 'spawnError' | 'runnerError' | 'compareError' | 'runtimeError' | 'ioMode' | 'fileIo' | 'skip'>> = {},
-  message?: string,
-  score?: number,
-  checker?: CheckerSampleReport
-): SampleReport {
-  const sampleSourceType = inferSampleSourceType(workspaceFolder, sample);
-  return {
-    id: sample.id,
-    index: sample.index,
-    name: sample.name,
-    status,
-    timeMs,
-    compareTimeMs,
-    elapsedMs: Math.round(timeMs),
-    input: resolveSamplePath(workspaceFolder, sample.input),
-    answer: resolveSamplePath(workspaceFolder, sample.answer),
-    actualOutput: outputRel,
-    output: outputRel,
-    stderr: stderrRel,
-    runResult: deriveRunResultRel(outputRel),
-    diff: diffRel,
-    sampleSourceType,
-    ...diagnostics,
-    score,
-    checker,
-    message
-  };
-}
-
-function deriveRunResultRel(outputRel: string): string {
-  if (/useroutput\.txt$/u.test(outputRel)) {
-    return outputRel.replace(/useroutput\.txt$/u, 'run-result.txt');
-  }
-  if (/\.out$/u.test(outputRel)) {
-    return outputRel.replace(/\.out$/u, '.run-result.txt');
-  }
-  return `${outputRel}.run-result.txt`;
-}
-
 function createRuntimeDiagnostics(
   sourcePath: string,
   exePath: string,
@@ -1320,54 +1240,6 @@ function createRuntimeDiagnostics(
     stdoutError: result.stdoutError,
     stderrError: result.stderrError,
     stderrPreview: firstLines(result.stderr, 12)
-  };
-}
-
-function getSampleOutputPaths(
-  workspaceFolder: vscode.WorkspaceFolder,
-  sample: SampleConfig,
-  problemId: string | undefined
-): {
-  outputRel: string;
-  outputPath: string;
-  stderrRel: string;
-  stderrPath: string;
-  runResultRel: string;
-  runResultPath: string;
-  runDirRel: string;
-  runDirPath: string;
-  diffRel: string;
-  diffPath: string;
-} {
-  if (problemId) {
-    const paths = getProblemSampleOutputPaths(workspaceFolder, problemId, sample.index);
-    return {
-      outputRel: paths.outputRel,
-      outputPath: paths.outputPath,
-      stderrRel: paths.stderrRel,
-      stderrPath: paths.stderrPath,
-      runResultRel: paths.runResultRel,
-      runResultPath: paths.runResultPath,
-      runDirRel: paths.runDirRel,
-      runDirPath: paths.runDirPath,
-      diffRel: paths.diffRel,
-      diffPath: paths.diffPath
-    };
-  }
-
-  const outputRel = getLegacyOutputRel(sample);
-  const outputPath = resolveWorkspacePath(workspaceFolder, outputRel);
-  return {
-    outputRel,
-    outputPath,
-    stderrRel: outputRel.replace(/\.out$/u, '.err'),
-    stderrPath: outputPath.replace(/\.out$/u, '.err'),
-    runResultRel: outputRel.replace(/\.out$/u, '.run-result.txt'),
-    runResultPath: outputPath.replace(/\.out$/u, '.run-result.txt'),
-    runDirRel: outputRel.replace(/\.out$/u, '-run'),
-    runDirPath: outputPath.replace(/\.out$/u, '-run'),
-    diffRel: outputRel.replace(/\.out$/u, '.diff'),
-    diffPath: outputPath.replace(/\.out$/u, '.diff')
   };
 }
 

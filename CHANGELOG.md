@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 重构评测与报告内部模块，保持用户功能不变/Refactor internal judging and report modules without changing user-facing behavior.
 - 新增 Subtask Skip 与子任务依赖评测能力 / Add Subtask Skip and subtask dependency judging support.
 - 补充 testlib-like 交互评测完整示例和文档 / Add complete testlib-like interactive judging example and documentation.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
