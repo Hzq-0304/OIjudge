@@ -1495,7 +1495,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "vitest run tests --exclude \"tests/cross-platform/**\" --exclude \"tests/report-ui/**\"",
-    "test:cross-platform": "vitest run tests/cross-platform",
+    "test:cross-platform": "vitest run tests/cross-platform --no-file-parallelism",
     "test:report-ui": "vitest run tests/report-ui",
     "test:watch": "vitest"
   },
