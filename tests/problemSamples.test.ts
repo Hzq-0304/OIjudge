@@ -9,14 +9,19 @@ import {
   addEmptyProblemSample,
   addExternalProblemSample,
   addProblemInputSample,
+  addProblemFromSource,
   addProblemSample,
   applyAllGeneratedAnswersForProblem,
   applyGeneratedAnswerForSample,
+  bindProblemStatement,
   clearProblemSampleScore,
   createProblem,
   createProblemSubtask,
+  deleteProblem,
   deleteGeneratedAnswerForSample,
   getProblem,
+  getProblemRoot,
+  ensureProblemsConfig,
   getSampleGeneratedAnswerStatus,
   isAnswerFileEmpty,
   setProblemSampleScore,
@@ -197,6 +202,67 @@ describe('problem sample files', () => {
     expect(sample?.input).toBe(path.resolve(inputPath));
     expect(sample?.answer).toBe(path.resolve(answerPath));
     expect(sample?.answer.endsWith('.out')).toBe(true);
+  });
+
+  it('deletes a problem record and managed directory without deleting external files', async () => {
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'solution.cpp');
+    const statementPath = path.join(workspaceFolder.uri.fsPath, 'statement.md');
+    const inputPath = path.join(workspaceFolder.uri.fsPath, 'external', 'case.in');
+    const answerPath = path.join(workspaceFolder.uri.fsPath, 'external', 'case.out');
+    await fs.mkdir(path.dirname(inputPath), { recursive: true });
+    await fs.writeFile(sourcePath, 'int main() { return 0; }\n', 'utf8');
+    await fs.writeFile(statementPath, '# Statement\n', 'utf8');
+    await fs.writeFile(inputPath, '1\n', 'utf8');
+    await fs.writeFile(answerPath, '1\n', 'utf8');
+    const problem = await addProblemFromSource(workspaceFolder, sourcePath);
+    await bindProblemStatement(workspaceFolder, problem.id, statementPath);
+    await addExternalProblemSample(workspaceFolder, problem.id, inputPath, answerPath);
+    const other = await createProblem(workspaceFolder, 'B');
+    const problemRoot = getProblemRoot(workspaceFolder, problem.id);
+    await fs.mkdir(path.join(problemRoot, 'outputs'), { recursive: true });
+    await fs.writeFile(path.join(problemRoot, 'outputs', 'report.json'), '{}\n', 'utf8');
+
+    const result = await deleteProblem(workspaceFolder, problem.id);
+    const config = await ensureProblemsConfig(workspaceFolder);
+
+    expect(result.problem?.id).toBe(problem.id);
+    expect(result.remainingProblems.map((entry) => entry.id)).toEqual([other.id]);
+    expect(config.problems.map((entry) => entry.id)).toEqual([other.id]);
+    await expect(getProblem(workspaceFolder, problem.id)).resolves.toBeUndefined();
+    await expect(fs.access(problemRoot)).rejects.toThrow();
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('int main() { return 0; }\n');
+    await expect(fs.readFile(statementPath, 'utf8')).resolves.toBe('# Statement\n');
+    await expect(fs.readFile(inputPath, 'utf8')).resolves.toBe('1\n');
+    await expect(fs.readFile(answerPath, 'utf8')).resolves.toBe('1\n');
+  });
+
+  it('deletes the config record even when the managed problem directory is already missing', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const problemRoot = getProblemRoot(workspaceFolder, problem.id);
+    await fs.rm(problemRoot, { recursive: true, force: true });
+
+    const result = await deleteProblem(workspaceFolder, problem.id);
+    const config = await ensureProblemsConfig(workspaceFolder);
+
+    expect(result.problem?.id).toBe(problem.id);
+    expect(result.remainingProblems).toEqual([]);
+    expect(config.problems).toEqual([]);
+  });
+
+  it('leaves unrelated problems untouched when deleting a missing problem id', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const problemRoot = getProblemRoot(workspaceFolder, problem.id);
+
+    const result = await deleteProblem(workspaceFolder, 'missing-problem');
+    const saved = await getProblem(workspaceFolder, problem.id);
+
+    expect(result.problem).toBeUndefined();
+    expect(result.remainingProblems.map((entry) => entry.id)).toEqual([problem.id]);
+    expect(saved?.id).toBe(problem.id);
+    await expect(fs.access(problemRoot)).resolves.toBeUndefined();
   });
 
   it('writes generated answers without changing the current answer file', async () => {

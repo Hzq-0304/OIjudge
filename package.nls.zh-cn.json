@@ -68,6 +68,7 @@
   "commands.openSampleUserOutput.title": "OI Judge: 打开运行结果",
   "commands.openSampleDiff.title": "OI Judge: 打开差异",
   "commands.deleteSample.title": "OI Judge: 删除样例",
+  "commands.deleteProblem.title": "OI Judge: 删除题目",
   "commands.setChecker.title": "OI Judge: 设置 Checker",
   "commands.setPlainCheckerProtocol.title": "OI Judge: 设置 Plain Checker 协议",
   "commands.clearChecker.title": "OI Judge: 清除 Checker",

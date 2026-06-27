@@ -85,6 +85,7 @@
     "onCommand:oijudger.openSampleUserOutput",
     "onCommand:oijudger.openSampleDiff",
     "onCommand:oijudger.deleteSample",
+    "onCommand:oijudger.deleteProblem",
     "onView:oijudger.samplesView",
     "onCommand:oijudger.setChecker",
     "onCommand:oijudger.setPlainCheckerProtocol",
@@ -477,6 +478,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "oijudger.deleteProblem",
+        "title": "%commands.deleteProblem.title%",
+        "icon": "$(trash)"
+      },
+      {
         "command": "oijudger.setChecker",
         "title": "%commands.setChecker.title%",
         "icon": "$(verified)"
@@ -816,6 +822,11 @@
           "command": "oijudger.addProgramToProblem",
           "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)",
           "group": "2_program"
+        },
+        {
+          "command": "oijudger.deleteProblem",
+          "when": "view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)",
+          "group": "9_delete"
         },
         {
           "command": "oijudger.addSampleFromSamplesGroup",
@@ -1265,6 +1276,10 @@
         },
         {
           "command": "oijudger.deleteSubtask",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.deleteProblem",
           "when": "false"
         },
         {

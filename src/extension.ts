@@ -58,6 +58,7 @@ import {
   createProblemSubtaskGeneratorInputFile,
   createProblemSubtask,
   createProblem,
+  deleteProblem,
   deleteProblemSubtask,
   deleteGeneratedAnswerForSample,
   deleteProblemSample,
@@ -909,6 +910,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.deleteSample', async (problemArg?: unknown, sampleArg?: unknown) => {
       await deleteSampleCommand(readProblemId(problemArg), readSampleId(problemArg, sampleArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.deleteProblem', async (problemArg?: unknown) => {
+      await deleteProblemCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     output
   );
@@ -5950,6 +5954,49 @@ async function openFileInEditor(filePath: string, missingMessage: string): Promi
 
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
   await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function deleteProblemCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const previousActiveProblemId = activeProblemId;
+  const context = await getProblemContext(problemId, true);
+  if (!context) {
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    `${t('deleteProblemConfirm', { name: context.problem.name })} ${t('deleteProblemDetail')}`,
+    { modal: true },
+    t('delete'),
+    t('cancel')
+  );
+  if (confirmed !== t('delete')) {
+    activeProblemId = previousActiveProblemId;
+    return;
+  }
+
+  try {
+    const result = await deleteProblem(context.workspaceFolder, context.problem.id);
+    if (!result.problem) {
+      activeProblemId = previousActiveProblemId;
+      vscode.window.showWarningMessage(t('problemNotFound'));
+      sampleTreeProvider.refresh();
+      return;
+    }
+
+    const remainingActive = result.remainingProblems.find((problem) => problem.id === previousActiveProblemId);
+    activeProblemId = remainingActive?.id ?? result.remainingProblems[0]?.id;
+    sampleTreeProvider.clearAllRunning();
+    sampleTreeProvider.refresh();
+    await refreshProblemReportPanel(context.problem.id);
+    vscode.window.showInformationMessage(t('deleteProblemDone', { name: result.problem.name }));
+  } catch (error) {
+    activeProblemId = previousActiveProblemId;
+    output.appendLine(`[ERR] Failed to delete problem: ${String(error)}`);
+    vscode.window.showErrorMessage(t('deleteProblemFailed'));
+  }
 }
 
 async function deleteSampleCommand(

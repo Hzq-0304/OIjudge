@@ -1022,6 +1022,33 @@ export async function deleteProblemSubtask(
   return true;
 }
 
+export type DeleteProblemResult = {
+  problem?: ProblemConfig;
+  remainingProblems: ProblemConfig[];
+};
+
+export async function deleteProblem(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string
+): Promise<DeleteProblemResult> {
+  const problems = await ensureProblemsConfig(workspaceFolder);
+  const problemIndex = problems.problems.findIndex((entry) => entry.id === problemId);
+  if (problemIndex < 0) {
+    return { remainingProblems: problems.problems };
+  }
+
+  const problem = problems.problems[problemIndex];
+  await fs.rm(getProblemRoot(workspaceFolder, problem.id), { recursive: true, force: true });
+
+  problems.problems.splice(problemIndex, 1);
+  await writeProblemsConfig(workspaceFolder, problems);
+
+  return {
+    problem,
+    remainingProblems: problems.problems
+  };
+}
+
 export async function setProblemSubtaskGeneratorInput(
   workspaceFolder: vscode.WorkspaceFolder,
   problemId: string,

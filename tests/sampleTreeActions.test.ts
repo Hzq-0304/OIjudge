@@ -129,10 +129,12 @@ describe('sample tree add entry', () => {
       'oijudger.stressTestCurrentCode',
       'oijudger.runStressTest',
       'oijudger.stopStressTest',
-      'oijudger.openProblemResultPanel'
+      'oijudger.openProblemResultPanel',
+      'oijudger.deleteProblem'
     ]);
     expect(actionNodes.find((node) => node.command?.command === 'oijudger.stopStressTest')?.icon?.id).toBe('debug-stop');
     expect(actionNodes.find((node) => node.command?.command === 'oijudger.stressTestCurrentCode')?.label).toBe('Stress Test Current Code');
+    expect(actionNodes.find((node) => node.command?.command === 'oijudger.deleteProblem')?.icon?.id).toBe('trash');
   });
 
   it('moves statement actions under the statement group', async () => {

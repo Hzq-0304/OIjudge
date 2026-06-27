@@ -62,6 +62,10 @@ xcode-select --install
 - 程序无限运行 / 无法停止。
 - GitHub Actions 与本机时间/内存差异。
 
+## 托管题目删除
+
+删除题目只会删除 OI Judge 题目记录和 `.vscode/.OIJudge/problems/<problemId>/` 内部托管目录。源码、题面和题目引用的外部测试点文件在所有平台上都会保留。
+
 ## Subtask Skip 与子任务依赖
 
 普通 Judge 支持 Subtask Skip 与子任务依赖。该能力默认关闭以保持旧配置兼容。启用后，失败的 `bundle` 子任务可以跳过剩余测试点；带有 `dependsOn` 的子任务会在任一前置子任务未通过时直接跳过。Skipped 测试点计 `0` 分，且不会启动程序。

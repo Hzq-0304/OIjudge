@@ -62,6 +62,10 @@ The current cross-platform regression suite covers:
 - A program runs forever or cannot be stopped.
 - GitHub Actions and local machines may report slightly different time / memory values.
 
+## Managed Problem Deletion
+
+Deleting a problem removes only the OI Judge problem record and the managed `.vscode/.OIJudge/problems/<problemId>/` directory. Source files, statements, and external testcase files referenced by the problem are left untouched on all platforms.
+
 ## Subtask Skip and Dependencies
 
 Subtask Skip is available for ordinary Judge runs. It is disabled by default for compatibility. When enabled, a failed `bundle` Subtask can skip its remaining cases, and a Subtask with `dependsOn` can be skipped when any prerequisite Subtask did not pass. Skipped cases are reported as `Skipped`, score `0`, and are not executed.

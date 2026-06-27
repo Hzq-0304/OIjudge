@@ -968,7 +968,8 @@ function createProblemActionNodes(problem: ProblemConfig): TreeNode[] {
     actionNode(t('stress.currentCode.run'), 'oijudger.stressTestCurrentCode', 'beaker', problem.id),
     actionNode(t('stress.run'), 'oijudger.runStressTest', 'beaker', problem.id),
     actionNode(t('stress.stop'), 'oijudger.stopStressTest', 'debug-stop', problem.id),
-    actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id)
+    actionNode(t('openResultPanel'), 'oijudger.openProblemResultPanel', 'layout-panel', problem.id),
+    actionNode(t('deleteProblem'), 'oijudger.deleteProblem', 'trash', problem.id)
   ];
 }
 

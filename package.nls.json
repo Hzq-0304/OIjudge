@@ -68,6 +68,7 @@
   "commands.openSampleUserOutput.title": "OI Judge: Open Run Result",
   "commands.openSampleDiff.title": "OI Judge: Open Diff",
   "commands.deleteSample.title": "OI Judge: Delete Sample",
+  "commands.deleteProblem.title": "OI Judge: Delete Problem",
   "commands.setChecker.title": "OI Judge: Set Checker",
   "commands.setPlainCheckerProtocol.title": "OI Judge: Set Plain Checker Protocol",
   "commands.clearChecker.title": "OI Judge: Clear Checker",

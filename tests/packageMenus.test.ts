@@ -548,6 +548,35 @@ describe('package tree sample add menu', () => {
     expect(registeredCommands()).toContain('oijudger.importProblemPackage');
   });
 
+  it('contributes delete problem only on problem nodes', () => {
+    const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.deleteProblem');
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+    const entries = contextMenus.filter((entry) => entry.command === 'oijudger.deleteProblem');
+
+    expect(packageJson.activationEvents).toContain('onCommand:oijudger.deleteProblem');
+    expect(command).toMatchObject({
+      icon: '$(trash)',
+      title: '%commands.deleteProblem.title%'
+    });
+    expect(resolveNls(command?.title)).toBe('OI Judge: Delete Problem');
+    expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 删除题目');
+    expect(entries).toEqual([
+      {
+        command: 'oijudger.deleteProblem',
+        when: 'view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker || viewItem == oijudgerProblemPlainChecker)',
+        group: '9_delete'
+      }
+    ]);
+    expect(entries.every((entry) => !entry.when.includes('sample ||'))).toBe(true);
+    expect(entries.every((entry) => !entry.when.includes('subtask ||'))).toBe(true);
+    expect(entries.every((entry) => !entry.when.includes('generator'))).toBe(true);
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.deleteProblem',
+      when: 'false'
+    });
+    expect(registeredCommands()).toContain('oijudger.deleteProblem');
+  });
+
   it('contributes stress test entry without requiring setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
