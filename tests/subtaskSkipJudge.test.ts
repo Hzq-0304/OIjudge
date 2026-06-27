@@ -36,7 +36,7 @@ const workspaces: string[] = [];
 
 describe('subtask skip judge scheduling', () => {
   afterEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await Promise.all(workspaces.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
   });
 
@@ -138,7 +138,7 @@ describe('subtask skip judge scheduling', () => {
     expect(accepted?.samples.map((sample) => sample.status)).toEqual(['AC', 'AC']);
     expect(mocks.runNativeProcess).toHaveBeenCalledTimes(2);
 
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.compileSource.mockResolvedValue(compileOk(workspaceFolder));
     mocks.runNativeProcess.mockResolvedValueOnce(result('wrong\n'));
 
@@ -201,7 +201,7 @@ describe('subtask skip judge scheduling', () => {
 });
 
 async function expectSkipAfterStatus(status: 'WA' | 'RE' | 'TLE', secondResult: ProcessResult): Promise<void> {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   const { runAllSamples } = await import('../src/judge');
   const workspaceFolder = await createWorkspace();
   await writeSamples(workspaceFolder, ['1', '2', '3']);
