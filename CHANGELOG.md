@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 简化 OI Judge 侧边栏，移除仅包含管理入口的工作区分组 / Simplify the OI Judge sidebar by removing the workspace group that only contained the manage action.
+
 ## 5.6.0
 
 - 新增 Subtask Skip 与子任务依赖评测能力 / Add Subtask Skip and subtask dependency judging support.

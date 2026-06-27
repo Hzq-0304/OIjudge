@@ -395,6 +395,11 @@ describe('package tree sample add menu', () => {
         command: 'oijudger.checkEnvironment',
         when: 'view == oijudger.samplesView',
         group: 'navigation@5'
+      },
+      {
+        command: 'oijudger.manageWorkspace',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@6'
       }
     ]);
   });
@@ -461,6 +466,9 @@ describe('package tree sample add menu', () => {
 
   it('contributes a workspace management command for consolidated workspace actions', () => {
     const command = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.manageWorkspace');
+    const titleMenus = packageJson.contributes.menus['view/title'].filter((entry) =>
+      entry.command === 'oijudger.manageWorkspace'
+    );
 
     expect(packageJson.activationEvents).toContain('onCommand:oijudger.manageWorkspace');
     expect(command).toMatchObject({
@@ -469,6 +477,17 @@ describe('package tree sample add menu', () => {
     });
     expect(resolveNls(command?.title)).toBe('OI Judge: Manage Workspace');
     expect(resolveNls(command?.title, packageNlsZhCn)).toBe('OI Judge: 管理工作区');
+    expect(titleMenus).toEqual([
+      {
+        command: 'oijudger.manageWorkspace',
+        when: 'view == oijudger.samplesView',
+        group: 'navigation@6'
+      }
+    ]);
+    expect(packageJson.contributes.menus.commandPalette).not.toContainEqual({
+      command: 'oijudger.manageWorkspace',
+      when: 'false'
+    });
     expect(registeredCommands()).toContain('oijudger.manageWorkspace');
   });
 

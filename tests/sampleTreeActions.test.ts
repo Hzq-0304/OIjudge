@@ -69,15 +69,15 @@ describe('sample tree add entry', () => {
     expect(problemChildren.every((node) => node.kind === 'group')).toBe(true);
   });
 
-  it('consolidates workspace operations behind a single management entry', async () => {
+  it('does not render a workspace group for the management action', async () => {
     await createWorkspace();
     const provider = new SampleTreeProvider();
 
     const rootNodes = await provider.getChildren();
-    const workspaceGroup = rootNodes.find((node) => node.group === 'workspaceActions');
-    const workspaceActions = await provider.getChildren(workspaceGroup);
 
-    expect(workspaceActions.map((node) => node.command?.command)).toEqual(['oijudger.manageWorkspace']);
+    expect(rootNodes.map((node) => node.group)).toEqual(['problems']);
+    expect(rootNodes.some((node) => node.group === 'workspaceActions')).toBe(false);
+    expect(rootNodes.some((node) => node.command?.command === 'oijudger.manageWorkspace')).toBe(false);
   });
 
   it('shows a passive empty sample hint without an add command', async () => {

@@ -68,6 +68,7 @@ Tree view:
 - Problem nodes are collapsed by default to keep the OI Judge sidebar compact after VSCode restarts.
 - Expand a problem manually to view Statement, Programs, Limits, Samples, and Actions.
 - Samples and Actions are also collapsed by default, which keeps large multi-sample problems easier to scan.
+- Manage Workspace is available from the OI Judge view title bar or the Command Palette.
 - Click the Default Program, Compiler, or C++ Standard node under a problem to edit the corresponding setting.
 - Click the Time, Memory, or Stack node under a problem's Limits section to edit the corresponding limit. These limit editors are not duplicated in the Actions section.
 

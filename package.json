@@ -780,6 +780,11 @@
           "group": "navigation@5"
         },
         {
+          "command": "oijudger.manageWorkspace",
+          "when": "view == oijudger.samplesView",
+          "group": "navigation@6"
+        },
+        {
           "command": "oijudger.refreshStressRecords",
           "when": "view == oijudger.stressRecordsView",
           "group": "navigation@1"

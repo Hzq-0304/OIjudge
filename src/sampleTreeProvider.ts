@@ -29,7 +29,6 @@ import { formatVerdictAcronym } from './verdict';
 type NodeKind = 'group' | 'problem' | 'info' | 'sample' | 'subtask' | 'action';
 type NodeGroup =
   | 'problems'
-  | 'workspaceActions'
   | 'statement'
   | 'programs'
   | 'configuration'
@@ -126,10 +125,6 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
 
     if (element.group === 'problems' && !element.problemId) {
       return config.problems.length > 0 ? config.problems.map(createProblemNode) : [createNoProblemsNode()];
-    }
-
-    if (element.group === 'workspaceActions') {
-      return createWorkspaceActionNodes();
     }
 
     if (!element.problemId) {
@@ -272,13 +267,6 @@ function createRootNodes(): TreeNode[] {
       icon: new vscode.ThemeIcon('book'),
       collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
       group: 'problems'
-    },
-    {
-      kind: 'group',
-      label: t('workspace'),
-      icon: new vscode.ThemeIcon('tools'),
-      collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-      group: 'workspaceActions'
     }
   ];
 }
@@ -1132,12 +1120,6 @@ function createJudgeModeNode(problem: ProblemConfig): TreeNode {
       arguments: [problem.id]
     }
   };
-}
-
-function createWorkspaceActionNodes(): TreeNode[] {
-  return [
-    actionNode(t('manageWorkspace'), 'oijudger.manageWorkspace', 'tools')
-  ];
 }
 
 function formatJudgeModeLabel(mode: JudgeMode): string {
