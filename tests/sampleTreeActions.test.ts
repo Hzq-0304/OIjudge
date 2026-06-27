@@ -13,6 +13,8 @@ import {
   moveProblemSampleToSubtask,
   saveProblemReport,
   setProblemSubtaskResult,
+  updateProblemIoMode,
+  writeProblemsConfig,
   writeGeneratedAnswerForSample
 } from '../src/problems';
 import { formatVerdictText, SampleTreeProvider, withSamplesRunning } from '../src/sampleTreeProvider';
@@ -196,6 +198,64 @@ describe('sample tree add entry', () => {
     expect((await provider.getChildren(configurationGroup)).find((node) =>
       node.command?.command === 'oijudger.setJudgeMode'
     )?.label).toBe('Judge Mode: Text Compare (ignore trailing whitespace and final newlines)');
+  });
+
+  it('shows a Standard IO mode entry in the problem configuration group', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const provider = new SampleTreeProvider();
+
+    const configurationNodes = await getConfigurationNodes(provider);
+    const ioNode = configurationNodes.find((node) => node.command?.command === 'oijudger.setIoMode');
+
+    expect(ioNode).toMatchObject({
+      label: 'I/O Mode: Standard IO',
+      problemId: problem.id
+    });
+    expect(ioNode?.description).toBeUndefined();
+    expect(ioNode?.icon?.id).toBe('terminal');
+    expect(ioNode?.command?.arguments).toEqual([problem.id]);
+    expect(configurationNodes.some((node) => node.command?.command === 'oijudger.setFileIoNames')).toBe(false);
+  });
+
+  it('shows File IO names and binds them to the file-name command', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    await updateProblemIoMode(workspaceFolder, problem.id, 'fileio', {
+      inputFileName: 'problem.in',
+      outputFileName: 'problem.out'
+    });
+    const provider = new SampleTreeProvider();
+
+    const configurationNodes = await getConfigurationNodes(provider);
+    const ioNode = configurationNodes.find((node) => node.command?.command === 'oijudger.setIoMode');
+    const fileIoNodes = configurationNodes.filter((node) => node.command?.command === 'oijudger.setFileIoNames');
+
+    expect(ioNode).toMatchObject({
+      label: 'I/O Mode: File IO',
+      description: 'problem.in -> problem.out',
+      tooltip: 'Input File: problem.in\nOutput File: problem.out'
+    });
+    expect(ioNode?.icon?.id).toBe('files');
+    expect(fileIoNodes.map((node) => node.label)).toEqual([
+      'Input File: problem.in',
+      'Output File: problem.out'
+    ]);
+    expect(fileIoNodes.every((node) => node.command?.arguments?.[0] === problem.id)).toBe(true);
+  });
+
+  it('displays legacy problems without ioMode as Standard IO', async () => {
+    const workspaceFolder = await createWorkspace();
+    const problem = await createProblem(workspaceFolder, 'A');
+    const legacyProblem = { ...problem, ioMode: undefined, fileIo: undefined };
+    await writeProblemsConfig(workspaceFolder, { version: 1, problems: [legacyProblem] });
+    const provider = new SampleTreeProvider();
+
+    const configurationNodes = await getConfigurationNodes(provider);
+
+    expect(configurationNodes.find((node) => node.command?.command === 'oijudger.setIoMode')?.label)
+      .toBe('I/O Mode: Standard IO');
+    expect(configurationNodes.some((node) => node.command?.command === 'oijudger.setFileIoNames')).toBe(false);
   });
 
   it('shows setter STD answer and generator actions when setter mode is enabled', async () => {
@@ -714,6 +774,14 @@ async function getSampleNodes(provider: SampleTreeProvider, problemIndex = 0): P
   const problemNode = (await provider.getChildren(problemsRoot))[problemIndex];
   const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
   return (await provider.getChildren(samplesGroup)).filter((node) => node.kind === 'sample');
+}
+
+async function getConfigurationNodes(provider: SampleTreeProvider, problemIndex = 0): Promise<any[]> {
+  const rootNodes = await provider.getChildren();
+  const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+  const problemNode = (await provider.getChildren(problemsRoot))[problemIndex];
+  const configurationGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'configuration');
+  return provider.getChildren(configurationGroup);
 }
 
 function iconId(item: vscode.TreeItem): string | undefined {

@@ -214,6 +214,7 @@ Interactor 可以通过 `{input}` 获取测试点输入文件路径，通过 `{a
 ## I/O 模式
 
 - 每个题目可以使用 `Standard IO` 或 `File IO`。
+- 可以在 OI Judge 侧边栏中题目的“配置”分组切换模式。选择 `File IO` 后，同一分组会显示输入文件名和输出文件名入口。
 - `Standard IO` 是默认模式：OI Judge 通过 stdin 输入样例，并把 stdout 捕获为 `useroutput.txt`。
 - `File IO` 用于使用 `problem.in` 和 `problem.out` 等文件的程序。
 - 在 File IO 模式下，OI Judge 会为每个样例创建隔离的临时运行目录：

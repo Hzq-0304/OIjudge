@@ -343,6 +343,40 @@ describe('package tree sample add menu', () => {
     }
   });
 
+  it('keeps I/O mode and File IO filename commands contributed and registered', () => {
+    const ioModeCommand = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.setIoMode');
+    const fileNamesCommand = packageJson.contributes.commands.find((entry) => entry.command === 'oijudger.setFileIoNames');
+    const contextMenus = packageJson.contributes.menus['view/item/context'];
+
+    expect(packageJson.activationEvents).toEqual(expect.arrayContaining([
+      'onCommand:oijudger.setIoMode',
+      'onCommand:oijudger.setFileIoNames'
+    ]));
+    expect(ioModeCommand).toMatchObject({
+      icon: '$(terminal)',
+      title: '%commands.setIoMode.title%'
+    });
+    expect(fileNamesCommand).toMatchObject({
+      icon: '$(files)',
+      title: '%commands.setFileIoNames.title%'
+    });
+    expect(resolveNls(ioModeCommand?.title)).toBe('OI Judge: Set I/O Mode');
+    expect(resolveNls(fileNamesCommand?.title)).toBe('OI Judge: Set File I/O Names');
+    expect(contextMenus).toContainEqual({
+      command: 'oijudger.setIoMode',
+      when: 'view == oijudger.samplesView && (viewItem == oijudgerProblemNormal || viewItem == oijudgerProblemChecker)',
+      group: '0_judge@2'
+    });
+    expect(packageJson.contributes.menus.commandPalette).toContainEqual({
+      command: 'oijudger.setFileIoNames',
+      when: 'false'
+    });
+    expect(registeredCommands()).toEqual(expect.arrayContaining([
+      'oijudger.setIoMode',
+      'oijudger.setFileIoNames'
+    ]));
+  });
+
   it('contributes testcase export menus without requiring setter mode', () => {
     const commands = packageJson.contributes.commands.map((entry) => entry.command);
     const contextMenus = packageJson.contributes.menus['view/item/context'];
