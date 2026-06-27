@@ -2,10 +2,13 @@
 
 ## Unreleased
 
-- 新增删除题目功能，支持移除题目记录和内部托管目录且保留外部文件 / Add Delete Problem support for removing problem records and managed internal data while preserving external files.
-- 重构评测与报告内部模块，保持用户功能不变/Refactor internal judging and report modules without changing user-facing behavior.
+## 5.6.0
+
 - 新增 Subtask Skip 与子任务依赖评测能力 / Add Subtask Skip and subtask dependency judging support.
+- 新增删除题目命令，并确保不会删除用户源代码、题面或外部样例文件 / Add Delete Problem command while preserving user source files, statements, and external sample files.
 - 补充 testlib-like 交互评测完整示例和文档 / Add complete testlib-like interactive judging example and documentation.
+- 重构评测与报告内部模块，保持用户功能不变 / Refactor internal judging and report modules without changing user-facing behavior.
+- 修复跨平台回归测试在 Windows 上因并发导致的交互评测超时问题 / Fix Windows cross-platform regression interactive timeouts caused by concurrent test files.
 - 新增函数式交互评测模式 / Add Function-style Judge mode.
 - 补充函数式交互评测的公开题型模式回归测试 / Add public-pattern regression tests for Function-style Judge.
 
