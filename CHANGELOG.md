@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.6.1
+
 - 简化 OI Judge 侧边栏，移除仅包含管理入口的工作区分组 / Simplify the OI Judge sidebar by removing the workspace group that only contained the manage action.
 
 ## 5.6.0
