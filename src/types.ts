@@ -216,6 +216,7 @@ export type StackConfig = {
 export type ProblemConfig = OITestConfig & {
   id: string;
   name: string;
+  createdAt?: string;
   source?: string;
   defaultSource?: string;
   statement?: ProblemStatement;

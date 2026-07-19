@@ -10,6 +10,7 @@ import {
   addProblemInputSample,
   createProblem,
   createProblemSubtask,
+  ensureProblemsConfig,
   moveProblemSampleToSubtask,
   saveProblemReport,
   setProblemSubtaskResult,
@@ -69,6 +70,42 @@ describe('sample tree add entry', () => {
       'actions'
     ]);
     expect(problemChildren.every((node) => node.kind === 'group')).toBe(true);
+  });
+
+  it('shows newly created problems first and records their creation time', async () => {
+    const workspaceFolder = await createWorkspace();
+    const first = await createProblem(workspaceFolder, 'First');
+    const second = await createProblem(workspaceFolder, 'Second');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNodes = await provider.getChildren(problemsRoot);
+
+    expect(problemNodes.map((node) => node.problemId)).toEqual([second.id, first.id]);
+    expect(Date.parse(first.createdAt ?? '')).not.toBeNaN();
+    expect(Date.parse(second.createdAt ?? '')).not.toBeNaN();
+  });
+
+  it('persists problem order when a problem is dragged before another problem', async () => {
+    const workspaceFolder = await createWorkspace();
+    const first = await createProblem(workspaceFolder, 'First');
+    const second = await createProblem(workspaceFolder, 'Second');
+    const third = await createProblem(workspaceFolder, 'Third');
+    const provider = new SampleTreeProvider();
+
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNodes = await provider.getChildren(problemsRoot);
+    const firstNode = problemNodes.find((node) => node.problemId === first.id);
+    const thirdNode = problemNodes.find((node) => node.problemId === third.id);
+    const dataTransfer = new vscode.DataTransfer();
+
+    provider.handleDrag(firstNode ? [firstNode] : [], dataTransfer);
+    await provider.handleDrop(thirdNode, dataTransfer);
+
+    const saved = await ensureProblemsConfig(workspaceFolder);
+    expect(saved.problems.map((problem) => problem.id)).toEqual([first.id, third.id, second.id]);
   });
 
   it('does not render a workspace group for the management action', async () => {
@@ -588,8 +625,8 @@ describe('sample tree add entry', () => {
     const provider = new SampleTreeProvider();
 
     provider.markSamplesRunning(firstProblem.id, [firstSample?.id ?? '']);
-    const firstItem = provider.getTreeItem((await getSampleNodes(provider, 0))[0]);
-    const secondItem = provider.getTreeItem((await getSampleNodes(provider, 1))[0]);
+    const firstItem = provider.getTreeItem((await getSampleNodes(provider, firstProblem.id))[0]);
+    const secondItem = provider.getTreeItem((await getSampleNodes(provider, secondProblem.id))[0]);
 
     expect(iconId(firstItem)).toBe('sync~spin');
     expect(iconId(secondItem)).toBe('circle-outline');
@@ -768,10 +805,13 @@ async function createWorkspace(): Promise<vscode.WorkspaceFolder> {
   return workspaceFolder;
 }
 
-async function getSampleNodes(provider: SampleTreeProvider, problemIndex = 0): Promise<any[]> {
+async function getSampleNodes(provider: SampleTreeProvider, problemId?: string): Promise<any[]> {
   const rootNodes = await provider.getChildren();
   const problemsRoot = rootNodes.find((node) => node.group === 'problems');
-  const problemNode = (await provider.getChildren(problemsRoot))[problemIndex];
+  const problemNodes = await provider.getChildren(problemsRoot);
+  const problemNode = problemId
+    ? problemNodes.find((node) => node.problemId === problemId)
+    : problemNodes[0];
   const samplesGroup = (await provider.getChildren(problemNode)).find((node) => node.group === 'samples');
   return (await provider.getChildren(samplesGroup)).filter((node) => node.kind === 'sample');
 }

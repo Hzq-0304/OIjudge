@@ -206,7 +206,7 @@ export async function importProblemPackage(
     delete problem.setter;
   }
 
-  problems.problems.push(problem);
+  problems.problems.unshift(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   await fs.writeFile(path.join(getProblemRoot(workspaceFolder, problem.id), 'config.json'), `${JSON.stringify(problem, null, 2)}\n`, 'utf8');
 
@@ -229,6 +229,7 @@ function createImportedProblemBase(
     ...snapshot,
     id: problemId,
     name: problemName,
+    createdAt: new Date().toISOString(),
     limits: {
       ...defaults.limits,
       ...snapshot?.limits,

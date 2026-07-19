@@ -17,6 +17,7 @@ import {
   getUnassignedProblemSamples,
   hasProblemGeneratedAnswers,
   isProblemAutoGenerateOutputFromStdEnabled,
+  moveProblems,
   moveProblemSampleToSubtask,
   resolveProblemReferencePath
 } from './problems';
@@ -66,14 +67,15 @@ type TreeNode = {
 };
 
 const SAMPLE_TREE_MIME = 'application/vnd.code.tree.oijudger.samplesView';
+const PROBLEM_TREE_MIME = 'application/vnd.code.tree.oijudger.samplesView.problems';
 
 export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined | null | void>();
   private readonly runningSampleKeys = new Set<string>();
 
   readonly onDidChangeTreeData = this.emitter.event;
-  readonly dragMimeTypes = [SAMPLE_TREE_MIME];
-  readonly dropMimeTypes = [SAMPLE_TREE_MIME];
+  readonly dragMimeTypes = [PROBLEM_TREE_MIME, SAMPLE_TREE_MIME];
+  readonly dropMimeTypes = [PROBLEM_TREE_MIME, SAMPLE_TREE_MIME];
 
   refresh(): void {
     this.emitter.fire();
@@ -184,6 +186,14 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
   }
 
   handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {
+    const problemIds = source
+      .filter((node) => node.kind === 'problem' && node.problemId)
+      .map((node) => node.problemId as string);
+    if (problemIds.length > 0) {
+      dataTransfer.set(PROBLEM_TREE_MIME, new vscode.DataTransferItem(JSON.stringify(problemIds)));
+      return;
+    }
+
     const samples = source
       .filter((node) => node.kind === 'sample' && node.problemId && node.sampleId !== undefined)
       .map((node) => ({
@@ -200,6 +210,26 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     target: TreeNode | undefined,
     dataTransfer: vscode.DataTransfer
   ): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return;
+    }
+
+    const problemItem = dataTransfer.get(PROBLEM_TREE_MIME);
+    if (problemItem && (target?.kind === 'problem' || target?.group === 'problems')) {
+      const raw = typeof problemItem.value === 'string' ? problemItem.value : await problemItem.asString();
+      const problemIds = JSON.parse(raw) as unknown;
+      if (Array.isArray(problemIds)) {
+        await moveProblems(
+          workspaceFolder,
+          problemIds.filter((problemId): problemId is string => typeof problemId === 'string'),
+          target.kind === 'problem' ? target.problemId : undefined
+        );
+        this.refresh();
+      }
+      return;
+    }
+
     const targetSubtaskId = resolveDropTargetSubtaskId(target);
     const targetProblemId = target?.problemId;
     if (!targetProblemId || (target !== undefined && target.group !== 'samples' && targetSubtaskId === undefined)) {
@@ -213,11 +243,6 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
 
     const raw = typeof item.value === 'string' ? item.value : await item.asString();
     const samples = JSON.parse(raw) as Array<{ problemId?: string; sampleId?: number }>;
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-      return;
-    }
-
     for (const sample of samples) {
       if (!sample.problemId || sample.sampleId === undefined || sample.problemId !== targetProblemId) {
         continue;

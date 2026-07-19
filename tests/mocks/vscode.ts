@@ -59,6 +59,26 @@ export class EventEmitter<T> {
   }
 }
 
+export class DataTransferItem {
+  constructor(public value: unknown) {}
+
+  async asString(): Promise<string> {
+    return typeof this.value === 'string' ? this.value : String(this.value);
+  }
+}
+
+export class DataTransfer {
+  private readonly items = new Map<string, DataTransferItem>();
+
+  get(mimeType: string): DataTransferItem | undefined {
+    return this.items.get(mimeType);
+  }
+
+  set(mimeType: string, value: DataTransferItem): void {
+    this.items.set(mimeType, value);
+  }
+}
+
 export class TreeItem {
   description?: string;
   tooltip?: string;

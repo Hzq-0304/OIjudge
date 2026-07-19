@@ -245,6 +245,50 @@ export async function writeProblemsConfig(
   await fs.writeFile(getProblemsPath(workspaceFolder), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
+export function reorderProblemList(
+  problems: readonly ProblemConfig[],
+  movingProblemIds: readonly string[],
+  targetProblemId?: string
+): ProblemConfig[] {
+  const movingIds = new Set(movingProblemIds);
+  if (movingIds.size === 0 || (targetProblemId !== undefined && movingIds.has(targetProblemId))) {
+    return [...problems];
+  }
+
+  const moving = problems.filter((problem) => movingIds.has(problem.id));
+  if (moving.length === 0) {
+    return [...problems];
+  }
+
+  const remaining = problems.filter((problem) => !movingIds.has(problem.id));
+  const targetIndex = targetProblemId === undefined
+    ? 0
+    : remaining.findIndex((problem) => problem.id === targetProblemId);
+  if (targetIndex < 0) {
+    return [...problems];
+  }
+
+  return [
+    ...remaining.slice(0, targetIndex),
+    ...moving,
+    ...remaining.slice(targetIndex)
+  ];
+}
+
+export async function moveProblems(
+  workspaceFolder: vscode.WorkspaceFolder,
+  movingProblemIds: readonly string[],
+  targetProblemId?: string
+): Promise<void> {
+  const config = await ensureProblemsConfig(workspaceFolder);
+  const reordered = reorderProblemList(config.problems, movingProblemIds, targetProblemId);
+  if (reordered.every((problem, index) => problem.id === config.problems[index]?.id)) {
+    return;
+  }
+  config.problems = reordered;
+  await writeProblemsConfig(workspaceFolder, config);
+}
+
 export async function createProblem(
   workspaceFolder: vscode.WorkspaceFolder,
   name: string
@@ -254,13 +298,14 @@ export async function createProblem(
     ...createDefaultConfig(),
     id: createProblemId(name, problems),
     name: createProblemName(name, problems),
+    createdAt: new Date().toISOString(),
     standard: 'c++17',
     sources: [],
     subtasks: []
   };
 
   await ensureProblemFolders(workspaceFolder, problem.id);
-  problems.problems.push(problem);
+  problems.problems.unshift(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return problem;
 }
@@ -276,6 +321,7 @@ export async function addProblemFromSource(
     ...createDefaultConfig(),
     id: createProblemId(baseName, problems),
     name: createProblemName(baseName, problems),
+    createdAt: new Date().toISOString(),
     source: relativeSource,
     defaultSource: relativeSource,
     sources: [createProblemSource(workspaceFolder, sourcePath)],
@@ -284,7 +330,7 @@ export async function addProblemFromSource(
   };
 
   await ensureProblemFolders(workspaceFolder, problem.id);
-  problems.problems.push(problem);
+  problems.problems.unshift(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return problem;
 }
@@ -301,6 +347,7 @@ export async function importLegacyProblem(workspaceFolder: vscode.WorkspaceFolde
     ...legacy,
     id: createProblemId(baseName, problems),
     name: createProblemName(baseName, problems),
+    createdAt: new Date().toISOString(),
     source: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : '',
     defaultSource: source ? toPosixPath(path.relative(workspaceFolder.uri.fsPath, source)) : undefined,
     sources: source ? [createProblemSource(workspaceFolder, source)] : [],
@@ -315,7 +362,7 @@ export async function importLegacyProblem(workspaceFolder: vscode.WorkspaceFolde
     copiedSamples.push(await addProblemSampleFiles(workspaceFolder, problem, input, answer));
   }
   problem.samples = copiedSamples;
-  problems.problems.push(problem);
+  problems.problems.unshift(problem);
   await writeProblemsConfig(workspaceFolder, problems);
   return problem;
 }
