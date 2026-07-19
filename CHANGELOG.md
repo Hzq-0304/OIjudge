@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 5.6.2
+
 - 新增题目侧边栏中的 I/O 模式与文件输入输出设置入口 / Add sidebar entries for I/O mode and File IO filename settings.
 - 支持在题目树中拖拽调整题目相对顺序 / Support drag-and-drop reordering of problems in the problem tree.
 - 新建或导入题目默认显示在现有题目前方 / Show newly created or imported problems before existing problems by default.
