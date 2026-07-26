@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 修复拖动题目排序时悬停题目卡片自动展开的问题 / Prevent problem cards from auto-expanding during drag reordering.
+
 ## 5.6.2
 
 - 新增题目侧边栏中的 I/O 模式与文件输入输出设置入口 / Add sidebar entries for I/O mode and File IO filename settings.

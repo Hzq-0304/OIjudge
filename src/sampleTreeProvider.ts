@@ -72,6 +72,8 @@ const PROBLEM_TREE_MIME = 'application/vnd.code.tree.oijudger.samplesView.proble
 export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.TreeDragAndDropController<TreeNode> {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined | null | void>();
   private readonly runningSampleKeys = new Set<string>();
+  private suppressProblemExpansion = false;
+  private problemDragCancellation?: vscode.Disposable;
 
   readonly onDidChangeTreeData = this.emitter.event;
   readonly dragMimeTypes = [PROBLEM_TREE_MIME, SAMPLE_TREE_MIME];
@@ -102,9 +104,12 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
+    const collapsibleState = element.kind === 'problem' && this.suppressProblemExpansion
+      ? vscode.TreeItemCollapsibleState.None
+      : element.collapsibleState ?? vscode.TreeItemCollapsibleState.None;
     const item = new vscode.TreeItem(
       element.label,
-      element.collapsibleState ?? vscode.TreeItemCollapsibleState.None
+      collapsibleState
     );
     item.description = element.description;
     item.tooltip = element.tooltip;
@@ -185,12 +190,17 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     }
   }
 
-  handleDrag(source: readonly TreeNode[], dataTransfer: vscode.DataTransfer): void {
+  handleDrag(
+    source: readonly TreeNode[],
+    dataTransfer: vscode.DataTransfer,
+    token?: vscode.CancellationToken
+  ): void {
     const problemIds = source
       .filter((node) => node.kind === 'problem' && node.problemId)
       .map((node) => node.problemId as string);
     if (problemIds.length > 0) {
       dataTransfer.set(PROBLEM_TREE_MIME, new vscode.DataTransferItem(JSON.stringify(problemIds)));
+      this.beginProblemDrag(token);
       return;
     }
 
@@ -210,23 +220,31 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
     target: TreeNode | undefined,
     dataTransfer: vscode.DataTransfer
   ): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
+    const problemItem = dataTransfer.get(PROBLEM_TREE_MIME);
+    if (problemItem) {
+      try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder || (target?.kind !== 'problem' && target?.group !== 'problems')) {
+          return;
+        }
+
+        const raw = typeof problemItem.value === 'string' ? problemItem.value : await problemItem.asString();
+        const problemIds = JSON.parse(raw) as unknown;
+        if (Array.isArray(problemIds)) {
+          await moveProblems(
+            workspaceFolder,
+            problemIds.filter((problemId): problemId is string => typeof problemId === 'string'),
+            target.kind === 'problem' ? target.problemId : undefined
+          );
+        }
+      } finally {
+        this.endProblemDrag();
+      }
       return;
     }
 
-    const problemItem = dataTransfer.get(PROBLEM_TREE_MIME);
-    if (problemItem && (target?.kind === 'problem' || target?.group === 'problems')) {
-      const raw = typeof problemItem.value === 'string' ? problemItem.value : await problemItem.asString();
-      const problemIds = JSON.parse(raw) as unknown;
-      if (Array.isArray(problemIds)) {
-        await moveProblems(
-          workspaceFolder,
-          problemIds.filter((problemId): problemId is string => typeof problemId === 'string'),
-          target.kind === 'problem' ? target.problemId : undefined
-        );
-        this.refresh();
-      }
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
       return;
     }
 
@@ -260,6 +278,24 @@ export class SampleTreeProvider implements vscode.TreeDataProvider<TreeNode>, vs
         targetSubtaskId
       );
     }
+    this.refresh();
+  }
+
+  private beginProblemDrag(token?: vscode.CancellationToken): void {
+    this.problemDragCancellation?.dispose();
+    this.suppressProblemExpansion = true;
+    this.problemDragCancellation = token?.onCancellationRequested(() => this.endProblemDrag());
+    this.refresh();
+  }
+
+  private endProblemDrag(): void {
+    if (!this.suppressProblemExpansion && !this.problemDragCancellation) {
+      return;
+    }
+    this.suppressProblemExpansion = false;
+    const cancellation = this.problemDragCancellation;
+    this.problemDragCancellation = undefined;
+    cancellation?.dispose();
     this.refresh();
   }
 }

@@ -99,13 +99,38 @@ describe('sample tree add entry', () => {
     const problemNodes = await provider.getChildren(problemsRoot);
     const firstNode = problemNodes.find((node) => node.problemId === first.id);
     const thirdNode = problemNodes.find((node) => node.problemId === third.id);
+    const thirdProblemChildren = await provider.getChildren(thirdNode);
+    const samplesGroup = thirdProblemChildren.find((node) => node.group === 'samples');
     const dataTransfer = new vscode.DataTransfer();
 
+    expect(provider.getTreeItem(thirdNode!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     provider.handleDrag(firstNode ? [firstNode] : [], dataTransfer);
+    expect(provider.getTreeItem(thirdNode!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+    expect(provider.getTreeItem(samplesGroup!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     await provider.handleDrop(thirdNode, dataTransfer);
 
     const saved = await ensureProblemsConfig(workspaceFolder);
     expect(saved.problems.map((problem) => problem.id)).toEqual([first.id, third.id, second.id]);
+    expect(provider.getTreeItem(thirdNode!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+
+  it('restores manual problem expansion when a problem drag is cancelled', async () => {
+    const workspaceFolder = await createWorkspace();
+    await createProblem(workspaceFolder, 'First');
+    await createProblem(workspaceFolder, 'Second');
+    const provider = new SampleTreeProvider();
+    const rootNodes = await provider.getChildren();
+    const problemsRoot = rootNodes.find((node) => node.group === 'problems');
+    const problemNodes = await provider.getChildren(problemsRoot);
+    const dataTransfer = new vscode.DataTransfer();
+    const cancellation = createCancellationToken();
+
+    provider.handleDrag([problemNodes[0]], dataTransfer, cancellation.token);
+    expect(provider.getTreeItem(problemNodes[1]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+
+    cancellation.cancel();
+
+    expect(provider.getTreeItem(problemNodes[1]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   it('does not render a workspace group for the management action', async () => {
@@ -830,6 +855,28 @@ function iconId(item: vscode.TreeItem): string | undefined {
 
 function iconColorId(item: vscode.TreeItem): string | undefined {
   return (item.iconPath as { color?: { id?: string } } | undefined)?.color?.id;
+}
+
+function createCancellationToken(): { token: vscode.CancellationToken; cancel: () => void } {
+  const listeners = new Set<() => void>();
+  const token = {
+    isCancellationRequested: false,
+    onCancellationRequested: (listener: () => void) => {
+      listeners.add(listener);
+      return {
+        dispose: () => listeners.delete(listener)
+      };
+    }
+  } as vscode.CancellationToken;
+  return {
+    token,
+    cancel: () => {
+      (token as { isCancellationRequested: boolean }).isCancellationRequested = true;
+      for (const listener of [...listeners]) {
+        listener();
+      }
+    }
+  };
 }
 
 function reportSample(sample: SampleConfig | undefined, status: SampleStatus) {
