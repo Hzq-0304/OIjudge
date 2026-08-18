@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## 5.6.3
+
 - 修复拖动题目排序时悬停题目卡片自动展开的问题 / Prevent problem cards from auto-expanding during drag reordering.
+- 支持在题目侧边栏中编辑程序编译命令，并锁定标准 Checker 的输入、用户输出与答案文件顺序 / Support editing program compile commands from the problem sidebar and lock the standard Checker input, user-output, and answer-file order.
+- 修复 `testlib_for_CCR.h` Checker 的参数顺序与零退出码 verdict 解析，无法识别明确结果时报告 Unknown Error / Fix `testlib_for_CCR.h` Checker argument ordering and zero-exit verdict parsing, reporting Unknown Error when no explicit result can be identified.
 
 ## 5.6.2
 
