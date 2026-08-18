@@ -982,6 +982,12 @@ async function judgeSample(
     if (checkerContext.compilerBin) {
       output.appendLine(`${sample.name} checker PATH includes compiler bin: ${checkerContext.compilerBin}`);
     }
+    if (checkerResult.report.protocol) {
+      output.appendLine(`${sample.name} checker protocol: ${checkerResult.report.protocol}`);
+    }
+    if (checkerResult.report.argumentOrder) {
+      output.appendLine(`${sample.name} checker argument order: ${checkerResult.report.argumentOrder}`);
+    }
     if (checkerResult.report.message) {
       output.appendLine(indent(checkerResult.report.message));
     }

@@ -8,6 +8,13 @@ import { explainRuntimeError } from './runtimeErrorExplainer';
 import { CheckerSampleReport } from './types';
 import { mergeCheckerOutput } from './checkerOutput';
 
+export type TestlibCheckerProtocol = 'standard' | 'ccr';
+
+type CcrTestlibVerdict =
+  | { type: 'AC'; score: 1; scoreText?: string }
+  | { type: 'WA' | 'PE' | 'CheckerError' | 'UnknownError'; score: 0 }
+  | { type: 'Scored'; score: number; scoreText: string };
+
 export type CheckerRunInput = {
   checkerSource: string;
   checkerExe: string;
@@ -19,27 +26,76 @@ export type CheckerRunInput = {
   outputPath: string;
   outputRel: string;
   timeLimitMs: number;
+  testlibProtocol?: TestlibCheckerProtocol;
   plainOptions?: Partial<PlainCheckerParseOptions>;
 };
 
 export function buildCheckerArguments(
-  input: Pick<CheckerRunInput, 'inputPath' | 'userOutputPath' | 'answerPath'>
+  input: Pick<CheckerRunInput, 'inputPath' | 'userOutputPath' | 'answerPath'>,
+  protocol: TestlibCheckerProtocol = 'standard'
 ): string[] {
+  if (protocol === 'ccr') {
+    return [input.inputPath, input.answerPath, input.userOutputPath];
+  }
   return [input.inputPath, input.userOutputPath, input.answerPath];
 }
 
+export function detectTestlibCheckerProtocol(sourceText: string): TestlibCheckerProtocol {
+  return /^\uFEFF?[ \t]*#[ \t]*include[ \t]*[<"][^>"\r\n]*testlib_for_CCR\.h[>"]/imu.test(sourceText)
+    ? 'ccr'
+    : 'standard';
+}
+
+export function parseCcrTestlibVerdict(stdout: string, stderr: string): CcrTestlibVerdict {
+  const lines = `${stderr}\n${stdout}`
+    .split(/\r?\n/u)
+    .map((line) => stripAnsi(line).trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (/^ok(?:\s|$)/iu.test(line)) {
+      return { type: 'AC', score: 1 };
+    }
+    if (/^wrong answer(?:\s|$)/iu.test(line)) {
+      return { type: 'WA', score: 0 };
+    }
+    if (/^(?:wrong output format|unexpected eof)(?:\s|$)/iu.test(line)) {
+      return { type: 'PE', score: 0 };
+    }
+    if (/^fail(?:\s|$)/iu.test(line)) {
+      return { type: 'CheckerError', score: 0 };
+    }
+
+    const points = /^points\s+([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(?:\s|$)/iu.exec(line);
+    if (points) {
+      return scoredCcrVerdict(Number(points[1]), points[1]);
+    }
+
+    const partial = /^partially correct\s*\((\d+)\)(?:\s|$)/iu.exec(line);
+    if (partial) {
+      const percentage = Number(partial[1]);
+      return scoredCcrVerdict(percentage / 100, `${percentage}%`);
+    }
+  }
+
+  return { type: 'UnknownError', score: 0 };
+}
+
 export async function runTestlibChecker(input: CheckerRunInput): Promise<{
-  status: 'AC' | 'WA' | 'Checker Error';
+  status: 'AC' | 'WA' | 'PE' | 'Scored' | 'ERR' | 'Checker Error';
   score: number;
+  scoreText?: string;
   report: CheckerSampleReport;
 }> {
   await fs.mkdir(path.dirname(input.outputPath), { recursive: true });
   const cwd = path.dirname(input.checkerSource);
   const env = createCheckerEnv(input.compilerBin);
+  const protocol = input.testlibProtocol ?? await resolveTestlibCheckerProtocol(input.checkerSource);
+  const resolvedInput = { ...input, testlibProtocol: protocol };
   try {
     const result = await runProcess(
       input.checkerExe,
-      buildCheckerArguments(input),
+      buildCheckerArguments(input, protocol),
       '',
       cwd,
       input.timeLimitMs,
@@ -52,19 +108,11 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
       return {
         status: 'Checker Error',
         score: 0,
-        report: createReport(input, result.code, result.signal, result.timeMs, 'Checker timed out.', {
+        report: createReport(resolvedInput, result.code, result.signal, result.timeMs, 'Checker timed out.', {
           verdict: 'CheckerError',
           errorKind: 'CheckerError',
           errorName: 'Checker Timeout'
         })
-      };
-    }
-
-    if (result.code === 0 && !result.signal) {
-      return {
-        status: 'AC',
-        score: 1,
-        report: createReport(input, result.code, result.signal, result.timeMs, message)
       };
     }
 
@@ -73,7 +121,40 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
       return {
         status: 'Checker Error',
         score: 0,
-        report: createReport(input, result.code, result.signal, result.timeMs, abnormalExit.message, abnormalExit)
+        report: createReport(resolvedInput, result.code, result.signal, result.timeMs, abnormalExit.message, abnormalExit)
+      };
+    }
+
+    if (protocol === 'ccr') {
+      if (result.code !== 0) {
+        return {
+          status: 'Checker Error',
+          score: 0,
+          report: createReport(resolvedInput, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code ?? 'null'}.`, {
+            verdict: 'CheckerError',
+            errorKind: 'CheckerError',
+            errorName: 'Checker Error'
+          })
+        };
+      }
+      return createCcrCheckerResult(resolvedInput, result.code, result.signal, result.timeMs, message, result.stdout, result.stderr);
+    }
+
+    if (result.code === 0 && !result.signal) {
+      return {
+        status: 'AC',
+        score: 1,
+        report: createReport(resolvedInput, result.code, result.signal, result.timeMs, message, { verdict: 'AC' })
+      };
+    }
+
+    if (result.code === 2 || result.code === 8) {
+      return {
+        status: 'PE',
+        score: 0,
+        report: createReport(resolvedInput, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code}.`, {
+          verdict: 'PE'
+        })
       };
     }
 
@@ -81,7 +162,7 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
       return {
         status: 'WA',
         score: 0,
-        report: createReport(input, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code}.`, {
+        report: createReport(resolvedInput, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code}.`, {
           verdict: 'WA'
         })
       };
@@ -90,7 +171,7 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
     return {
       status: 'Checker Error',
       score: 0,
-      report: createReport(input, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code ?? 'null'}.`, {
+      report: createReport(resolvedInput, result.code, result.signal, result.timeMs, message || `Checker exited with code ${result.code ?? 'null'}.`, {
         verdict: 'CheckerError',
         errorKind: 'CheckerError',
         errorName: 'Checker Error'
@@ -109,6 +190,8 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
         exe: input.checkerExe,
         testlibPath: input.testlibPath,
         output: input.outputRel,
+        protocol,
+        argumentOrder: protocol === 'ccr' ? 'input-answer-user' : 'input-user-answer',
         verdict: 'CheckerError',
         errorKind: 'CheckerError',
         errorName: 'Checker Error',
@@ -266,9 +349,11 @@ function createReport(
   timeMs: number,
   message?: string,
   details: {
-    verdict?: 'AC' | 'WA' | 'CheckerError';
+    verdict?: CheckerSampleReport['verdict'];
     errorKind?: CheckerSampleReport['errorKind'];
     errorName?: string;
+    score?: number;
+    scoreText?: string;
   } = {}
 ): CheckerSampleReport {
   return {
@@ -282,11 +367,113 @@ function createReport(
     signal,
     timeMs,
     output: input.outputRel,
-    verdict: details.verdict ?? (exitCode === 0 && !signal ? 'AC' : undefined),
+    protocol: input.testlibProtocol,
+    argumentOrder: input.testlibProtocol === 'ccr' ? 'input-answer-user' : 'input-user-answer',
+    verdict: details.verdict,
     errorKind: details.errorKind,
     errorName: details.errorName,
+    score: details.score,
+    scoreText: details.scoreText,
     message
   };
+}
+
+async function resolveTestlibCheckerProtocol(checkerSource: string): Promise<TestlibCheckerProtocol> {
+  try {
+    return detectTestlibCheckerProtocol(await fs.readFile(checkerSource, 'utf8'));
+  } catch {
+    return 'standard';
+  }
+}
+
+function createCcrCheckerResult(
+  input: CheckerRunInput,
+  exitCode: number | null,
+  signal: NodeJS.Signals | null,
+  timeMs: number,
+  message: string | undefined,
+  stdout: string,
+  stderr: string
+): {
+  status: 'AC' | 'WA' | 'PE' | 'Scored' | 'ERR' | 'Checker Error';
+  score: number;
+  scoreText?: string;
+  report: CheckerSampleReport;
+} {
+  const verdict = parseCcrTestlibVerdict(stdout, stderr);
+  if (verdict.type === 'AC') {
+    return {
+      status: 'AC',
+      score: 1,
+      scoreText: verdict.scoreText,
+      report: createReport(input, exitCode, signal, timeMs, message, {
+        verdict: 'AC',
+        score: 1,
+        scoreText: verdict.scoreText
+      })
+    };
+  }
+  if (verdict.type === 'WA' || verdict.type === 'PE') {
+    return {
+      status: verdict.type,
+      score: 0,
+      report: createReport(input, exitCode, signal, timeMs, message, { verdict: verdict.type })
+    };
+  }
+  if (verdict.type === 'Scored') {
+    return {
+      status: 'Scored',
+      score: verdict.score,
+      scoreText: verdict.scoreText,
+      report: createReport(input, exitCode, signal, timeMs, message, {
+        verdict: 'Score',
+        score: verdict.score,
+        scoreText: verdict.scoreText
+      })
+    };
+  }
+  if (verdict.type === 'CheckerError') {
+    return {
+      status: 'Checker Error',
+      score: 0,
+      report: createReport(input, exitCode, signal, timeMs, message, {
+        verdict: 'CheckerError',
+        errorKind: 'CheckerError',
+        errorName: 'Checker Failure'
+      })
+    };
+  }
+
+  const unknownMessage = [
+    'Unknown checker verdict: the CCR checker exited without an explicit result marker.',
+    message ? `Checker output:\n${message}` : undefined
+  ].filter(Boolean).join('\n');
+  return {
+    status: 'ERR',
+    score: 0,
+    report: createReport(input, exitCode, signal, timeMs, unknownMessage, {
+      verdict: 'UnknownError',
+      errorKind: 'CheckerError',
+      errorName: 'Unknown Checker Verdict'
+    })
+  };
+}
+
+function scoredCcrVerdict(score: number, scoreText: string): CcrTestlibVerdict {
+  if (!Number.isFinite(score) || score < 0 || score > 1) {
+    return { type: 'UnknownError', score: 0 };
+  }
+  if (score >= 1) {
+    return { type: 'AC', score: 1, scoreText };
+  }
+  if (score <= 0) {
+    return { type: 'WA', score: 0 };
+  }
+  return { type: 'Scored', score, scoreText };
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/gu, '');
 }
 
 function createPlainReport(

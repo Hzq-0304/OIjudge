@@ -311,6 +311,8 @@ export type CheckerSampleReport = {
   signal?: NodeJS.Signals | null;
   timeMs?: number;
   output?: string;
+  protocol?: 'standard' | 'ccr';
+  argumentOrder?: 'input-user-answer' | 'input-answer-user';
   stdout?: string;
   stderr?: string;
   finalLine?: string;
@@ -318,7 +320,7 @@ export type CheckerSampleReport = {
   verdictPosition?: PlainCheckerVerdictPosition;
   acceptedToken?: string;
   wrongAnswerToken?: string;
-  verdict?: 'AC' | 'WA' | 'Score' | 'Invalid' | 'CheckerError';
+  verdict?: 'AC' | 'WA' | 'PE' | 'Score' | 'Invalid' | 'UnknownError' | 'CheckerError';
   errorKind?: RuntimeErrorSummary['kind'] | 'CheckerError';
   errorName?: string;
   score?: number;
