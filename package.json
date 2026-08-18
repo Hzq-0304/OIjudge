@@ -72,6 +72,7 @@
     "onCommand:oijudger.setFileIoNames",
     "onCommand:oijudger.setProblemStandard",
     "onCommand:oijudger.selectProblemCompiler",
+    "onCommand:oijudger.editProblemCompileCommand",
     "onCommand:oijudger.bindStatement",
     "onCommand:oijudger.openStatement",
     "onCommand:oijudger.unbindStatement",
@@ -411,6 +412,11 @@
         "command": "oijudger.selectProblemCompiler",
         "title": "%commands.selectProblemCompiler.title%",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "oijudger.editProblemCompileCommand",
+        "title": "%commands.editProblemCompileCommand.title%",
+        "icon": "$(terminal-bash)"
       },
       {
         "command": "oijudger.bindStatement",
@@ -1345,6 +1351,10 @@
         },
         {
           "command": "oijudger.selectProblemCompiler",
+          "when": "false"
+        },
+        {
+          "command": "oijudger.editProblemCompileCommand",
           "when": "false"
         },
         {

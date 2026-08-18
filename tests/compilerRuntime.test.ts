@@ -155,6 +155,18 @@ describe('compiler runtime environment', () => {
 });
 
 describe('compile argument generation', () => {
+  it('preserves a user-defined output/source placeholder order', async () => {
+    const workspaceFolder = await createWorkspace();
+    const sourcePath = path.join(workspaceFolder.uri.fsPath, 'answer and user.cpp');
+    const outputPath = path.join(workspaceFolder.uri.fsPath, 'custom output.exe');
+    const customConfig = config('g++', { autoStack: false });
+    customConfig.compiler.args = ['-o', '${output}', '${file}', '-std=c++17'];
+
+    const { args } = buildCompileArgs(workspaceFolder, customConfig, sourcePath, outputPath);
+
+    expect(args).toEqual(['-o', outputPath, sourcePath, '-std=c++17']);
+  });
+
   it('keeps gcc-like compiler arguments unchanged', async () => {
     const workspaceFolder = await createWorkspace();
     const sourcePath = path.join(workspaceFolder.uri.fsPath, 'main.cpp');

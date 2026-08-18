@@ -315,6 +315,64 @@ export function setCompilerCommand(config: OITestConfig, command: string): OITes
   return config;
 }
 
+export type CompileCommandTemplateError =
+  | 'invalidJson'
+  | 'notArray'
+  | 'nonStringValue'
+  | 'emptyCommand'
+  | 'missingSourcePlaceholder'
+  | 'missingOutputPlaceholder';
+
+export type CompileCommandTemplateParseResult =
+  | { ok: true; command: string; args: string[] }
+  | { ok: false; error: CompileCommandTemplateError };
+
+export function formatCompileCommandTemplate(config: Pick<OITestConfig, 'compiler'>): string {
+  return JSON.stringify([config.compiler.command, ...config.compiler.args]);
+}
+
+export function parseCompileCommandTemplate(value: string): CompileCommandTemplateParseResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { ok: false, error: 'invalidJson' };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: 'notArray' };
+  }
+  if (!parsed.every((entry) => typeof entry === 'string')) {
+    return { ok: false, error: 'nonStringValue' };
+  }
+
+  const [rawCommand, ...args] = parsed;
+  const command = rawCommand?.trim();
+  if (!command) {
+    return { ok: false, error: 'emptyCommand' };
+  }
+  if (!args.some((arg) => arg.includes('${file}') || arg.includes('{source}'))) {
+    return { ok: false, error: 'missingSourcePlaceholder' };
+  }
+  if (!args.some((arg) => arg.includes('${output}') || arg.includes('{exe}'))) {
+    return { ok: false, error: 'missingOutputPlaceholder' };
+  }
+
+  return { ok: true, command, args };
+}
+
+export function setCompileCommand(config: OITestConfig, command: string, args: string[]): OITestConfig {
+  config.compiler = {
+    command,
+    args: [...args]
+  };
+  config.compile = {
+    command,
+    args: [...args]
+  };
+  return config;
+}
+
 export async function exists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);

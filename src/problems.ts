@@ -23,6 +23,7 @@ import {
   normalizeSampleInternalId,
   resolveSampleIndex,
   resolveWorkspacePath,
+  setCompileCommand,
   setCompilerCommand,
   toPosixPath,
   uniqueSampleName
@@ -576,6 +577,17 @@ export async function updateProblemCompiler(
 ): Promise<ProblemConfig | undefined> {
   return updateProblem(workspaceFolder, problemId, (problem) => {
     setCompilerCommand(problem, command);
+  });
+}
+
+export async function updateProblemCompileCommand(
+  workspaceFolder: vscode.WorkspaceFolder,
+  problemId: string,
+  command: string,
+  args: string[]
+): Promise<ProblemConfig | undefined> {
+  return updateProblem(workspaceFolder, problemId, (problem) => {
+    setCompileCommand(problem, command, args);
   });
 }
 

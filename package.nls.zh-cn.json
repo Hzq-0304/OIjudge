@@ -55,6 +55,7 @@
   "commands.setFileIoNames.title": "OI Judge: 设置文件输入输出文件名",
   "commands.setProblemStandard.title": "OI Judge: 设置题目 C++ 标准",
   "commands.selectProblemCompiler.title": "OI Judge: 选择题目编译器",
+  "commands.editProblemCompileCommand.title": "OI Judge: 编辑题目编译命令",
   "commands.bindStatement.title": "OI Judge: 绑定题面",
   "commands.openStatement.title": "OI Judge: 打开题面",
   "commands.unbindStatement.title": "OI Judge: 解绑题面",

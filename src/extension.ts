@@ -8,12 +8,14 @@ import {
   clearOutputs,
   ensureConfig,
   exists,
+  formatCompileCommandTemplate,
   getOiJudgeDataRelPath,
   getOITestDir,
   getWorkspaceFolder,
   initProblem,
   isCppFile,
   resolveWorkspacePath,
+  parseCompileCommandTemplate,
   setMemoryLimit,
   setStackConfig,
   setTimeLimit,
@@ -99,6 +101,7 @@ import {
   writeGeneratedAnswerForSample,
   unbindProblemStatement,
   updateProblemChecker,
+  updateProblemCompileCommand,
   updateProblemCompiler,
   updateProblemFileIo,
   updateProblemIoMode,
@@ -762,6 +765,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('oijudger.selectProblemCompiler', async (problemArg?: unknown) => {
       await selectProblemCompilerCommand(readProblemId(problemArg), sampleTreeProvider);
+    }),
+    vscode.commands.registerCommand('oijudger.editProblemCompileCommand', async (problemArg?: unknown) => {
+      await editProblemCompileCommandCommand(readProblemId(problemArg), sampleTreeProvider);
     }),
     vscode.commands.registerCommand('oijudger.bindStatement', async (problemArg?: unknown) => {
       await bindStatementCommand(readProblemId(problemArg), sampleTreeProvider);
@@ -4390,6 +4396,62 @@ async function selectProblemCompilerCommand(
   await updateProblemCompiler(context.workspaceFolder, context.problem.id, compilerPath);
   sampleTreeProvider.refresh();
   vscode.window.showInformationMessage(t('compilerSaved'));
+}
+
+async function editProblemCompileCommandCommand(
+  problemId: string | undefined,
+  sampleTreeProvider: SampleTreeProvider
+): Promise<void> {
+  const context = await getProblemContext(problemId);
+  if (!context) {
+    return;
+  }
+
+  const value = await vscode.window.showInputBox({
+    title: t('editCompileCommandTitle'),
+    prompt: t('editCompileCommandPrompt'),
+    value: formatCompileCommandTemplate(context.problem),
+    ignoreFocusOut: true,
+    validateInput: (input) => {
+      const parsed = parseCompileCommandTemplate(input);
+      return parsed.ok ? undefined : getCompileCommandValidationMessage(parsed.error);
+    }
+  });
+  if (value === undefined) {
+    return;
+  }
+
+  const parsed = parseCompileCommandTemplate(value);
+  if (!parsed.ok) {
+    vscode.window.showErrorMessage(getCompileCommandValidationMessage(parsed.error));
+    return;
+  }
+
+  await updateProblemCompileCommand(
+    context.workspaceFolder,
+    context.problem.id,
+    parsed.command,
+    parsed.args
+  );
+  sampleTreeProvider.refresh();
+  vscode.window.showInformationMessage(t('compileCommandSaved'));
+}
+
+function getCompileCommandValidationMessage(error: import('./config').CompileCommandTemplateError): string {
+  switch (error) {
+    case 'invalidJson':
+      return t('compileCommandInvalidJson');
+    case 'notArray':
+      return t('compileCommandNotArray');
+    case 'nonStringValue':
+      return t('compileCommandNonStringValue');
+    case 'emptyCommand':
+      return t('compileCommandEmptyCommand');
+    case 'missingSourcePlaceholder':
+      return t('compileCommandMissingSource');
+    case 'missingOutputPlaceholder':
+      return t('compileCommandMissingOutput');
+  }
 }
 
 async function bindStatementCommand(

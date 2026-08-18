@@ -22,6 +22,12 @@ export type CheckerRunInput = {
   plainOptions?: Partial<PlainCheckerParseOptions>;
 };
 
+export function buildCheckerArguments(
+  input: Pick<CheckerRunInput, 'inputPath' | 'userOutputPath' | 'answerPath'>
+): string[] {
+  return [input.inputPath, input.userOutputPath, input.answerPath];
+}
+
 export async function runTestlibChecker(input: CheckerRunInput): Promise<{
   status: 'AC' | 'WA' | 'Checker Error';
   score: number;
@@ -33,7 +39,7 @@ export async function runTestlibChecker(input: CheckerRunInput): Promise<{
   try {
     const result = await runProcess(
       input.checkerExe,
-      [input.inputPath, input.userOutputPath, input.answerPath],
+      buildCheckerArguments(input),
       '',
       cwd,
       input.timeLimitMs,
@@ -124,7 +130,7 @@ export async function runPlainChecker(input: CheckerRunInput): Promise<{
   try {
     const result = await runProcess(
       input.checkerExe,
-      [input.inputPath, input.userOutputPath, input.answerPath],
+      buildCheckerArguments(input),
       '',
       cwd,
       input.timeLimitMs,

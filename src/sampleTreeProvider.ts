@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { exists } from './config';
+import { exists, formatCompileCommandTemplate } from './config';
 import { t } from './i18n';
 import { explainRuntimeError, renderRuntimeErrorExplanation } from './runtimeErrorExplainer';
 import {
@@ -530,6 +530,13 @@ async function createProgramNodes(
       'terminal',
       t('clickSelectCompiler'),
       'oijudger.selectProblemCompiler',
+      problem.id
+    ),
+    clickableInfoNode(
+      t('compileCommandLine', { command: formatCompileCommandTemplate(problem) }),
+      'terminal-bash',
+      t('clickEditCompileCommand'),
+      'oijudger.editProblemCompileCommand',
       problem.id
     ),
     actionNode(t('addProgram'), 'oijudger.addProgramToProblem', 'file-add', problem.id)

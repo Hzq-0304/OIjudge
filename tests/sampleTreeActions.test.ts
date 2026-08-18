@@ -235,6 +235,7 @@ describe('sample tree add entry', () => {
     expect(programCommands).toEqual(expect.arrayContaining([
       'oijudger.setDefaultProgram',
       'oijudger.selectProblemCompiler',
+      'oijudger.editProblemCompileCommand',
       'oijudger.addProgramToProblem'
     ]));
   });

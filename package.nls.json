@@ -55,6 +55,7 @@
   "commands.setFileIoNames.title": "OI Judge: Set File I/O Names",
   "commands.setProblemStandard.title": "OI Judge: Set Problem C++ Standard",
   "commands.selectProblemCompiler.title": "OI Judge: Select Problem Compiler",
+  "commands.editProblemCompileCommand.title": "OI Judge: Edit Problem Compile Command",
   "commands.bindStatement.title": "OI Judge: Bind Statement",
   "commands.openStatement.title": "OI Judge: Open Statement",
   "commands.unbindStatement.title": "OI Judge: Unbind Statement",
